@@ -42,7 +42,7 @@ export default function TaskDetailsPage() {
   
   const isOwner = user && task?.ownerUid === user.uid;
   
-  // General edit (name, assignees) is only for the owner of the task (main or sub).
+  // Edit (name, assignees) is only for the owner of the task (main or sub).
   const canEditCurrentTask = isOwner;
   const canDeleteCurrentTask = isOwner; // Only owner can delete any task
   const canAddSubTask = isOwner && isMainTask; // Only owner can add sub-tasks to a main task
@@ -68,13 +68,14 @@ export default function TaskDetailsPage() {
             .finally(() => setIsFetchingOwnerName(false));
         }
       } else {
-        setError('Task not found or does not belong to this project.');
-        router.push(`/projects/${projectId}`);
+        console.error(`TaskDetailsPage: Fetched task is null or projectId mismatch. Task ID: ${taskId}, Project ID from params: ${projectId}, Fetched Task Project ID: ${fetchedTask?.projectId}`);
+        setError(`Task not found (ID: ${taskId}) or does not belong to this project (Project ID from task: ${fetchedTask?.projectId}, Expected: ${projectId}). Check console for more details from taskService.`);
+        // router.push(`/projects/${projectId}`); // Temporarily commented out to see error and logs
       }
     } catch (err: any) {
-      console.error('Error fetching task:', err);
-      setError('Failed to load task details.');
-       router.push(`/projects/${projectId}`);
+      console.error(`TaskDetailsPage: Error fetching task details for task ${taskId}:`, err);
+      setError(`Failed to load task details for ${taskId}. ${err.message || 'Unknown error'}. Check console for more details from taskService.`);
+       // router.push(`/projects/${projectId}`); // Temporarily commented out
     } finally {
       setLoading(false);
     }
@@ -328,3 +329,4 @@ export default function TaskDetailsPage() {
     </div>
   );
 }
+
