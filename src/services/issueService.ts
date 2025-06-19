@@ -31,7 +31,7 @@ interface CreateIssueData {
   status: IssueProgressStatus;
   assignedToUids?: string[] | null;
   assignedToNames?: string[] | null;
-  dueDate: Date; // Changed from endDate
+  dueDate: Date; 
 }
 
 const mapDocumentToIssue = (docSnapshot: any): Issue => {
@@ -49,7 +49,7 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
     assignedToNames: data.assignedToNames || [],
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
-    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : new Date()), // Changed from endDate
+    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : new Date()), 
   };
 };
 
@@ -76,7 +76,7 @@ async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUi
         if (!newParentAssigneeUids.includes(issueUid)) {
           newParentAssigneeUids.push(issueUid);
           const issueName = issueAssigneeNames[index] || issueUid; 
-          if (!newParentAssigneeNames.some(name => currentParentAssigneeUids[currentParentAssigneeNames.indexOf(name)] === issueUid)) { // Ensure name corresponds to UID if possible
+          if (!newParentAssigneeNames.some(name => currentParentAssigneeUids[currentParentAssigneeNames.indexOf(name)] === issueUid)) { 
              newParentAssigneeNames.push(issueName);
           }
           needsUpdate = true;
@@ -123,7 +123,7 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
     ownerUid: userUid, 
     assignedToUids: issueData.assignedToUids || [],
     assignedToNames: issueData.assignedToNames || [],
-    dueDate: Timestamp.fromDate(issueData.dueDate), // Changed from endDate
+    dueDate: Timestamp.fromDate(issueData.dueDate), 
     createdAt: serverTimestamp() as Timestamp,
     updatedAt: serverTimestamp() as Timestamp,
   };
@@ -219,7 +219,7 @@ interface UpdateIssueData {
   status?: IssueProgressStatus;
   assignedToUids?: string[] | null;
   assignedToNames?: string[] | null;
-  dueDate?: Date; // Changed from endDate, made non-nullable for update payload
+  dueDate?: Date; 
 }
 
 export const updateIssue = async (issueId: string, userUid: string, parentSubTaskId: string, updates: UpdateIssueData): Promise<void> => {
@@ -251,7 +251,7 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
   }
 
   if (updates.dueDate !== undefined) {
-    updatePayload.dueDate = Timestamp.fromDate(updates.dueDate); // Changed from endDate
+    updatePayload.dueDate = Timestamp.fromDate(updates.dueDate); 
   }
 
   try {
@@ -281,7 +281,7 @@ export const updateIssueStatus = async (issueId: string, userUid: string, status
       throw new Error('Issue not found.');
   }
   const issueData = mapDocumentToIssue(issueSnap); 
-  if (issueData.ownerUid !== userUid && !issueData.assignedToUids?.includes(userUid)) {
+  if (issueData.ownerUid !== userUid && !(issueData.assignedToUids?.includes(userUid))) {
     throw new Error('Access denied. You did not create this issue nor are you assigned to it.');
   }
 
@@ -331,3 +331,26 @@ export const deleteIssuesForTask = async (taskId: string, userUid: string): Prom
   }
 };
 
+export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
+  const q = query(
+    issuesCollection,
+    where('taskId', '==', taskId),
+    where('status', '==', 'Open')
+  );
+
+  try {
+    const querySnapshot = await getDocs(q);
+    if (querySnapshot.empty) {
+      console.log(`issueService: No open issues found for task ${taskId}.`);
+    } else {
+      console.log(`issueService: Found ${querySnapshot.docs.length} open issues for task ${taskId}.`);
+    }
+    return !querySnapshot.empty; 
+  } catch (error: any) {
+    console.error('issueService: Error checking for open issues for task ID:', taskId, error.message, error.code ? `(${error.code})` : '', error.stack);
+    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
+        console.error("Firestore query for checking open issues requires a composite index. Please create it in the Firebase console. Collection: 'issues', Fields: 'taskId' (ASC), 'status' (ASC).");
+    }
+    throw new Error(`Failed to check for open issues for task ${taskId}. ${error.message}`);
+  }
+};
