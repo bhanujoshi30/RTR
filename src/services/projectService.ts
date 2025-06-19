@@ -45,7 +45,14 @@ export const createProject = async (projectData: {
     console.log('projectService: Firestore addDoc successful. New project Ref ID:', newProjectRef.id);
     return newProjectRef.id;
   } catch (error: any) {
-    console.error('projectService: Error calling addDoc in createProject:', error.message, error.stack, error);
+    console.error('projectService: Error calling addDoc in createProject. Raw error:', error);
+    console.error('projectService: Error message:', error.message);
+    if (error.code) {
+      console.error('projectService: Error code:', error.code);
+    }
+    if (error.stack) {
+      console.error('projectService: Error stack:', error.stack);
+    }
     throw error; 
   }
 };
