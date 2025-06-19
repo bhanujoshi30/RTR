@@ -38,6 +38,7 @@ export function Header() {
   };
 
   const isSupervisor = user?.role === 'supervisor';
+  const isMember = user?.role === 'member';
   const isAdmin = user?.email === ADMIN_EMAIL;
 
   const baseNavLinks = [
@@ -45,7 +46,8 @@ export function Header() {
   ];
 
   const conditionalNavLinks = [];
-  if (!isSupervisor) { // Hide "New Project" for supervisors
+  // "New Project" link hidden for supervisors and members
+  if (user && !isSupervisor && !isMember) { 
     conditionalNavLinks.push({ href: '/projects/create', label: 'New Project', icon: <FolderPlus className="mr-2 h-4 w-4" /> });
   }
   if (isAdmin) { // "Users" tab only for admin
@@ -137,5 +139,3 @@ export function Header() {
     </header>
   );
 }
-
-    

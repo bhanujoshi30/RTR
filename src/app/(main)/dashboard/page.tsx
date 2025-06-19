@@ -20,7 +20,9 @@ export default function DashboardPage() {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   const isSupervisor = user?.role === 'supervisor';
-  const isAdminOrOwner = !isSupervisor && user; // Simplified to "not supervisor and is a user"
+  const isMember = user?.role === 'member';
+  // AdminOrOwner means not supervisor and not member, and is a logged-in user
+  const isAdminOrOwner = user && !isSupervisor && !isMember; 
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -39,10 +41,10 @@ export default function DashboardPage() {
       try {
         if (isSupervisor) {
           console.log(`DashboardPage: User is a supervisor (UID: ${user.uid}). Fetching assigned tasks and issues.`);
-          const assignedTasks = await getAllTasksAssignedToUser(user.uid); // Expects tasks with assignedToUids array
+          const assignedTasks = await getAllTasksAssignedToUser(user.uid); 
           console.log('DashboardPage: Supervisor - Fetched assignedTasks:', assignedTasks);
           
-          const assignedIssues = await getAllIssuesAssignedToUser(user.uid); // Expects issues with assignedToUids array
+          const assignedIssues = await getAllIssuesAssignedToUser(user.uid); 
           console.log('DashboardPage: Supervisor - Fetched assignedIssues:', assignedIssues);
 
           const projectIdsFromTasks = assignedTasks.map(task => task.projectId).filter(id => !!id);
@@ -59,11 +61,29 @@ export default function DashboardPage() {
             console.log('DashboardPage: Supervisor - No unique project IDs found from tasks or issues. Assigned tasks count:', assignedTasks.length, '(Project IDs from tasks:', projectIdsFromTasks, ') Assigned issues count:', assignedIssues.length, '(Project IDs from issues:', projectIdsFromIssues,')');
             setProjectsToDisplay([]);
           }
-        } else if (isAdminOrOwner) {
+        } else if (isAdminOrOwner) { // User is admin/owner (not supervisor, not member)
           console.log(`DashboardPage: User is admin/owner (UID: ${user.uid}). Fetching owned projects.`);
           const ownerProjects = await getUserProjects(user.uid);
           console.log('DashboardPage: Admin/Owner - Fetched ownerProjects:', ownerProjects);
           setProjectsToDisplay(ownerProjects);
+        } else if (isMember) {
+           console.log(`DashboardPage: User is a member (UID: ${user.uid}). Members do not own projects directly. Will check for assigned work.`);
+            const assignedTasks = await getAllTasksAssignedToUser(user.uid);
+            const assignedIssues = await getAllIssuesAssignedToUser(user.uid);
+
+            const projectIdsFromTasks = assignedTasks.map(task => task.projectId).filter(id => !!id);
+            const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId).filter(id => !!id);
+            
+            const allProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
+            if (allProjectIds.length > 0) {
+                const memberProjects = await getProjectsByIds(allProjectIds);
+                setProjectsToDisplay(memberProjects);
+            } else {
+                setProjectsToDisplay([]);
+            }
+        } else {
+          // Fallback for any other roles or unhandled states
+          setProjectsToDisplay([]);
         }
       } catch (err: any) {
         console.error("DashboardPage: Error fetching dashboard data:", err);
@@ -75,9 +95,10 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [user, authLoading, isSupervisor, isAdminOrOwner]);
+  }, [user, authLoading, isSupervisor, isAdminOrOwner, isMember]);
 
-  const pageTitle = isSupervisor ? "My Assigned Work" : "My Projects";
+  const pageTitle = isSupervisor ? "My Assigned Work" : (isMember ? "My Assigned Work" : "My Projects");
+  const canCreateProject = user && !isSupervisor && !isMember;
 
   if (authLoading || dashboardLoading) {
     return (
@@ -92,7 +113,7 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <h1 className="font-headline text-3xl font-semibold tracking-tight">{pageTitle}</h1>
-        {!isSupervisor && user && (
+        {canCreateProject && (
           <Button asChild>
             <Link href="/projects/create">
               <FolderPlus className="mr-2 h-4 w-4" />
@@ -102,7 +123,7 @@ export default function DashboardPage() {
         )}
       </div>
       {dashboardError && <p className="text-center text-destructive py-4">{dashboardError}</p>}
-      {!dashboardError && <ProjectList projects={projectsToDisplay} isSupervisorView={isSupervisor} />}
+      {!dashboardError && <ProjectList projects={projectsToDisplay} isSupervisorView={isSupervisor || isMember} />}
     </div>
   );
 }

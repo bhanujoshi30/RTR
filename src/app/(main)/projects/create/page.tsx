@@ -12,12 +12,12 @@ export default function CreateProjectPage() {
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && user?.role === 'supervisor') {
+    if (!loading && (user?.role === 'supervisor' || user?.role === 'member')) {
       router.push('/dashboard');
     }
   }, [user, loading, router]);
 
-  if (loading || (user && user.role === 'supervisor')) {
+  if (loading || (user && (user.role === 'supervisor' || user.role === 'member'))) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -25,8 +25,8 @@ export default function CreateProjectPage() {
     );
   }
   
-  // Render form if not loading and user is not a supervisor (or no user, though AuthGuard should prevent this)
-  if (!loading && user && user.role !== 'supervisor') {
+  // Render form if not loading and user is not a supervisor or member
+  if (!loading && user && user.role !== 'supervisor' && user.role !== 'member') {
     return (
       <div className="mx-auto max-w-2xl">
         <h1 className="mb-8 font-headline text-3xl font-semibold tracking-tight">Create New Project</h1>
@@ -38,5 +38,3 @@ export default function CreateProjectPage() {
   // Fallback or if user is null and not loading (AuthGuard should handle this ideally)
   return null; 
 }
-
-    
