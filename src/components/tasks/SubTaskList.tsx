@@ -21,8 +21,8 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   
   const isSupervisor = user?.role === 'supervisor';
 
-  const fetchSubTasks = async () => {
-    console.log('SubTaskList: fetchSubTasks called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null', 'isSupervisor:', isSupervisor);
+  const fetchSubTasksData = async () => {
+    console.log('SubTaskList: fetchSubTasksData called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null');
     if (authLoading || !user || !mainTaskId) {
       console.log('SubTaskList: Skipping fetch, auth loading, no user, or no mainTaskId.');
       if(!authLoading && !user && mainTaskId) setLoading(false); 
@@ -32,24 +32,23 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
     setLoading(true);
     setError(null);
     try {
-      console.log(`SubTaskList: Attempting to fetch sub-tasks for mainTaskId: ${mainTaskId}, userUid: ${user.uid}, isSupervisorView: ${isSupervisor}`);
-      // Pass isSupervisor as the flag to filter tasks for supervisors
-      const fetchedSubTasks = await getSubTasks(mainTaskId, user.uid, isSupervisor);
+      // getSubTasks now always fetches ALL sub-tasks for the mainTaskId
+      const fetchedSubTasks = await getSubTasks(mainTaskId);
       console.log('SubTaskList: Fetched sub-tasks:', fetchedSubTasks);
       setSubTasks(fetchedSubTasks);
     } catch (err: any) {
       console.error('SubTaskList: Error fetching sub-tasks:', err);
-      setError(`Failed to load sub-tasks. ${err.message?.includes("index") ? "A database index might be required for sub-tasks. Check console for details from taskService." : (err.message || "Unknown error")}`);
+      setError(`Failed to load sub-tasks. ${err.message?.includes("index") ? "A database index might be required for sub-tasks (parentId ASC, createdAt ASC). Check console." : (err.message || "Unknown error")}`);
     } finally {
       setLoading(false);
-      console.log('SubTaskList: fetchSubTasks finished. Loading set to false.');
+      console.log('SubTaskList: fetchSubTasksData finished. Loading set to false.');
     }
   };
 
   useEffect(() => {
     console.log('SubTaskList: useEffect triggered. mainTaskId:', mainTaskId, 'User available:', !!user, 'Auth loading:', authLoading);
     if (mainTaskId && user && !authLoading) {
-        fetchSubTasks();
+        fetchSubTasksData();
     } else if (!mainTaskId) {
         console.warn('SubTaskList: mainTaskId is undefined or null, skipping fetch.');
         setLoading(false);
@@ -60,11 +59,11 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
         setError('Cannot load sub-tasks: User not authenticated.');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mainTaskId, user, authLoading, isSupervisor]); // Added isSupervisor to dependencies
+  }, [mainTaskId, user, authLoading]);
 
   const onSubTaskUpdated = () => {
     console.log('SubTaskList: onSubTaskUpdated called, re-fetching sub-tasks.');
-    fetchSubTasks(); 
+    fetchSubTasksData(); 
   };
 
   if (loading) {
@@ -83,14 +82,14 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   }
 
   if (subTasks.length === 0) {
-    const message = isSupervisor 
-      ? "No sub-tasks assigned to you under this main task." 
-      : "No sub-tasks yet. Add sub-tasks to this main task.";
+    // The message can be generic as supervisors will see all sub-tasks anyway.
+    // Specific assigned work is visible when they drill down into a sub-task's issues.
+    const message = "No sub-tasks yet for this main task. Add sub-tasks to get started.";
     console.log('SubTaskList: Render - No sub-tasks found.');
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <ListChecks className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-3 font-headline text-lg font-semibold">{isSupervisor ? "No Assigned Sub-tasks" : "No Sub-tasks Yet"}</h3>
+        <h3 className="mt-3 font-headline text-lg font-semibold">No Sub-tasks Yet</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           {message}
         </p>
@@ -105,11 +104,9 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
             key={subTask.id} 
             task={subTask} 
             onTaskUpdated={onSubTaskUpdated}
-            isSubTaskView={true}
+            isSubTaskView={true} // Indicates this card represents a sub-task in this list
         />
       ))}
     </div>
   );
 }
-
-    

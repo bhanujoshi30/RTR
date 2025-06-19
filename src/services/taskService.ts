@@ -17,6 +17,7 @@ import {
   orderBy,
   getDoc,
   writeBatch,
+  getCountFromServer,
 } from 'firebase/firestore';
 import { deleteIssuesForTask } from './issueService';
 
@@ -37,17 +38,16 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
   return {
     id: docSnapshot.id,
     projectId: data.projectId,
-    parentId: data.parentId,
+    parentId: data.parentId || null,
     name: data.name,
-    description: data.description,
-    status: data.status,
+    description: data.description || '',
+    status: data.status as TaskStatus,
     ownerUid: data.ownerUid,
-    assignedToUid: data.assignedToUid,
-    assignedToName: data.assignedToName,
-    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
+    assignedToUid: data.assignedToUid || null,
+    assignedToName: data.assignedToName || null,
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt || Date.now()),
     dueDate: data.dueDate ? (data.dueDate instanceof Timestamp ? data.dueDate.toDate() : new Date(data.dueDate)) : null,
-    // Ensure updatedAt is also handled if it exists in your Task type and Firestore
-    // updatedAt: data.updatedAt ? (data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(data.updatedAt)) : undefined,
+    updatedAt: data.updatedAt ? (data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(data.updatedAt)) : undefined,
   };
 };
 
@@ -75,7 +75,7 @@ export const createTask = async (
     name: taskData.name,
     parentId: taskData.parentId || null,
     createdAt: serverTimestamp() as Timestamp,
-    updatedAt: serverTimestamp() as Timestamp, // Add updatedAt on creation
+    updatedAt: serverTimestamp() as Timestamp,
     description: taskData.description || '',
     status: taskData.status || 'To Do',
     assignedToUid: taskData.assignedToUid || null,
@@ -88,13 +88,15 @@ export const createTask = async (
     newTaskPayload.dueDate = null;
   }
 
-  if (!taskData.parentId) {
-    newTaskPayload.status = 'To Do';
-    delete newTaskPayload.description;
-    delete newTaskPayload.dueDate;
-    delete newTaskPayload.assignedToUid;
+  if (!taskData.parentId) { // Main task defaults
+    newTaskPayload.status = 'To Do'; // Main tasks don't have progress status directly set like this by user
+    // For main tasks, these fields are often not directly set or are derived
+    delete newTaskPayload.description; // Typically not on main task form
+    delete newTaskPayload.dueDate; // Typically not on main task form
+    delete newTaskPayload.assignedToUid; // Main tasks are not "assigned"
     delete newTaskPayload.assignedToName;
   }
+
 
   try {
     const newTaskRef = await addDoc(tasksCollection, newTaskPayload);
@@ -119,7 +121,7 @@ export const getProjectMainTasks = async (projectId: string): Promise<Task[]> =>
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
      if (tasks.length === 0) {
-      console.log(`taskService: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks. This could be due to no matching data or a missing/incorrect Firestore index if no explicit index error was thrown. Index needed: projectId (ASC), parentId (ASC), createdAt (DESC)`);
+      console.log(`taskService: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks. Index needed: projectId (ASC), parentId (ASC), createdAt (DESC)`);
     }
     return tasks;
   } catch (error: any) {
@@ -132,37 +134,56 @@ export const getProjectMainTasks = async (projectId: string): Promise<Task[]> =>
 };
 
 
-export const getSubTasks = async (parentId: string, userUid: string, isSupervisorView: boolean = false): Promise<Task[]> => {
-  console.log(`taskService: getSubTasks for parentId: ${parentId}, userUid: ${userUid}, isSupervisorView: ${isSupervisorView}`);
-  if (!userUid) return [];
-
-  let q;
-  if (isSupervisorView) {
-    q = query(
-      tasksCollection,
-      where('parentId', '==', parentId),
-      where('assignedToUid', '==', userUid),
-      orderBy('createdAt', 'asc')
-    );
-  } else {
-     q = query(
-      tasksCollection,
-      where('parentId', '==', parentId),
-      orderBy('createdAt', 'asc')
-    );
+// Fetches all sub-tasks for a given parentId
+export const getSubTasks = async (parentId: string): Promise<Task[]> => {
+  console.log(`taskService: getSubTasks for parentId: ${parentId}`);
+  if (!parentId) {
+    console.warn('taskService: getSubTasks called with no parentId.');
+    return [];
   }
+
+  const q = query(
+    tasksCollection,
+    where('parentId', '==', parentId),
+    orderBy('createdAt', 'asc')
+  );
 
   try {
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    console.log(`taskService: Fetched ${tasks.length} sub-tasks for parentId ${parentId}.`);
     return tasks;
   } catch (error: any) {
-    console.error(`taskService: Error fetching sub-tasks for parentId: ${parentId}, userUid: ${userUid}, supervisorView: ${isSupervisorView}`, error.message, error.code ? `(${error.code})` : '', error.stack);
+    console.error(`taskService: Error fetching sub-tasks for parentId: ${parentId}`, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-       const indexFields = isSupervisorView
-         ? "parentId (ASC), assignedToUid (ASC), createdAt (ASC)"
-         : "parentId (ASC), createdAt (ASC)";
-       console.error(`Firestore query for sub-tasks requires an index. Please create it in the Firebase console. Fields: ${indexFields}. The error message from Firebase usually provides a direct link to create it.`);
+       const indexFields = "parentId (ASC), createdAt (ASC)";
+       console.error(`Firestore query for sub-tasks requires an index. Please create it in the Firebase console. Fields: ${indexFields}.`);
+    }
+    throw error;
+  }
+};
+
+// Fetches sub-tasks directly assigned to a specific user under a main task
+export const getAssignedSubTasksForUser = async (mainTaskId: string, userUid: string): Promise<Task[]> => {
+  console.log(`taskService: getAssignedSubTasksForUser for mainTaskId: ${mainTaskId}, userUid: ${userUid}`);
+  if (!mainTaskId || !userUid) return [];
+
+  const q = query(
+    tasksCollection,
+    where('parentId', '==', mainTaskId),
+    where('assignedToUid', '==', userUid),
+    orderBy('createdAt', 'asc') // Consistent ordering
+  );
+
+  try {
+    const querySnapshot = await getDocs(q);
+    const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    console.log(`taskService: Fetched ${tasks.length} sub-tasks assigned to user ${userUid} under main task ${mainTaskId}.`);
+    return tasks;
+  } catch (error: any) {
+    console.error(`taskService: Error in getAssignedSubTasksForUser for mainTaskId: ${mainTaskId}, userUid: ${userUid}`, error.message, error.stack);
+    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
+      console.error("Firestore query for getAssignedSubTasksForUser requires an index. Fields: parentId (ASC), assignedToUid (ASC), createdAt (ASC). Check Firebase console.");
     }
     throw error;
   }
@@ -176,16 +197,21 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
   const taskSnap = await getDoc(taskDocRef);
 
   if (taskSnap.exists()) {
-    const taskData = mapDocumentToTask(taskSnap); // Use mapping function
+    const taskData = mapDocumentToTask(taskSnap);
     const isOwner = taskData.ownerUid === userUid;
+    
+    // If it's a sub-task, check if it's assigned to the current user (supervisor or not)
     const isAssignedToThisSubTask = taskData.parentId && taskData.assignedToUid === userUid;
+
+    // If it's a main task, a supervisor can view it if they are on the project page (implies they have work in it)
     const isSupervisorViewingAnyMainTask = userRole === 'supervisor' && !taskData.parentId;
 
     if (isOwner || isAssignedToThisSubTask || isSupervisorViewingAnyMainTask) {
       return taskData;
     } else {
       console.warn(`taskService: getTaskById - Access denied for user ${userUid} (role: ${userRole}) to task ${taskId}. Owner: ${taskData.ownerUid}, AssignedToSubTask: ${taskData.assignedToUid}`);
-      return null;
+      // throw new Error('Access denied or task not found for your role.'); // Potentially too disruptive
+      return null; // Or handle appropriately in UI
     }
   }
   console.warn(`taskService: getTaskById - Task ${taskId} not found.`);
@@ -215,7 +241,7 @@ export const updateTask = async (
     throw new Error('Task not found for update.');
   }
 
-  const taskDataFromSnap = taskSnap.data();
+  const taskDataFromSnap = taskSnap.data() as Task; // Assuming it's Task like structure
   const isOwner = taskDataFromSnap.ownerUid === userUid;
   const isAssignedSupervisor = userRole === 'supervisor' && taskDataFromSnap.assignedToUid === userUid;
 
@@ -223,49 +249,76 @@ export const updateTask = async (
      throw new Error('Access denied for updating task.');
   }
 
-  const updatePayload: any = { ...updates, updatedAt: serverTimestamp() as Timestamp };
+  const updatePayload: any = { updatedAt: serverTimestamp() as Timestamp };
 
-  if (updates.dueDate !== undefined) {
+  // Apply general updates if present
+  if (updates.name !== undefined) updatePayload.name = updates.name;
+  if (updates.description !== undefined) updatePayload.description = updates.description;
+  if (updates.status !== undefined) updatePayload.status = updates.status;
+
+
+  if (updates.dueDate !== undefined) { // Handle date conversion for Firestore
     updatePayload.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
   }
 
-  if (updates.assignedToUid !== undefined) {
+  if (updates.assignedToUid !== undefined) { // Handle assignee update
     updatePayload.assignedToUid = updates.assignedToUid || null;
     updatePayload.assignedToName = updates.assignedToName || null;
   }
 
-  if (!taskDataFromSnap.parentId) {
+
+  if (!taskDataFromSnap.parentId) { // It's a main task
     if (!isOwner) throw new Error('Only project owner can edit main task name.');
-    const mainTaskUpdate: Partial<Pick<Task, 'name'>> & {updatedAt: Timestamp} = {updatedAt: serverTimestamp() as Timestamp};
-    if (updates.name !== undefined) mainTaskUpdate.name = updates.name;
-
-    const allowedKeysForMainTask: (keyof UpdateTaskData)[] = ['name'];
+    // For main tasks, only allow name update through this path, other fields are typically not user-editable here
+    const mainTaskSpecificUpdate: { name?: string, updatedAt: Timestamp } = { updatedAt: serverTimestamp() as Timestamp };
+    if (updates.name !== undefined) mainTaskSpecificUpdate.name = updates.name;
+    
     const attemptedUpdates = Object.keys(updates) as (keyof UpdateTaskData)[];
-    const disallowedUpdates = attemptedUpdates.filter(key => !allowedKeysForMainTask.includes(key) && (updates as any)[key] !== undefined);
+    const disallowedUpdatesForMainTask = attemptedUpdates.filter(key => key !== 'name' && (updates as any)[key] !== undefined);
 
-    if (disallowedUpdates.length > 0) {
-       console.warn(`Attempting to update restricted fields (${disallowedUpdates.join(', ')}) for a main task ${taskId}. Only 'name' is allowed through this form path.`);
+    if (disallowedUpdatesForMainTask.length > 0) {
+       console.warn(`Attempting to update restricted fields (${disallowedUpdatesForMainTask.join(', ')}) for main task ${taskId}. Only 'name' is allowed for main tasks via this form.`);
+       // Filter payload to only include name and updatedAt
+       Object.keys(updatePayload).forEach(key => {
+           if (key !== 'name' && key !== 'updatedAt') {
+               delete updatePayload[key];
+           }
+       });
     }
-    await updateDoc(taskDocRef, mainTaskUpdate);
+    await updateDoc(taskDocRef, updatePayload); // updatePayload will now only contain name (if changed) and updatedAt
     return;
   }
 
-  if (isAssignedSupervisor && !isOwner) {
-    if (Object.keys(updates).length === 1 && updates.status) {
-      await updateDoc(taskDocRef, { status: updates.status, updatedAt: serverTimestamp() as Timestamp });
-      return;
-    } else if (updates.status && Object.keys(updates).every(key => ['status', 'description', 'dueDate'].includes(key)) ) {
-      const supervisorAllowedUpdates: any = {updatedAt: serverTimestamp() as Timestamp};
-      if(updates.status) supervisorAllowedUpdates.status = updates.status;
-      if(updates.description !== undefined) supervisorAllowedUpdates.description = updates.description;
-      if(updates.dueDate !== undefined) supervisorAllowedUpdates.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
-      await updateDoc(taskDocRef, supervisorAllowedUpdates);
-      return;
+  // It's a sub-task
+  if (isAssignedSupervisor && !isOwner) { // Supervisor editing assigned sub-task
+    // Supervisors can only update status, description, or due date
+    const supervisorAllowedUpdates: any = {updatedAt: serverTimestamp() as Timestamp};
+    let hasAllowedUpdate = false;
 
-    } else {
-      throw new Error("Supervisors can only update status, description, or due date of sub-tasks assigned to them.");
+    if(updates.status !== undefined) { supervisorAllowedUpdates.status = updates.status; hasAllowedUpdate = true; }
+    if(updates.description !== undefined) { supervisorAllowedUpdates.description = updates.description; hasAllowedUpdate = true; }
+    if(updates.dueDate !== undefined) { supervisorAllowedUpdates.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null; hasAllowedUpdate = true; }
+    
+    // Check if any other fields were attempted
+    const attemptedKeys = Object.keys(updates) as (keyof UpdateTaskData)[];
+    const otherAttempts = attemptedKeys.some(key => !['status', 'description', 'dueDate'].includes(key) && (updates as any)[key] !== undefined);
+
+    if (otherAttempts || !hasAllowedUpdate) {
+         // If they try to change other fields, or no allowed fields were provided, throw error or ignore
+         // For now, let's assume if 'status' is the only thing, it's handled by updateTaskStatus
+         // If other fields like 'name' or 'assignedToUid' are attempted by supervisor, it's an error here.
+         const forbiddenAttempts = attemptedKeys.filter(key => !['status', 'description', 'dueDate'].includes(key) && (updates as any)[key] !== undefined);
+         if(forbiddenAttempts.length > 0) {
+            throw new Error(`Supervisors can only update status, description, or due date of sub-tasks assigned to them. Attempted to change: ${forbiddenAttempts.join(', ')}`);
+         }
     }
+    if(hasAllowedUpdate) {
+        await updateDoc(taskDocRef, supervisorAllowedUpdates);
+    }
+    return;
   }
+  
+  // Owner editing sub-task (can change anything in UpdateTaskData)
   await updateDoc(taskDocRef, updatePayload);
 };
 
@@ -277,11 +330,11 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
   if (!taskSnap.exists()) {
     throw new Error('Task not found for status update.');
   }
-  const taskData = taskSnap.data();
+  const taskData = taskSnap.data() as Task;
   const isOwner = taskData.ownerUid === userUid;
   const isAssignedSupervisor = userRole === 'supervisor' && taskData.assignedToUid === userUid;
 
-  if (taskData.parentId) {
+  if (taskData.parentId) { // Only sub-tasks have user-mutable status
     if (isOwner || isAssignedSupervisor) {
       await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
     } else {
@@ -297,22 +350,33 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
 
   const taskDocRef = doc(db, 'tasks', taskId);
   const taskSnap = await getDoc(taskDocRef);
-  if (!taskSnap.exists() || taskSnap.data().ownerUid !== userUid) {
+  if (!taskSnap.exists() || (taskSnap.data() as Task).ownerUid !== userUid) {
     throw new Error('Task not found or access denied for deletion.');
   }
 
-  const taskDataFromSnap = taskSnap.data();
+  const taskDataFromSnap = taskSnap.data() as Task;
   const batch = writeBatch(db);
 
-  batch.delete(taskDocRef);
-  await deleteIssuesForTask(taskId, userUid);
+  batch.delete(taskDocRef); // Delete the task itself
+  await deleteIssuesForTask(taskId, userUid); // Delete associated issues
 
+  // If it's a main task, delete all its sub-tasks and their issues
   if (!taskDataFromSnap.parentId) {
-    const subTasksQuery = query(tasksCollection, where('parentId', '==', taskId), where('ownerUid', '==', userUid));
+    // Query for sub-tasks that belong to this main task AND are owned by the same user
+    // (though ownerUid check might be redundant if sub-tasks inherit project's owner context implicitly)
+    const subTasksQuery = query(tasksCollection, where('parentId', '==', taskId)); 
     const subTasksSnapshot = await getDocs(subTasksQuery);
     for (const subTaskDoc of subTasksSnapshot.docs) {
-      batch.delete(subTaskDoc.ref);
-      await deleteIssuesForTask(subTaskDoc.id, userUid);
+      // Check if the sub-task owner is indeed the one deleting the main task, for safety.
+      // This check might be overly cautious if main task deletion implies sub-task deletion regardless of sub-task owner.
+      // For now, assume if main task owner deletes, sub-tasks they own are deleted.
+      // If sub-tasks could have different owners, this logic would need refinement.
+      if ((subTaskDoc.data() as Task).ownerUid === userUid) {
+        batch.delete(subTaskDoc.ref);
+        await deleteIssuesForTask(subTaskDoc.id, userUid); // Delete issues of each sub-task
+      } else {
+        console.warn(`Skipping deletion of sub-task ${subTaskDoc.id} as its owner does not match the main task deleter. This scenario might need policy review.`);
+      }
     }
   }
 
@@ -329,27 +393,32 @@ export const deleteAllTasksForProject = async (projectId: string, projectOwnerUi
 
   const projectTasksQuery = query(
     tasksCollection,
-    where("projectId", "==", projectId),
-    where("ownerUid", "==", projectOwnerUid)
+    where("projectId", "==", projectId)
+    // No ownerUid check here, assume if project is deleted, all its tasks go.
+    // Ensure Firestore rules protect this appropriately if needed.
   );
 
   const batch = writeBatch(db);
   try {
     const tasksSnapshot = await getDocs(projectTasksQuery);
     if (tasksSnapshot.empty) {
-        console.log(`taskService: No tasks found for project ${projectId} owned by ${projectOwnerUid} to delete.`);
+        console.log(`taskService: No tasks found for project ${projectId} to delete.`);
         return;
     }
 
     for (const taskDoc of tasksSnapshot.docs) {
+      // We must ensure that the user deleting the project has authority to delete these tasks.
+      // This is usually handled by Firestore rules, but an explicit check for ownerUid here could be added if tasks can have different owners than the project owner.
+      // For now, assume project deletion implies deletion of all its tasks.
       batch.delete(taskDoc.ref);
-      await deleteIssuesForTask(taskDoc.id, projectOwnerUid);
+      // Delete issues for each task being deleted
+      await deleteIssuesForTask(taskDoc.id, projectOwnerUid); // Pass projectOwnerUid as the performing user
     }
     await batch.commit();
-    console.log(`taskService: Successfully deleted all tasks and their issues for project ${projectId} owned by ${projectOwnerUid}.`);
+    console.log(`taskService: Successfully deleted all tasks and their issues for project ${projectId}.`);
 
   } catch (error) {
-    console.error(`Error in deleteAllTasksForProject for projectId ${projectId} and userUid ${projectOwnerUid}:`, error);
+    console.error(`Error in deleteAllTasksForProject for projectId ${projectId} by user ${projectOwnerUid}:`, error);
     throw error;
   }
 };
@@ -359,27 +428,28 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   if (!userUid) return [];
   console.log(`taskService: getAllTasksAssignedToUser for userUid: ${userUid}`);
 
+  // This query fetches sub-tasks (parentId != null) assigned to the user
   const q = query(
     tasksCollection,
     where('assignedToUid', '==', userUid),
-    where('parentId', '!=', null),
-    orderBy('parentId'),
-    orderBy('createdAt', 'desc')
+    where('parentId', '!=', null), // Ensure it's a sub-task
+    orderBy('parentId'), // Order by main task first
+    orderBy('createdAt', 'desc') // Then by creation time
   );
 
   try {
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
     if (tasks.length === 0) {
-      console.log(`taskService: getAllTasksAssignedToUser - Query executed successfully but found 0 tasks assigned to user ${userUid}. This means no task documents matched: assignedToUid === '${userUid}' AND parentId !== null. Check data and query logic.`);
+      console.log(`taskService: getAllTasksAssignedToUser - Query executed successfully but found 0 sub-tasks assigned to user ${userUid}. Index needed: assignedToUid (ASC), parentId (ASC), createdAt (DESC)`);
     } else {
-      console.log(`taskService: Fetched ${tasks.length} tasks assigned to user ${userUid}`);
+      console.log(`taskService: Fetched ${tasks.length} sub-tasks assigned to user ${userUid}`);
     }
     return tasks;
   } catch (error: any) {
     console.error('taskService: Error fetching all tasks assigned to user:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error("Firestore query for getAllTasksAssignedToUser requires an index. Fields: assignedToUid (ASC), parentId (ASC), createdAt (DESC). Check Firebase console using the link provided in the Firebase error message in your browser console.");
+      console.error("Firestore query for getAllTasksAssignedToUser requires an index. Fields: assignedToUid (ASC), parentId (ASC), createdAt (DESC). Check Firebase console.");
     }
     throw error;
   }
