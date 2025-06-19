@@ -43,14 +43,12 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
 
   const isActuallyMainTask = !task.parentId;
   const isSupervisor = user?.role === 'supervisor';
+  const isMember = user?.role === 'member';
 
   const isOwnerOfThisTask = user && task.ownerUid === user.uid;
 
-  // For sub-tasks, only owner can perform full edit or delete.
-  // For main tasks, only owner can perform full edit or delete.
   const canFullyEditOrDeleteThisTask = isOwnerOfThisTask;
 
-  // For sub-tasks, status can be changed by owner OR any user assigned to it.
   const isAssignedToThisSubTask = !isActuallyMainTask && (task.assignedToUids?.includes(user?.uid || '') ?? false);
   const canChangeSubTaskStatus = user && (isOwnerOfThisTask || isAssignedToThisSubTask);
 
@@ -59,20 +57,22 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
     console.log(`[TaskCard Debug] useEffect for task '${task.name}' (ID: ${task.id}). isActuallyMainTask: ${isActuallyMainTask}, User: ${user?.uid}, Task ID: ${task.id}`);
     if (isActuallyMainTask && user && task.id) {
       const fetchCount = async () => {
-        console.log(`[TaskCard Debug] fetchCount called for main task '${task.name}' (ID: ${task.id}). Supervisor: ${isSupervisor}, Owner: ${isOwnerOfThisTask}`);
+        console.log(`[TaskCard Debug] fetchCount called for main task '${task.name}' (ID: ${task.id}). Supervisor: ${isSupervisor}, Member: ${isMember}, Owner: ${isOwnerOfThisTask}`);
         try {
-          if (isSupervisor && !isOwnerOfThisTask) {
-            console.log(`[TaskCard Debug] Fetching assigned sub-tasks for supervisor ${user.uid} under main task ${task.id}`);
+          const isNonOwnerSupervisorOrMember = !isOwnerOfThisTask && (isSupervisor || isMember);
+
+          if (isNonOwnerSupervisorOrMember) {
+            console.log(`[TaskCard Debug] Fetching assigned sub-tasks for non-owner supervisor/member ${user.uid} under main task ${task.id}`);
             const assignedSubtasks = await getAssignedSubTasksForUser(task.id, user.uid);
-            console.log(`[TaskCard Debug] Fetched assignedSubtasks for ${task.id}:`, assignedSubtasks);
+            console.log(`[TaskCard Debug] Fetched assignedSubtasks for ${task.id} (user ${user.uid}):`, assignedSubtasks);
             setSubTaskCount(assignedSubtasks.length);
             const count = assignedSubtasks.length;
             const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
             const newLabel = `${count} ${taskWord} (assigned to you)`;
             setSubTaskCountLabel(newLabel);
-            console.log(`[TaskCard Debug] Set label for ${task.id} (supervisor): ${newLabel}`);
-          } else { 
-            console.log(`[TaskCard Debug] Fetching all sub-tasks for main task ${task.id}`);
+            console.log(`[TaskCard Debug] Set label for ${task.id} (non-owner supervisor/member): ${newLabel}`);
+          } else {
+            console.log(`[TaskCard Debug] Fetching all sub-tasks for main task ${task.id} (user is owner or other role).`);
             const allSubtasks = await getSubTasks(task.id);
             console.log(`[TaskCard Debug] Fetched allSubtasks for ${task.id}:`, allSubtasks);
             setSubTaskCount(allSubtasks.length);
@@ -88,8 +88,9 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
             } else {
                 console.error("[TaskCard Debug] Failed to fetch sub-task count for main task:", task.id, error);
             }
-            setSubTaskCount(0); 
-            const errorLabel = isSupervisor && !isOwnerOfThisTask ? "0 Sub-tasks (assigned to you)" : "0 Sub-tasks";
+            setSubTaskCount(0);
+            const isPotentiallyAssignedViewer = !isOwnerOfThisTask && (isSupervisor || isMember);
+            const errorLabel = isPotentiallyAssignedViewer ? "0 Sub-tasks (assigned to you)" : "0 Sub-tasks";
             setSubTaskCountLabel(errorLabel);
             console.log(`[TaskCard Debug] Set label for ${task.id} (error fallback): ${errorLabel}`);
         }
@@ -97,7 +98,7 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
       fetchCount();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor]);
+  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor, isMember, isOwnerOfThisTask]);
 
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
@@ -275,3 +276,4 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
     </Card>
   );
 }
+
