@@ -21,7 +21,6 @@ export default function DashboardPage() {
 
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
-  // AdminOrOwner means not supervisor and not member, and is a logged-in user
   const isAdminOrOwner = user && !isSupervisor && !isMember; 
 
   useEffect(() => {
@@ -62,7 +61,7 @@ export default function DashboardPage() {
             console.log(`DashboardPage: ${user.role} - No unique project IDs found from tasks or issues.`);
             baseProjects = [];
           }
-        } else if (isAdminOrOwner) { // User is admin/owner (not supervisor, not member)
+        } else if (isAdminOrOwner) { 
           console.log(`DashboardPage: User is admin/owner (UID: ${user.uid}). Fetching owned projects.`);
           baseProjects = await getUserProjects(user.uid);
           console.log('DashboardPage: Admin/Owner - Fetched baseProjects:', baseProjects);
@@ -71,12 +70,15 @@ export default function DashboardPage() {
         }
 
         if (baseProjects.length > 0) {
+          console.log('DashboardPage: Base projects found, proceeding to fetch counts for:', baseProjects.map(p => p.id));
           const projectsWithCounts = await Promise.all(
             baseProjects.map(async (project) => {
+              console.log(`DashboardPage: Processing project ${project.id} (${project.name}) for counts.`);
               const [subTaskCount, openIssueCount] = await Promise.all([
                 countProjectSubTasks(project.id),
                 countProjectOpenIssues(project.id)
               ]);
+              console.log(`DashboardPage: Counts received for project ${project.id}: SubTasks=${subTaskCount}, OpenIssues=${openIssueCount}`);
               return {
                 ...project,
                 totalSubTasks: subTaskCount,
@@ -84,8 +86,10 @@ export default function DashboardPage() {
               };
             })
           );
+          console.log('DashboardPage: Projects with counts:', projectsWithCounts);
           setProjectsToDisplay(projectsWithCounts);
         } else {
+          console.log('DashboardPage: No base projects to display or fetch counts for.');
           setProjectsToDisplay([]);
         }
 

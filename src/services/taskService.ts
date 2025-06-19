@@ -464,8 +464,11 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
 };
 
 export const countProjectSubTasks = async (projectId: string): Promise<number> => {
-  if (!projectId) return 0;
-  console.log(`taskService: countProjectSubTasks for projectId: ${projectId}`);
+  if (!projectId) {
+    console.warn('taskService: countProjectSubTasks called with no projectId.');
+    return 0;
+  }
+  console.log(`taskService: countProjectSubTasks called for projectId: ${projectId}`);
 
   const q = query(
     tasksCollection,
@@ -476,13 +479,14 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
   try {
     const snapshot = await getCountFromServer(q);
     const count = snapshot.data().count;
-    console.log(`taskService: Found ${count} sub-tasks for project ${projectId}.`);
+    console.log(`taskService: Successfully queried. Found ${count} sub-tasks for project ${projectId}.`);
     return count;
   } catch (error: any) {
-    console.error(`taskService: Error counting sub-tasks for project ${projectId}:`, error.message, error.stack);
-    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error(`Firestore query for counting sub-tasks (projectId: ${projectId}) requires a composite index. Please create it in the Firebase console. Expected fields: 'projectId' (ASC), 'parentId' (ASC/DESC). The error message from Firebase often provides a direct link to create it.`);
+    console.error(`taskService: Error counting sub-tasks for project ${projectId}. Message: ${error.message}. Code: ${error.code || 'N/A'}. Full error:`, error);
+    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index") || error.code === 'failed-precondition')) {
+      console.error(`Firestore query for counting sub-tasks (projectId: ${projectId}) requires a composite index. Expected fields: 'projectId' (ASC), 'parentId' (ASC or DESC for '!=' query). Error: ${error.message}. A link to create this index is usually provided in the detailed Firebase error in the browser console or server logs.`);
     }
-    return 0; // Return 0 on error to prevent breaking the UI, though an error will be logged.
+    return 0; 
   }
 };
+
