@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users } from 'lucide-react'; 
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateTaskStatus, deleteTask, getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
 import { useToast } from '@/hooks/use-toast';
@@ -28,8 +28,8 @@ import { useAuth } from '@/hooks/useAuth';
 interface TaskCardProps {
   task: Task;
   onTaskUpdated: () => void;
-  isMainTaskView?: boolean; 
-  isSubTaskView?: boolean; 
+  isMainTaskView?: boolean;
+  isSubTaskView?: boolean;
 }
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
@@ -39,46 +39,58 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   const router = useRouter();
   const [subTaskCount, setSubTaskCount] = useState(0);
   const [subTaskCountLabel, setSubTaskCountLabel] = useState("Sub-tasks");
-  const { user } = useAuth(); 
+  const { user } = useAuth();
 
-  const isActuallyMainTask = !task.parentId; 
+  const isActuallyMainTask = !task.parentId;
   const isSupervisor = user?.role === 'supervisor';
-  
-  const canFullyEditOrDelete = user && task.ownerUid === user.uid; 
+
+  const canFullyEditOrDelete = user && task.ownerUid === user.uid;
 
   const isAssignedToThisSubTask = !isActuallyMainTask && task.assignedToUids?.includes(user?.uid || '');
   const canChangeSubTaskStatus = user && (task.ownerUid === user.uid || (isSupervisor && isAssignedToThisSubTask));
 
   useEffect(() => {
-    if (isActuallyMainTask && user && task.id) { 
+    console.log(`[TaskCard Debug] useEffect for task '${task.name}' (ID: ${task.id}). isActuallyMainTask: ${isActuallyMainTask}, User: ${user?.uid}, Task ID: ${task.id}`);
+    if (isActuallyMainTask && user && task.id) {
       const fetchCount = async () => {
+        console.log(`[TaskCard Debug] fetchCount called for main task '${task.name}' (ID: ${task.id}). Supervisor: ${isSupervisor}, Owner: ${task.ownerUid === user.uid}`);
         try {
           if (isSupervisor && task.ownerUid !== user.uid) {
+            console.log(`[TaskCard Debug] Fetching assigned sub-tasks for supervisor ${user.uid} under main task ${task.id}`);
             const assignedSubtasks = await getAssignedSubTasksForUser(task.id, user.uid);
+            console.log(`[TaskCard Debug] Fetched assignedSubtasks for ${task.id}:`, assignedSubtasks);
             setSubTaskCount(assignedSubtasks.length);
-            setSubTaskCountLabel(`Sub-task${assignedSubtasks.length !== 1 ? 's' : ''} (assigned to you)`);
-          } else {
+            const newLabel = `${assignedSubtasks.length} Sub-task${assignedSubtasks.length !== 1 ? 's' : ''} (assigned to you)`;
+            setSubTaskCountLabel(newLabel);
+            console.log(`[TaskCard Debug] Set label for ${task.id} (supervisor): ${newLabel}`);
+          } else { // Owner or non-supervisor view
+            console.log(`[TaskCard Debug] Fetching all sub-tasks for main task ${task.id}`);
             const allSubtasks = await getSubTasks(task.id);
+            console.log(`[TaskCard Debug] Fetched allSubtasks for ${task.id}:`, allSubtasks);
             setSubTaskCount(allSubtasks.length);
-            setSubTaskCountLabel(`${allSubtasks.length} Sub-task${allSubtasks.length !== 1 ? 's' : ''}`);
+            const newLabel = `${allSubtasks.length} Sub-task${allSubtasks.length !== 1 ? 's' : ''}`;
+            setSubTaskCountLabel(newLabel);
+            console.log(`[TaskCard Debug] Set label for ${task.id} (owner/other): ${newLabel}`);
           }
         } catch (error: any) {
             if (error.message && (error.message.includes("index is currently building") || error.message.includes("index is building"))) {
-                console.warn(`Sub-task count for main task ${task.id} is unavailable because a Firestore index is still building. Displaying 0 for now. Error: ${error.message}`);
+                console.warn(`[TaskCard Debug] Sub-task count for main task ${task.id} is unavailable because a Firestore index is still building. Displaying 0 for now. Error: ${error.message}`);
             } else {
-                console.error("Failed to fetch sub-task count for main task:", task.id, error);
+                console.error("[TaskCard Debug] Failed to fetch sub-task count for main task:", task.id, error);
             }
-            setSubTaskCount(0);
-            setSubTaskCountLabel(isSupervisor && task.ownerUid !== user.uid ? "Sub-tasks (assigned to you)" : "Sub-tasks");
+            setSubTaskCount(0); // Fallback to 0 on error
+            const errorLabel = isSupervisor && task.ownerUid !== user.uid ? "0 Sub-tasks (assigned to you)" : "0 Sub-tasks";
+            setSubTaskCountLabel(errorLabel);
+            console.log(`[TaskCard Debug] Set label for ${task.id} (error fallback): ${errorLabel}`);
         }
       };
       fetchCount();
     }
-  }, [task.id, task.ownerUid, isActuallyMainTask, user, isSupervisor]);
+  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor]);
 
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
-    if (isActuallyMainTask || !user) { 
+    if (isActuallyMainTask || !user) {
       toast({ title: 'Info', description: 'Main task status is derived and not directly set here.'});
       return;
     }
@@ -87,7 +99,6 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
       return;
     }
     try {
-      // For updateTaskStatus, we're updating a sub-task. The service function needs to know the user's role.
       await updateTaskStatus(task.id, user.uid, newStatus, user.role);
       toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
       onTaskUpdated();
@@ -97,14 +108,14 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   };
 
   const handleDeleteTask = async () => {
-    if (!user || !task.id || !canFullyEditOrDelete) { 
+    if (!user || !task.id || !canFullyEditOrDelete) {
          toast({ title: 'Permission Denied', description: 'Only the task owner can delete this task.', variant: 'destructive'});
         return;
     }
     try {
       await deleteTask(task.id, user.uid);
       toast({ title: 'Task Deleted', description: `"${task.name}" has been deleted.` });
-      onTaskUpdated(); 
+      onTaskUpdated();
     } catch (error: any) {
       toast({
         title: 'Deletion Failed',
@@ -126,14 +137,14 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   const handleViewTask = () => {
     router.push(`/projects/${task.projectId}/tasks/${task.id}`);
   };
-  
+
   const handleEditTask = () => {
-    if (isActuallyMainTask) { 
-        if (!canFullyEditOrDelete) { 
+    if (isActuallyMainTask) {
+        if (!canFullyEditOrDelete) {
              toast({ title: 'Permission Denied', description: 'Only the task owner can edit main task details.', variant: 'destructive'});
             return;
         }
-    } else { 
+    } else {
         if (!canFullyEditOrDelete && !(isSupervisor && isAssignedToThisSubTask)) {
             toast({ title: 'Permission Denied', description: 'You do not have permission to edit this sub-task.', variant: 'destructive'});
             return;
@@ -145,6 +156,10 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   const cardIcon = isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />;
   const showEditButton = canFullyEditOrDelete || (isSupervisor && isAssignedToThisSubTask && !isActuallyMainTask);
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
+
+  if (isActuallyMainTask) {
+    console.log(`[TaskCard Debug] Rendering main task '${task.name}', subTaskCountLabel: '${subTaskCountLabel}'`);
+  }
 
   return (
     <Card className="shadow-md transition-shadow hover:shadow-lg">
@@ -169,8 +184,8 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
           <CardDescription className="pt-1 line-clamp-2">{task.description}</CardDescription>
         )}
       </CardHeader>
-      <CardContent className="space-y-3 pt-2 pb-4"> 
-        <div className="flex flex-col gap-y-2"> 
+      <CardContent className="space-y-3 pt-2 pb-4">
+        <div className="flex flex-col gap-y-2">
           <div className="flex items-center text-xs text-muted-foreground">
             <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
             Created {task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true }) : 'N/A'}
@@ -188,10 +203,10 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
           )}
         </div>
         <div className="flex items-center justify-end gap-2 pt-2">
-            {!isActuallyMainTask && ( 
-              <Select 
-                value={task.status} 
-                onValueChange={handleStatusChange} 
+            {!isActuallyMainTask && (
+              <Select
+                value={task.status}
+                onValueChange={handleStatusChange}
                 disabled={!user || !canChangeSubTaskStatus}
               >
                 <SelectTrigger className="w-full h-9 text-xs sm:w-[150px]">
@@ -211,18 +226,18 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
                 <span className="sr-only">View Details</span>
             </Button>
             {showEditButton && (
-             <Button 
-                variant="outline" 
-                size="icon" 
-                className="h-9 w-9" 
-                title="Edit Task" 
+             <Button
+                variant="outline"
+                size="icon"
+                className="h-9 w-9"
+                title="Edit Task"
                 onClick={handleEditTask}
               >
                 <Edit2 className="h-4 w-4" />
                  <span className="sr-only">Edit Task</span>
             </Button>
             )}
-            {canFullyEditOrDelete && ( 
+            {canFullyEditOrDelete && (
              <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title={isActuallyMainTask ? "Delete Main Task & Sub-tasks" : "Delete Sub-task"} disabled={!user}>
