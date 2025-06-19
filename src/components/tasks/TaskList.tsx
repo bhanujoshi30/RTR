@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getProjectMainTasks } from '@/services/taskService'; // Changed to getProjectMainTasks
+import { getProjectMainTasks } from '@/services/taskService'; 
 import type { Task } from '@/types';
 import { TaskCard } from './TaskCard';
 import { Loader2, CheckSquare, ListTodo } from 'lucide-react';
@@ -16,21 +16,22 @@ export function TaskList({ projectId }: TaskListProps) {
   const [tasks, setTasks] = useState<Task[]>([]); // Will hold main tasks
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading } = useAuth(); // Keep authLoading to ensure user state is resolved
 
   const fetchMainTasks = async () => {
-    console.log('TaskList: fetchMainTasks called. projectId:', projectId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null');
-    if (authLoading || !user) {
-      console.log('TaskList: Skipping fetch, auth loading or no user.');
-      if(!authLoading && !user) setLoading(false); // Stop loading if auth is done and no user
+    console.log('TaskList: fetchMainTasks called. projectId:', projectId, 'Auth Loading:', authLoading);
+    // Wait for auth to resolve before proceeding, even if user object isn't directly used in the service call
+    if (authLoading) { 
+      console.log('TaskList: Skipping fetch, auth still loading.');
       return;
     }
     
     setLoading(true);
     setError(null);
     try {
-      console.log(`TaskList: Attempting to fetch main tasks for projectId: ${projectId}, userUid: ${user.uid}`);
-      const mainTasks = await getProjectMainTasks(projectId, user.uid); // Fetch only main tasks
+      console.log(`TaskList: Attempting to fetch main tasks for projectId: ${projectId}`);
+      // Call getProjectMainTasks without userUid, as it now fetches all main tasks for the project
+      const mainTasks = await getProjectMainTasks(projectId); 
       console.log('TaskList: Fetched main tasks:', mainTasks);
       setTasks(mainTasks);
     } catch (err: any) {
@@ -43,16 +44,15 @@ export function TaskList({ projectId }: TaskListProps) {
   };
 
   useEffect(() => {
-    console.log('TaskList: useEffect triggered. projectId:', projectId, 'User available:', !!user, 'Auth loading:', authLoading);
-    // Only fetch if projectId is valid
-    if (projectId) {
+    console.log('TaskList: useEffect triggered. projectId:', projectId, 'Auth loading:', authLoading);
+    if (projectId && !authLoading) { // Fetch tasks once projectId is available and auth is resolved
         fetchMainTasks();
-    } else {
+    } else if (!projectId) {
         console.warn('TaskList: projectId is undefined or null, skipping fetch.');
-        setLoading(false); // Don't show loader if no projectId
+        setLoading(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, user, authLoading]); // Rerun if projectId, user, or authLoading changes
+  }, [projectId, authLoading]); // Depend on projectId and authLoading
 
   const onTaskUpdated = () => {
     console.log('TaskList: onTaskUpdated called, re-fetching main tasks.');
@@ -81,6 +81,7 @@ export function TaskList({ projectId }: TaskListProps) {
         <ListTodo className="mx-auto h-12 w-12 text-muted-foreground/50" />
         <h3 className="mt-3 font-headline text-lg font-semibold">No main tasks yet</h3>
         <p className="mt-1 text-sm text-muted-foreground">
+          {/* Message can be dynamic based on whether user can add tasks, but for now, it's generic */}
           Add main tasks to this project to get started.
         </p>
       </div>
@@ -89,7 +90,7 @@ export function TaskList({ projectId }: TaskListProps) {
   console.log('TaskList: Render - Displaying tasks:', tasks);
   return (
     <div className="space-y-4">
-      {tasks.map((task) => ( // These are main tasks
+      {tasks.map((task) => ( 
         <TaskCard key={task.id} task={task} onTaskUpdated={onTaskUpdated} isMainTaskView={true} />
       ))}
     </div>
