@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -9,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
+// This page can be used to edit both main tasks and sub-tasks.
+// TaskForm will adapt based on whether task.parentId exists.
 export default function EditTaskPage() {
   const params = useParams();
   const router = useRouter();
@@ -27,7 +30,7 @@ export default function EditTaskPage() {
       try {
         setLoading(true);
         const fetchedTask = await getTaskById(taskId);
-        if (fetchedTask && fetchedTask.projectId === projectId) { // Ensure task belongs to project
+        if (fetchedTask && fetchedTask.projectId === projectId) {
           setTask(fetchedTask);
         } else {
           setError('Task not found or does not belong to this project.');
@@ -42,6 +45,12 @@ export default function EditTaskPage() {
 
     fetchTask();
   }, [taskId, projectId, user, authLoading]);
+
+  const handleFormSuccess = () => {
+    // Navigate to the task's detail page after successful edit
+    router.push(`/projects/${projectId}/tasks/${taskId}`);
+    router.refresh();
+  };
 
   if (loading || authLoading) {
     return (
@@ -59,13 +68,20 @@ export default function EditTaskPage() {
     return <p className="text-center text-muted-foreground py-10">Task details could not be loaded.</p>;
   }
   
+  // Determine back path: if sub-task, back to main task; if main task, back to project.
+  const backPath = task.parentId 
+    ? `/projects/${projectId}/tasks/${task.parentId}` 
+    : `/projects/${projectId}`;
+
   return (
     <div className="mx-auto max-w-2xl">
-       <Button variant="outline" onClick={() => router.push(`/projects/${projectId}`)} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Project
+       <Button variant="outline" onClick={() => router.push(backPath)} className="mb-6">
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back
       </Button>
-      <h1 className="mb-8 font-headline text-3xl font-semibold tracking-tight">Edit Task</h1>
-      <TaskForm projectId={projectId} task={task} />
+      <h1 className="mb-8 font-headline text-3xl font-semibold tracking-tight">
+        Edit {task.parentId ? 'Sub-task' : 'Main Task'}
+      </h1>
+      <TaskForm projectId={projectId} task={task} parentId={task.parentId} onFormSuccess={handleFormSuccess} />
     </div>
   );
 }

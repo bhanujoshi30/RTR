@@ -1,3 +1,4 @@
+
 "use client";
 
 import { TaskForm } from '@/components/tasks/TaskForm';
@@ -11,7 +12,6 @@ export default function CreateTaskPage() {
   const projectId = params.projectId as string;
 
   if (!projectId) {
-    // Handle case where projectId is not available, though Next.js routing should ensure it
     return <p>Project ID is missing.</p>;
   }
   
@@ -20,8 +20,9 @@ export default function CreateTaskPage() {
       <Button variant="outline" onClick={() => router.push(`/projects/${projectId}`)} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Project
       </Button>
-      <h1 className="mb-8 font-headline text-3xl font-semibold tracking-tight">Add New Task</h1>
-      <TaskForm projectId={projectId} />
+      <h1 className="mb-8 font-headline text-3xl font-semibold tracking-tight">Add New Main Task</h1>
+      {/* TaskForm without parentId creates a main task */}
+      <TaskForm projectId={projectId} onFormSuccess={() => router.push(`/projects/${projectId}`)} />
     </div>
   );
 }

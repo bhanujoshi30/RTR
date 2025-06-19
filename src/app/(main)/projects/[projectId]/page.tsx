@@ -10,9 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { TaskList } from '@/components/tasks/TaskList';
-// import { IssueList } from '@/components/issues/IssueList'; // Removed, issues are per task now
-import { Loader2, ArrowLeft, Edit, ListChecks, PlusCircle, CalendarDays, LayoutDashboard } from 'lucide-react'; // Removed Bug icon
+import { TaskList } from '@/components/tasks/TaskList'; // Will now list Main Tasks
+import { Loader2, ArrowLeft, Edit, ListChecks, PlusCircle, CalendarDays, LayoutDashboard, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -30,7 +29,6 @@ import { deleteProject } from '@/services/projectService';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectForm } from '@/components/projects/ProjectForm'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs" // Tabs removed for now from this page
 
 
 export default function ProjectDetailsPage() {
@@ -92,7 +90,7 @@ export default function ProjectDetailsPage() {
 
   const handleProjectFormSuccess = () => {
     setShowEditModal(false);
-    const fetchProject = async () => {
+    const fetchProject = async () => { // Renamed for clarity
       if (!projectId) return;
       try {
         const fetchedProject = await getProjectById(projectId);
@@ -106,6 +104,7 @@ export default function ProjectDetailsPage() {
       }
     };
     fetchProject();
+    router.refresh(); // Added to ensure project list might refresh if dashboard also re-renders
   };
 
 
@@ -160,14 +159,14 @@ export default function ProjectDetailsPage() {
               </Dialog>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm">Delete</Button>
+                  <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This action cannot be undone. This will permanently delete the project
-                      and all associated tasks and issues.
+                      and all associated tasks (main tasks, sub-tasks, and issues).
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -208,21 +207,20 @@ export default function ProjectDetailsPage() {
         </CardContent>
       </Card>
 
-      {/* Removed Tabs for Issues, issues are now per task */}
       <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
         <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
           <h2 className="font-headline text-2xl font-semibold flex items-center">
-            <ListChecks className="mr-3 h-7 w-7 text-primary" />
-            Tasks
+            <Layers className="mr-3 h-7 w-7 text-primary" /> {/* Icon changed to Layers for main tasks */}
+            Main Tasks
           </h2>
           <Button asChild>
-            <Link href={`/projects/${projectId}/tasks/create`}>
+            <Link href={`/projects/${projectId}/tasks/create`}> {/* This link creates a main task */}
               <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Task
+              Add New Main Task
             </Link>
           </Button>
         </div>
-        <TaskList projectId={projectId} />
+        <TaskList projectId={projectId} /> {/* TaskList now shows Main Tasks */}
       </div>
     </div>
   );

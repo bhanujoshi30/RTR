@@ -16,6 +16,7 @@ import {
   orderBy,
   writeBatch
 } from 'firebase/firestore';
+import { deleteAllTasksForProject } from './taskService'; // Import helper
 
 const projectsCollection = collection(db, 'projects');
 
@@ -117,7 +118,7 @@ export const updateProject = async (
 };
 
 export const deleteProject = async (projectId: string): Promise<void> => {
-   const user = auth.currentUser;
+  const user = auth.currentUser;
   if (!user) {
     throw new Error('User not authenticated');
   }
@@ -129,24 +130,11 @@ export const deleteProject = async (projectId: string): Promise<void> => {
   }
 
   try {
-    const batch = writeBatch(db);
+    // Delete all tasks (and their sub-tasks/issues) associated with the project
+    await deleteAllTasksForProject(projectId);
 
-    // Delete the project document
-    batch.delete(projectDocRef);
-
-    // Query and delete associated tasks
-    const tasksCollection = collection(db, 'tasks');
-    const tasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('ownerUid', '==', user.uid));
-    const tasksSnapshot = await getDocs(tasksQuery);
-    tasksSnapshot.forEach(doc => batch.delete(doc.ref));
-
-    // Query and delete associated issues
-    const issuesCollection = collection(db, 'issues');
-    const issuesQuery = query(issuesCollection, where('projectId', '==', projectId), where('ownerUid', '==', user.uid));
-    const issuesSnapshot = await getDocs(issuesQuery);
-    issuesSnapshot.forEach(doc => batch.delete(doc.ref));
-    
-    await batch.commit();
+    // Delete the project document itself
+    await deleteDoc(projectDocRef);
 
   } catch (error: any) {
     console.error('projectService: Error deleting project and associated data for ID:', projectId, error.message, error.code ? `(${error.code})` : '', error.stack);

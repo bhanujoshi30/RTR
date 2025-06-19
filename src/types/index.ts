@@ -23,24 +23,26 @@ export interface Project {
 export interface Task {
   id: string;
   projectId: string;
+  parentId?: string | null; // ID of the main task if this is a sub-task
   name: string;
+  // Details below are primarily for sub-tasks. Main tasks might not use them directly.
   description?: string;
-  status: TaskStatus;
+  status: TaskStatus; // Status might apply to sub-tasks or roll up to main tasks
   createdAt: Timestamp;
-  dueDate?: Timestamp;
-  ownerUid: string; 
+  dueDate?: Timestamp | null;
+  ownerUid: string;
 }
 
 export interface Issue {
   id: string;
-  projectId: string; // Keep projectId for potential project-wide issue queries if needed later
-  taskId: string; // New: Issues are now directly linked to a task
+  projectId: string;
+  taskId: string; // ID of the sub-task this issue belongs to
   ownerUid: string;
   title: string;
   description?: string;
   severity: IssueSeverity;
   status: IssueProgressStatus;
-  assignedToName?: string; 
+  assignedToName?: string;
   endDate?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt?: Timestamp;

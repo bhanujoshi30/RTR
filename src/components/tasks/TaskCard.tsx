@@ -6,12 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, Edit2, Trash2, ListChecks, Eye } from 'lucide-react'; // Added Eye icon
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
-import { updateTaskStatus, deleteTask } from '@/services/taskService';
+import { updateTaskStatus, deleteTask, getSubTasks } from '@/services/taskService';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,19 +23,44 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useEffect, useState } from 'react';
 
 interface TaskCardProps {
   task: Task;
   onTaskUpdated: () => void;
+  isMainTaskView?: boolean; // True if this card is for a main task in the project's main task list
+  isSubTaskView?: boolean; // True if this card is for a sub-task in a sub-task list
 }
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 
-export function TaskCard({ task, onTaskUpdated }: TaskCardProps) {
+export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTaskView = false }: TaskCardProps) {
   const { toast } = useToast();
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
+  const [subTaskCount, setSubTaskCount] = useState(0);
+
+  const isActuallyMainTask = !task.parentId; // Determine if the task object itself is a main task
+
+  useEffect(() => {
+    if (isActuallyMainTask) {
+      const fetchCount = async () => {
+        try {
+          const subtasks = await getSubTasks(task.id);
+          setSubTaskCount(subtasks.length);
+        } catch (error) {
+          console.error("Failed to fetch sub-task count for main task:", task.id, error);
+        }
+      };
+      fetchCount();
+    }
+  }, [task.id, isActuallyMainTask]);
+
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
+    if (isActuallyMainTask) { // Main tasks don't have their own status to change directly
+      toast({ title: 'Info', description: 'Main task status is derived from sub-tasks or not applicable.'});
+      return;
+    }
     try {
       await updateTaskStatus(task.id, newStatus);
       toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
@@ -68,24 +93,33 @@ export function TaskCard({ task, onTaskUpdated }: TaskCardProps) {
     }
   };
 
-  // Navigate to task details page
   const handleViewTask = () => {
     router.push(`/projects/${task.projectId}/tasks/${task.id}`);
   };
+
+  const cardIcon = isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />;
 
   return (
     <Card className="shadow-md transition-shadow hover:shadow-lg">
       <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={handleViewTask}>
         <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
-            <ListChecks className="h-6 w-6 text-primary" />
+            {cardIcon}
             <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
           </div>
-          <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
-            {task.status}
-          </Badge>
+          {!isActuallyMainTask && task.status && ( // Only show status badge for sub-tasks
+            <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
+              {task.status}
+            </Badge>
+          )}
+          {isActuallyMainTask && (
+             <Badge variant="outline">
+              {subTaskCount} Sub-task{subTaskCount !== 1 ? 's' : ''}
+            </Badge>
+          )}
         </div>
-        {task.description && (
+        {/* Description only for sub-tasks or if explicitly set for main tasks (though concept is they don't have one) */}
+        {(!isActuallyMainTask && task.description) && (
           <CardDescription className="pt-1 line-clamp-2">{task.description}</CardDescription>
         )}
       </CardHeader>
@@ -94,53 +128,59 @@ export function TaskCard({ task, onTaskUpdated }: TaskCardProps) {
           <div className="flex items-center text-xs text-muted-foreground">
             <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
             Created {task.createdAt ? formatDistanceToNow(task.createdAt.toDate(), { addSuffix: true }) : 'N/A'}
-            {task.dueDate && (
+            {/* Due date only for sub-tasks */}
+            {(!isActuallyMainTask && task.dueDate) && (
               <span className="ml-2 border-l pl-2">
                 Due: {format(task.dueDate.toDate(), 'PP')}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <Select value={task.status} onValueChange={handleStatusChange}>
-              <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs">
-                <SelectValue placeholder="Change status" />
-              </SelectTrigger>
-              <SelectContent>
-                {taskStatuses.map(status => (
-                  <SelectItem key={status} value={status} className="text-xs">
-                    {status}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="icon" className="h-9 w-9" title="View Task Details" onClick={handleViewTask}>
+            {/* Status select only for sub-tasks */}
+            {!isActuallyMainTask && (
+              <Select value={task.status} onValueChange={handleStatusChange}>
+                <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs">
+                  <SelectValue placeholder="Change status" />
+                </SelectTrigger>
+                <SelectContent>
+                  {taskStatuses.map(status => (
+                    <SelectItem key={status} value={status} className="text-xs">
+                      {status}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button variant="outline" size="icon" className="h-9 w-9" title="View Details" onClick={handleViewTask}>
                 <Eye className="h-4 w-4" />
-                <span className="sr-only">View Task Details</span>
+                <span className="sr-only">View Details</span>
             </Button>
-            <Button variant="outline" size="icon" className="h-9 w-9" asChild title="Edit Task">
-              <Link href={`/projects/${task.projectId}/tasks/${task.id}/edit`}>
+             {/* Edit button leads to Task Detail page which handles edit dialog */}
+            <Button variant="outline" size="icon" className="h-9 w-9" title="Edit Task" onClick={handleViewTask}>
                 <Edit2 className="h-4 w-4" />
-                <span className="sr-only">Edit Task</span>
-              </Link>
+                 <span className="sr-only">Edit Task</span>
             </Button>
              <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title="Delete Task">
+                  <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title={isActuallyMainTask ? "Delete Main Task & Sub-tasks" : "Delete Sub-task"}>
                     <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete Task</span>
+                    <span className="sr-only">Delete</span>
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Task "{task.name}"?</AlertDialogTitle>
+                    <AlertDialogTitle>Delete "{task.name}"?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete the task and all its associated issues.
+                      {isActuallyMainTask 
+                        ? "This action cannot be undone. This will permanently delete this main task and all its sub-tasks and associated issues."
+                        : "This action cannot be undone. This will permanently delete this sub-task and its associated issues."
+                      }
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction onClick={handleDeleteTask} className="bg-destructive hover:bg-destructive/90">
-                      Delete Task
+                      Delete
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
