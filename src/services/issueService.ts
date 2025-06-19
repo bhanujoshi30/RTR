@@ -45,8 +45,8 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
     assignedToUid: data.assignedToUid,
     assignedToName: data.assignedToName,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
-    updatedAt: data.updatedAt ? (data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(data.updatedAt)) : undefined,
-    endDate: data.endDate ? (data.endDate instanceof Timestamp ? data.endDate.toDate() : new Date(data.endDate)) : null,
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
+    endDate: data.endDate instanceof Timestamp ? data.endDate.toDate() : (data.endDate ? new Date(data.endDate) : null),
   };
 };
 
@@ -118,6 +118,35 @@ export const getTaskIssues = async (taskId: string, userUid: string, isSuperviso
   }
 };
 
+export const getAllIssuesAssignedToUser = async (userUid: string): Promise<Issue[]> => {
+  if (!userUid) return [];
+  console.log(`issueService: getAllIssuesAssignedToUser for userUid: ${userUid}`);
+
+  const q = query(
+    issuesCollection,
+    where('assignedToUid', '==', userUid),
+    orderBy('createdAt', 'desc')
+  );
+
+  try {
+    const querySnapshot = await getDocs(q);
+    const issues = querySnapshot.docs.map(mapDocumentToIssue);
+    if (issues.length === 0) {
+      console.log(`issueService: getAllIssuesAssignedToUser - Query executed successfully but found 0 issues assigned to user ${userUid}.`);
+    } else {
+      console.log(`issueService: Fetched ${issues.length} issues assigned to user ${userUid}`);
+    }
+    return issues;
+  } catch (error: any) {
+    console.error('issueService: Error fetching all issues assigned to user:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
+    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
+      console.error("Firestore query for getAllIssuesAssignedToUser requires an index. Fields: assignedToUid (ASC), createdAt (DESC). Check Firebase console using the link provided in the Firebase error message in your browser console.");
+    }
+    throw error;
+  }
+};
+
+
 export const getIssueById = async (issueId: string, userUid: string): Promise<Issue | null> => {
   if (!userUid) throw new Error('User not authenticated');
 
@@ -125,7 +154,7 @@ export const getIssueById = async (issueId: string, userUid: string): Promise<Is
   const issueSnap = await getDoc(issueDocRef);
 
   if (issueSnap.exists()) {
-    const issueData = mapDocumentToIssue(issueSnap); // Use mapping function
+    const issueData = mapDocumentToIssue(issueSnap);
     if (issueData.ownerUid === userUid || issueData.assignedToUid === userUid) {
         return issueData;
     }
@@ -153,8 +182,9 @@ export const updateIssue = async (issueId: string, userUid: string, updates: Upd
   }
 
   const issueData = issueSnap.data();
-  if (issueData.ownerUid !== userUid && issueData.assignedToUid !== userUid) {
-    throw new Error('Access denied. You did not create this issue nor are you assigned to it.');
+   // Only owner can edit all fields. Supervisor assigned can only update status (handled by updateIssueStatus).
+  if (issueData.ownerUid !== userUid) {
+    throw new Error('Access denied. Only the issue creator can edit it.');
   }
 
   const updatePayload: Partial<Omit<Issue, 'id' | 'projectId' | 'taskId' | 'ownerUid' | 'createdAt'>> & { updatedAt: Timestamp } = {
@@ -241,3 +271,4 @@ export const deleteIssuesForTask = async (taskId: string, userUid: string): Prom
     console.error('issueService: Error deleting issues for task ID:', taskId, error.message, error.code ? `(${error.code})` : '', error.stack);
   }
 };
+

@@ -7,8 +7,9 @@ import { FolderPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project } from '@/types';
+import type { Project, Issue as AppIssue } from '@/types'; // Renamed Issue to AppIssue
 import { getAllTasksAssignedToUser } from '@/services/taskService';
+import { getAllIssuesAssignedToUser } from '@/services/issueService'; // Import new service
 import { getProjectsByIds, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 
@@ -37,24 +38,25 @@ export default function DashboardPage() {
 
       try {
         if (isSupervisor) {
-          console.log(`DashboardPage: User is a supervisor (UID: ${user.uid}). Fetching assigned tasks.`);
+          console.log(`DashboardPage: User is a supervisor (UID: ${user.uid}). Fetching assigned tasks and issues.`);
           const assignedTasks = await getAllTasksAssignedToUser(user.uid);
           console.log('DashboardPage: Supervisor - Fetched assignedTasks:', assignedTasks);
+          
+          const assignedIssues = await getAllIssuesAssignedToUser(user.uid);
+          console.log('DashboardPage: Supervisor - Fetched assignedIssues:', assignedIssues);
 
-          if (assignedTasks.length > 0) {
-            const projectIds = [...new Set(assignedTasks.map(task => task.projectId))];
-            console.log('DashboardPage: Supervisor - Extracted projectIds from assigned tasks:', projectIds);
+          const projectIdsFromTasks = assignedTasks.map(task => task.projectId);
+          const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId);
+          
+          const allProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
+          console.log('DashboardPage: Supervisor - Combined unique projectIds from tasks and issues:', allProjectIds);
 
-            if (projectIds.length > 0) {
-              const supervisorProjects = await getProjectsByIds(projectIds);
-              console.log('DashboardPage: Supervisor - Fetched supervisorProjects from IDs:', supervisorProjects);
-              setProjectsToDisplay(supervisorProjects);
-            } else {
-              console.log('DashboardPage: Supervisor - No unique project IDs found from tasks. This is unexpected if tasks were found.');
-              setProjectsToDisplay([]);
-            }
+          if (allProjectIds.length > 0) {
+            const supervisorProjects = await getProjectsByIds(allProjectIds);
+            console.log('DashboardPage: Supervisor - Fetched supervisorProjects from combined IDs:', supervisorProjects);
+            setProjectsToDisplay(supervisorProjects);
           } else {
-            console.log('DashboardPage: Supervisor - No tasks assigned to this user. This could be due to no matching data in Firestore or a missing/incorrect Firestore index for the getAllTasksAssignedToUser query. Check taskService logs for details.');
+            console.log('DashboardPage: Supervisor - No unique project IDs found from tasks or issues.');
             setProjectsToDisplay([]);
           }
         } else if (isAdminOrOwner) {
@@ -105,3 +107,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
