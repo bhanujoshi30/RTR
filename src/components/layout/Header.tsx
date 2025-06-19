@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -15,9 +16,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
+
+const ADMIN_EMAIL = 'joshi11bhanu@gmail.com';
 
 export function Header() {
   const { user } = useAuth();
@@ -38,6 +41,11 @@ export function Header() {
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="mr-2 h-4 w-4" /> },
     { href: '/projects/create', label: 'New Project', icon: <FolderPlus className="mr-2 h-4 w-4" /> },
   ];
+
+  if (user?.email === ADMIN_EMAIL) {
+    navLinks.push({ href: '/users', label: 'Users', icon: <Users className="mr-2 h-4 w-4" /> });
+  }
+
 
   const NavItems = ({isMobile = false} : {isMobile?: boolean}) => (
     <>
@@ -81,7 +89,7 @@ export function Header() {
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{user.displayName || user.email}</p>
-                    {user.displayName && <p className="text-xs leading-none text-muted-foreground">{user.email}</p>}
+                    {user.displayName && user.email && <p className="text-xs leading-none text-muted-foreground">{user.email}</p>}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
