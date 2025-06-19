@@ -15,9 +15,10 @@ import { IssueForm } from './IssueForm';
 interface IssueListProps {
   projectId: string;
   taskId: string;
+  onIssueListChange?: () => void; 
 }
 
-export function IssueList({ projectId, taskId }: IssueListProps) {
+export function IssueList({ projectId, taskId, onIssueListChange }: IssueListProps) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +27,7 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
   const [parentTask, setParentTask] = useState<Task | null>(null);
 
   const isSupervisor = user?.role === 'supervisor';
-  const canManageIssuesForThisTask = user && (parentTask?.ownerUid === user.uid || (isSupervisor && parentTask?.assignedToUid === user.uid));
+  const canManageIssuesForThisTask = user && (parentTask?.ownerUid === user.uid || (isSupervisor && parentTask?.assignedToUids?.includes(user.uid)));
 
 
   const fetchParentTaskAndIssues = async () => {
@@ -36,7 +37,7 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
       const fetchedTask = await getTaskById(taskId, user.uid, user.role); 
       setParentTask(fetchedTask);
 
-      const taskIssues = await getTaskIssues(taskId, user.uid, isSupervisor && fetchedTask?.assignedToUid === user.uid);
+      const taskIssues = await getTaskIssues(taskId, user.uid, isSupervisor && fetchedTask?.assignedToUids?.includes(user.uid));
       setIssues(taskIssues);
       setError(null);
     } catch (err: any) {
@@ -44,6 +45,9 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
       setError(`Failed to load issues. ${err.message?.includes("index") ? "A database index might be required. Check console for details." : ""}`);
     } finally {
       setLoading(false);
+      if (onIssueListChange) {
+        onIssueListChange();
+      }
     }
   };
 
@@ -115,7 +119,7 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
                 projectId={projectId} 
                 taskId={taskId} 
                 onIssueUpdated={fetchParentTaskAndIssues}
-                canManageIssue={canManageIssuesForThisTask || (isSupervisor && issue.assignedToUid === user?.uid)}
+                canManageIssue={canManageIssuesForThisTask || (isSupervisor && issue.assignedToUids?.includes(user?.uid || ''))}
             />
           ))}
         </div>

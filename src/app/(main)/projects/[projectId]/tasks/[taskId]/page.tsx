@@ -42,10 +42,9 @@ export default function TaskDetailsPage() {
   
   const isOwner = user && task?.ownerUid === user.uid;
   
-  // Edit (name, assignees) is only for the owner of the task (main or sub).
   const canEditCurrentTask = isOwner;
-  const canDeleteCurrentTask = isOwner; // Only owner can delete any task
-  const canAddSubTask = isOwner && isMainTask; // Only owner can add sub-tasks to a main task
+  const canDeleteCurrentTask = isOwner; 
+  const canAddSubTask = isOwner && isMainTask; 
 
   const fetchTaskDetails = async () => {
     if (authLoading || !user || !taskId) return;
@@ -70,12 +69,12 @@ export default function TaskDetailsPage() {
       } else {
         console.error(`TaskDetailsPage: Fetched task is null or projectId mismatch. Task ID: ${taskId}, Project ID from params: ${projectId}, Fetched Task Project ID: ${fetchedTask?.projectId}`);
         setError(`Task not found (ID: ${taskId}) or does not belong to this project (Project ID from task: ${fetchedTask?.projectId}, Expected: ${projectId}). Check console for more details from taskService.`);
-        router.push(`/projects/${projectId}`); 
+        // router.push(`/projects/${projectId}`); 
       }
     } catch (err: any) {
       console.error(`TaskDetailsPage: Error fetching task details for task ${taskId}:`, err);
       setError(`Failed to load task details for ${taskId}. ${err.message || 'Unknown error'}. Check console for more details from taskService.`);
-       router.push(`/projects/${projectId}`); 
+      // router.push(`/projects/${projectId}`);  
     } finally {
       setLoading(false);
     }
@@ -185,11 +184,9 @@ export default function TaskDetailsPage() {
                           {isSubTask ? "Modify the details of this sub-task." : "Update the name or details of this main task."}
                       </DialogDescription>
                     </DialogHeader>
-                    {/* Only owner can access the full edit form via this dialog */}
                     {editingTask && user && isOwner && (
                         <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />
                     )}
-                     {/* Message for non-owner (e.g. supervisor) trying to edit */}
                     {editingTask && user && !isOwner && (
                         <p className="p-4 text-sm text-muted-foreground">Only the task owner can edit these details. Supervisors assigned to sub-tasks can update status, description, and due date via other mechanisms if available.</p>
                     )}
@@ -316,7 +313,7 @@ export default function TaskDetailsPage() {
             </Card>
           </TabsContent>
           <TabsContent value="issues" className="mt-6">
-            {user && <IssueList projectId={projectId} taskId={taskId} />}
+            {user && <IssueList projectId={projectId} taskId={taskId} onIssueListChange={fetchTaskDetails} />}
           </TabsContent>
           <TabsContent value="timeline" className="mt-6">
             <Card><CardHeader><CardTitle>Timeline</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Timeline for this sub-task (to be implemented).</p></CardContent></Card>
