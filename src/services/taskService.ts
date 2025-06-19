@@ -482,9 +482,21 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
     console.log(`taskService: Successfully queried. Found ${count} sub-tasks for project ${projectId}.`);
     return count;
   } catch (error: any) {
-    console.error(`taskService: Error counting sub-tasks for project ${projectId}. Message: ${error.message}. Code: ${error.code || 'N/A'}. Full error:`, error);
-    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index") || error.code === 'failed-precondition')) {
-      console.error(`Firestore query for counting sub-tasks (projectId: ${projectId}) requires a composite index. Expected fields: 'projectId' (ASC), 'parentId' (ASC or DESC for '!=' query). Error: ${error.message}. A link to create this index is usually provided in the detailed Firebase error in the browser console or server logs.`);
+    const e = error as { code?: string; message?: string };
+    console.error(`taskService: Error counting sub-tasks for project ${projectId}. Message: ${e.message}. Code: ${e.code || 'N/A'}. Full error:`, error);
+    if (e.code === 'failed-precondition' && e.message && e.message.toLowerCase().includes("index")) {
+      console.error(`\n\n🚨🚨🚨 Firestore Index Required 🚨🚨🚨\n` +
+        `The query to count sub-tasks for project '${projectId}' failed because a Firestore index is missing or not yet active.\n` +
+        `DETAILS:\n` +
+        ` - Collection: 'tasks'\n` +
+        ` - Query conditions: projectId == '${projectId}', parentId != null\n` +
+        ` - Likely required index fields: 'projectId' (Ascending), 'parentId' (e.g., Ascending or Descending - check the detailed error message from Firebase for a direct link or exact specification).\n` +
+        `Please go to your Firebase Console -> Firestore Database -> Indexes, and create the required composite index.\n` +
+        `The detailed error message from Firebase (often including a URL to create the index) might be visible in your browser's network tab for the failing request, or earlier in the console if not caught cleanly.\n\n`);
+    } else if (e.message && e.message.toLowerCase().includes("index")) {
+        console.error(`An index-related error occurred while counting sub-tasks for project ${projectId}. Please check your Firestore indexes for the 'tasks' collection. Query: projectId == ${projectId}, parentId != null.`);
+    } else {
+      console.error(`An unexpected error occurred while counting sub-tasks for project ${projectId}.`);
     }
     return 0; 
   }
