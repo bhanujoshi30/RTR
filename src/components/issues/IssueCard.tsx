@@ -5,7 +5,7 @@ import type { Issue, IssueProgressStatus, IssueSeverity, UserRole } from '@/type
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle } from 'lucide-react'; 
+import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle, RotateCcw } from 'lucide-react'; 
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateIssueStatus, deleteIssue } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
@@ -30,7 +30,7 @@ interface IssueCardProps {
   projectId: string;
   taskId: string; 
   onIssueUpdated: () => void;
-  canManageIssue?: boolean; // Prop from IssueList indicating if current user can generally add issues to this parent task
+  canManageIssue?: boolean; 
 }
 
 export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue }: IssueCardProps) {
@@ -40,9 +40,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
 
   const isIssueOwner = user && issue.ownerUid === user.uid;
   
-  // An issue's status can be changed by its owner OR any user assigned to it.
   const canChangeStatusOfThisIssue = isIssueOwner || (user && issue.assignedToUids?.includes(user.uid));
-  // Only the issue owner can perform full edit or delete operations.
   const canEditOrDeleteThisIssue = isIssueOwner;
 
 
@@ -56,11 +54,11 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
         return;
     }
     try {
-      await updateIssueStatus(issue.id, user.uid, newStatus);
+      await updateIssueStatus(issue.id, user.uid, newStatus, user.role as UserRole | undefined);
       toast({ title: 'Issue Updated', description: `Status of "${issue.title}" changed to ${newStatus}.` });
       onIssueUpdated();
-    } catch (error) {
-      toast({ title: 'Update Failed', description: 'Could not update issue status.', variant: 'destructive' });
+    } catch (error: any) {
+      toast({ title: 'Update Failed', description: error.message || 'Could not update issue status.', variant: 'destructive' });
     }
   };
 
@@ -145,6 +143,11 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
               <CheckSquare className="mr-2 h-4 w-4" /> Close Issue
             </Button>
           )}
+          {issue.status === 'Closed' && (
+             <Button variant="outline" size="sm" onClick={() => handleStatusChange('Open')} disabled={!canChangeStatusOfThisIssue}>
+              <RotateCcw className="mr-2 h-4 w-4" /> Reopen Issue
+            </Button>
+          )}
            <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" disabled={!canEditOrDeleteThisIssue}>
@@ -185,4 +188,3 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
     </Card>
   );
 }
-

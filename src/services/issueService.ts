@@ -20,7 +20,7 @@ import {
   arrayUnion,
   runTransaction
 } from 'firebase/firestore';
-import { getTaskById, updateTask as updateParentTask } from './taskService'; 
+import { getTaskById, updateTaskStatus as updateParentTaskStatus } from './taskService'; 
 
 const issuesCollection = collection(db, 'issues');
 
@@ -272,21 +272,41 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
   }
 };
 
-export const updateIssueStatus = async (issueId: string, userUid: string, status: IssueProgressStatus): Promise<void> => {
+export const updateIssueStatus = async (
+  issueId: string, 
+  userUid: string, 
+  newStatus: IssueProgressStatus, 
+  userRole?: UserRole
+): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated');
 
   const issueDocRef = doc(db, 'issues', issueId);
   const issueSnap = await getDoc(issueDocRef);
-   if (!issueSnap.exists()){
+  if (!issueSnap.exists()){
       throw new Error('Issue not found.');
   }
-  const issueData = mapDocumentToIssue(issueSnap); 
+  const issueData = mapDocumentToIssue(issueSnap);
+  const oldStatus = issueData.status;
+
   if (issueData.ownerUid !== userUid && !(issueData.assignedToUids?.includes(userUid))) {
     throw new Error('Access denied. You did not create this issue nor are you assigned to it.');
   }
 
   try {
-    await updateDoc(issueDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
+    await updateDoc(issueDocRef, { status: newStatus, updatedAt: serverTimestamp() as Timestamp });
+
+    // If issue is reopened, and parent task was completed, set parent task to In Progress
+    if (newStatus === 'Open' && oldStatus === 'Closed') {
+      if (issueData.taskId) { // Ensure taskId exists
+        const parentTask = await getTaskById(issueData.taskId, userUid, userRole);
+        if (parentTask && parentTask.status === 'Completed') {
+          await updateParentTaskStatus(parentTask.id, userUid, 'In Progress', userRole);
+          console.log(`IssueService: Parent task ${parentTask.id} status updated to 'In Progress' due to issue ${issueId} reopening.`);
+        }
+      } else {
+        console.warn(`IssueService: Issue ${issueId} does not have a taskId. Cannot update parent task status.`);
+      }
+    }
   } catch (error: any) {
      console.error('issueService: Error updating issue status for ID:', issueId, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;
