@@ -14,7 +14,7 @@ import { SubTaskList } from '@/components/tasks/SubTaskList';
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2 } from 'lucide-react';
+import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, User as UserIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -274,6 +274,15 @@ export default function TaskDetailsPage() {
                 <div><h4 className="font-semibold">Name:</h4><p>{task.name}</p></div>
                 {task.description && (<div><h4 className="font-semibold">Description:</h4><p className="whitespace-pre-wrap">{task.description}</p></div>)}
                 <div><h4 className="font-semibold">Status:</h4><p>{task.status}</p></div>
+                {task.assignedToName && (
+                  <div>
+                    <h4 className="font-semibold flex items-center">
+                      <UserIcon className="mr-2 h-4 w-4 text-muted-foreground"/>
+                      Assigned To:
+                    </h4>
+                    <p>{task.assignedToName}</p>
+                  </div>
+                )}
                 <div><h4 className="font-semibold">Created:</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
                 {task.dueDate && (<div><h4 className="font-semibold">Due Date:</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}
               </CardContent>
@@ -294,4 +303,6 @@ export default function TaskDetailsPage() {
   );
 }
     
+    
+
     
