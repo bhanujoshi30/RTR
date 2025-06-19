@@ -18,9 +18,9 @@ interface ProjectListProps {
 
 export function ProjectList({ projects, isSupervisorView = false }: ProjectListProps) {
   if (projects.length === 0) {
-    const title = isSupervisorView ? "No Projects with Assigned Tasks" : "No projects yet";
+    const title = isSupervisorView ? "No Projects with Assigned Work" : "No projects yet";
     const message = isSupervisorView 
-      ? "You currently have no tasks assigned to you in any project."
+      ? "You currently have no tasks or issues assigned to you in any project."
       : "Get started by creating your first project.";
 
     return (

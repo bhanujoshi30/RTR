@@ -45,8 +45,8 @@ export default function DashboardPage() {
           const assignedIssues = await getAllIssuesAssignedToUser(user.uid);
           console.log('DashboardPage: Supervisor - Fetched assignedIssues:', assignedIssues);
 
-          const projectIdsFromTasks = assignedTasks.map(task => task.projectId);
-          const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId);
+          const projectIdsFromTasks = assignedTasks.map(task => task.projectId).filter(id => !!id);
+          const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId).filter(id => !!id);
           
           const allProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
           console.log('DashboardPage: Supervisor - Combined unique projectIds from tasks and issues:', allProjectIds);
@@ -56,7 +56,7 @@ export default function DashboardPage() {
             console.log('DashboardPage: Supervisor - Fetched supervisorProjects from combined IDs:', supervisorProjects);
             setProjectsToDisplay(supervisorProjects);
           } else {
-            console.log('DashboardPage: Supervisor - No unique project IDs found from tasks or issues.');
+            console.log('DashboardPage: Supervisor - No unique project IDs found from tasks or issues. Assigned tasks count:', assignedTasks.length, '(Project IDs from tasks:', projectIdsFromTasks, ') Assigned issues count:', assignedIssues.length, '(Project IDs from issues:', projectIdsFromIssues,')');
             setProjectsToDisplay([]);
           }
         } else if (isAdminOrOwner) {
