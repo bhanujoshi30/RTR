@@ -22,8 +22,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    console.log('AuthContext: useEffect mounting. Initializing onAuthStateChanged listener.');
-    
     if (!auth) {
         console.error("AuthContext: Firebase auth object is not available. Firebase might not be initialized correctly.");
         setLoading(false); // Prevent infinite loader
@@ -31,23 +29,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
-      console.log('AuthContext: onAuthStateChanged triggered. Firebase user:', firebaseUser);
       setUser(firebaseUser as User | null);
       setLoading(false);
-      console.log('AuthContext: setLoading(false). Current user state:', firebaseUser as User | null);
     }, (error) => {
       console.error('AuthContext: onAuthStateChanged error:', error);
-      setUser(null); // Ensure user is null on auth error
-      setLoading(false); // Also set loading false on error to prevent infinite loader
+      setUser(null); 
+      setLoading(false); 
     });
 
     return () => {
-      console.log('AuthContext: useEffect unmounting. Unsubscribing from onAuthStateChanged.');
       unsubscribe();
     }
   }, []);
-
-  console.log('AuthProvider rendering. User:', user, 'Loading:', loading);
 
   return (
     <AuthContext.Provider value={{ user, loading }}>
