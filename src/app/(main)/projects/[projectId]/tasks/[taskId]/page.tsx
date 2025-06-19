@@ -25,14 +25,14 @@ export default function TaskDetailsPage() {
   const router = useRouter();
   const { toast } = useToast();
   const projectId = params.projectId as string;
-  const taskId = params.taskId as string; // Can be Main Task ID or Sub-task ID
+  const taskId = params.taskId as string; 
 
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const [showAddEditTaskModal, setShowAddEditTaskModal] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); // For editing the current task (main or sub)
+  const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); 
   const [ownerDisplayName, setOwnerDisplayName] = useState<string | null>(null);
   const [isFetchingOwnerName, setIsFetchingOwnerName] = useState(false);
 
@@ -41,10 +41,9 @@ export default function TaskDetailsPage() {
   const isSubTask = task && !!task.parentId;
   
   const isOwner = user && task?.ownerUid === user.uid;
-  const isAssignedToCurrentUserSupervisor = isSubTask && isSupervisor && task?.assignedToUids?.includes(user?.uid || '');
-
-  // Permissions for the current task being viewed (which could be a main task or a sub-task)
-  const canEditCurrentTask = isOwner || (isAssignedToCurrentUserSupervisor && !isMainTask); // Supervisor can edit assigned sub-tasks
+  
+  // General edit (name, assignees) is only for the owner of the task (main or sub).
+  const canEditCurrentTask = isOwner;
   const canDeleteCurrentTask = isOwner; // Only owner can delete any task
   const canAddSubTask = isOwner && isMainTask; // Only owner can add sub-tasks to a main task
 
@@ -185,13 +184,13 @@ export default function TaskDetailsPage() {
                           {isSubTask ? "Modify the details of this sub-task." : "Update the name or details of this main task."}
                       </DialogDescription>
                     </DialogHeader>
-                    {/* For main task, supervisor cannot edit (unless owner). For subtask, supervisor can edit if assigned. */}
-                    {editingTask && user && (isOwner || (isSubTask && isAssignedToCurrentUserSupervisor)) && (
+                    {/* Only owner can access the full edit form via this dialog */}
+                    {editingTask && user && isOwner && (
                         <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />
                     )}
-                    {/* Message for supervisor trying to edit main task they don't own */}
-                    {editingTask && user && isSupervisor && isMainTask && !isOwner && (
-                        <p className="p-4 text-sm text-muted-foreground">Supervisors cannot edit main task details unless they are the owner. Contact the project owner for changes.</p>
+                     {/* Message for non-owner (e.g. supervisor) trying to edit */}
+                    {editingTask && user && !isOwner && (
+                        <p className="p-4 text-sm text-muted-foreground">Only the task owner can edit these details. Supervisors assigned to sub-tasks can update status, description, and due date via other mechanisms if available.</p>
                     )}
                   </DialogContent>
                 </Dialog>
