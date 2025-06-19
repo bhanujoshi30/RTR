@@ -35,6 +35,7 @@ export default function TaskDetailsPage() {
   const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); 
   const [ownerDisplayName, setOwnerDisplayName] = useState<string | null>(null);
   const [isFetchingOwnerName, setIsFetchingOwnerName] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("details");
 
   const isSupervisor = user?.role === 'supervisor';
   const isMainTask = task && !task.parentId;
@@ -69,12 +70,12 @@ export default function TaskDetailsPage() {
       } else {
         console.error(`TaskDetailsPage: Fetched task is null or projectId mismatch. Task ID: ${taskId}, Project ID from params: ${projectId}, Fetched Task Project ID: ${fetchedTask?.projectId}`);
         setError(`Task not found (ID: ${taskId}) or does not belong to this project (Project ID from task: ${fetchedTask?.projectId}, Expected: ${projectId}). Check console for more details from taskService.`);
-        // router.push(`/projects/${projectId}`); 
+        // router.push(`/projects/${projectId}`); // Temporarily commented out to see error and logs
       }
     } catch (err: any) {
       console.error(`TaskDetailsPage: Error fetching task details for task ${taskId}:`, err);
       setError(`Failed to load task details for ${taskId}. ${err.message || 'Unknown error'}. Check console for more details from taskService.`);
-      // router.push(`/projects/${projectId}`);  
+      // router.push(`/projects/${projectId}`); // Temporarily commented out to see error and logs  
     } finally {
       setLoading(false);
     }
@@ -282,7 +283,7 @@ export default function TaskDetailsPage() {
       )}
 
       {isSubTask && (
-        <Tabs defaultValue="details" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 sm:w-auto sm:inline-flex">
             <TabsTrigger value="details" className="text-sm"><Info className="mr-2 h-4 w-4" /> Details</TabsTrigger>
             <TabsTrigger value="issues" className="text-sm"><ListChecks className="mr-2 h-4 w-4" /> Issues</TabsTrigger>
