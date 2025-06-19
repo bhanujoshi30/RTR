@@ -59,7 +59,6 @@ export default function ProjectDetailsPage() {
       } catch (err) {
         console.error('Error fetching project:', err);
         setError('Failed to load project details.');
-        // It's possible the error is due to missing index, so we guide the user.
         if ((err as any)?.message?.includes('index')) {
           setError('Failed to load project details. This might be due to a missing database index. Please check Firebase console.');
         }
@@ -89,10 +88,26 @@ export default function ProjectDetailsPage() {
 
   const handleProjectFormSuccess = () => {
     setShowEditModal(false);
-    // The router.refresh() in ProjectForm will handle data update.
-    // We might need to trigger a re-fetch of the project specifically if router.refresh() isn't sufficient
-    // For now, let's assume router.refresh() called within ProjectForm is enough.
+    const fetchProject = async () => {
+      if (!projectId) return;
+      try {
+        setLoading(true);
+        const fetchedProject = await getProjectById(projectId);
+        if (fetchedProject) {
+          setProject(fetchedProject);
+        } else {
+          setError('Project not found or you do not have permission to view it.');
+        }
+      } catch (err) {
+        setError('Failed to reload project details after edit.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProject();
+    router.refresh();
   };
+
 
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
@@ -121,7 +136,7 @@ export default function ProjectDetailsPage() {
 
   return (
     <div className="space-y-8">
-      <Button variant="outline" onClick={() => router.back()} className="mb-6">
+      <Button variant="outline" onClick={() => router.push('/dashboard')} className="mb-6">
         <ArrowLeft className="mr-2 h-4 w-4" /> Back to Projects
       </Button>
 
