@@ -34,23 +34,24 @@ const subTaskSchema = baseTaskSchema.extend({
   description: z.string().max(1000).optional(),
   status: z.enum(taskStatuses),
   dueDate: z.date().optional().nullable(),
-  assignedToUids: z.array(z.string()).optional().default([]),
+  assignedToUids: z.array(z.string()).optional().default([]), // Array of UIDs
 });
 
 const mainTaskSchema = baseTaskSchema.extend({
-  description: z.string().max(1000).optional().nullable().default(null),
-  status: z.enum(taskStatuses).default('To Do'), // Default, not user-editable for main task here
-  dueDate: z.date().optional().nullable().default(null), // Default, not user-editable
-  assignedToUids: z.array(z.string()).optional().default([]), // Main tasks are not assigned in this form
+  // Fields below are not user-editable for main tasks via this form directly or have fixed defaults
+  description: z.string().max(1000).optional().nullable().default(null), 
+  status: z.enum(taskStatuses).default('To Do'), 
+  dueDate: z.date().optional().nullable().default(null),
+  assignedToUids: z.array(z.string()).optional().default([]), 
 });
 
 type SubTaskFormValues = z.infer<typeof subTaskSchema>;
-type MainTaskFormValues = z.infer<typeof mainTaskSchema>;
+// type MainTaskFormValues = z.infer<typeof mainTaskSchema>; // Not directly used as data type for form if mixed
 
 interface TaskFormProps {
   projectId: string;
   task?: Task;
-  parentId?: string | null;
+  parentId?: string | null; // If present, this form is for a sub-task
   onFormSuccess?: () => void;
 }
 
@@ -68,15 +69,15 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     resolver: zodResolver(currentSchema),
     defaultValues: {
       name: task?.name || '',
-      description: isSubTask ? (task?.description || '') : undefined,
-      status: isSubTask ? (task?.status || 'To Do') : 'To Do',
-      dueDate: task?.dueDate || null,
-      assignedToUids: isSubTask ? (task?.assignedToUids || []) : [],
+      description: isSubTask ? (task?.description || '') : undefined, // Only for sub-tasks
+      status: isSubTask ? (task?.status || 'To Do') : 'To Do', // Editable for sub-tasks
+      dueDate: isSubTask ? (task?.dueDate || null) : null, // Only for sub-tasks
+      assignedToUids: isSubTask ? (task?.assignedToUids || []) : [], // Only for sub-tasks
     },
   });
 
   useEffect(() => {
-    if (isSubTask) {
+    if (isSubTask) { // Only fetch supervisors if it's a sub-task
       const fetchSupervisors = async () => {
         try {
           const fetchedSupervisors = await getUsersByRole('supervisor');
@@ -101,52 +102,55 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     }
     setLoading(true);
 
-    let assignedToNames: string[] | undefined = undefined;
+    let assignedToNamesForPayload: string[] | undefined = undefined;
     if (isSubTask && data.assignedToUids && data.assignedToUids.length > 0) {
-      assignedToNames = data.assignedToUids.map(uid => {
+      assignedToNamesForPayload = data.assignedToUids.map(uid => {
         const supervisor = supervisors.find(s => s.uid === uid);
-        return supervisor?.displayName || uid; 
+        return supervisor?.displayName || uid; // Fallback to UID if name not found
       });
     }
 
     const taskPayload: any = {
       name: data.name,
-      description: isSubTask ? (data as SubTaskFormValues).description || '' : '',
-      status: isSubTask ? (data as SubTaskFormValues).status : 'To Do',
-      dueDate: (isSubTask && (data as SubTaskFormValues).dueDate) ? (data as SubTaskFormValues).dueDate : null,
+      // Fields specific to sub-tasks or with different handling for main tasks
+      description: isSubTask ? (data as SubTaskFormValues).description || '' : '', // Only for sub-tasks
+      status: isSubTask ? (data as SubTaskFormValues).status : 'To Do', // Editable for sub-tasks
+      dueDate: (isSubTask && (data as SubTaskFormValues).dueDate) ? (data as SubTaskFormValues).dueDate : null, // Only for sub-tasks
       parentId: parentId || task?.parentId || null,
-      assignedToUids: isSubTask ? (data as SubTaskFormValues).assignedToUids || [] : [],
-      assignedToNames: isSubTask ? assignedToNames || [] : [],
+      assignedToUids: isSubTask ? (data as SubTaskFormValues).assignedToUids || [] : [], // Only for sub-tasks
+      assignedToNames: isSubTask ? assignedToNamesForPayload || [] : [], // Only for sub-tasks
     };
     
-    if (!isSubTask) { // Main task specific handling
+    // For main tasks, ensure certain fields are not sent or are default, as they are not editable here
+    if (!isSubTask) {
       delete taskPayload.description;
       delete taskPayload.dueDate;
       delete taskPayload.assignedToUids;
       delete taskPayload.assignedToNames;
-      delete taskPayload.status; // Main task status not set by form, derived or fixed
+      // Main task status is not set by this form, it's derived or fixed
+      // delete taskPayload.status; // Status 'To Do' is already set as default for mainTaskSchema
     }
 
 
     try {
-      if (task) {
+      if (task) { // Editing existing task
         await updateTask(task.id, user.uid, taskPayload, user.role);
         toast({ title: 'Task Updated', description: `"${data.name}" has been updated.` });
-      } else {
+      } else { // Creating new task
         await createTask(projectId, user.uid, taskPayload);
         toast({ title: 'Task Created', description: `"${data.name}" has been added.` });
       }
 
       if (onFormSuccess) {
         onFormSuccess();
-      } else {
-        if (parentId || task?.parentId) {
-          router.push(`/projects/${projectId}/tasks/${parentId || task?.parentId}`);
-        } else {
+      } else { // Default navigation if no specific callback
+        if (taskPayload.parentId) { // Nav back to parent task (main task details page)
+          router.push(`/projects/${projectId}/tasks/${taskPayload.parentId}`);
+        } else { // Nav back to project details page
           router.push(`/projects/${projectId}`);
         }
       }
-      router.refresh();
+      router.refresh(); // Ensure data is fresh on the navigated page
     } catch (error: any) {
       toast({
         title: task ? 'Update Failed' : 'Creation Failed',
@@ -183,7 +187,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 </FormItem>
               )}
             />
-            {isSubTask && (
+            {isSubTask && ( // Fields specific to sub-tasks
               <>
                 <FormField
                   control={form.control}
@@ -258,11 +262,11 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 </div>
                 <Controller
                   control={form.control}
-                  name="assignedToUids"
+                  name="assignedToUids" // This is an array
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assigned To Supervisors</FormLabel>
-                      {supervisors.length === 0 && <p className="text-sm text-muted-foreground">Loading supervisors...</p>}
+                      <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign to Supervisors</FormLabel>
+                      {supervisors.length === 0 && !loading && <p className="text-sm text-muted-foreground">No supervisors available or still loading...</p>}
                       <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                         {supervisors.map(supervisor => (
                           <FormItem key={supervisor.uid} className="flex flex-row items-start space-x-3 space-y-0">

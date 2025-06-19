@@ -31,15 +31,16 @@ export interface Project {
 export interface Task {
   id: string;
   projectId: string;
-  parentId?: string | null;
+  parentId?: string | null; // null if it's a main task
   name: string;
   description?: string;
-  status: TaskStatus;
+  status: TaskStatus; // Status is user-editable only for sub-tasks
   createdAt: Date;
-  dueDate?: Date | null;
+  dueDate?: Date | null; // Applicable only for sub-tasks
   ownerUid: string;
-  assignedToUids?: string[] | null; 
-  assignedToNames?: string[] | null; 
+  assignedToUids?: string[] | null; // Array of UIDs, applicable for sub-tasks
+  assignedToNames?: string[] | null; // Array of names, applicable for sub-tasks
+  updatedAt?: Date;
 }
 
 export interface Issue {
@@ -51,8 +52,8 @@ export interface Issue {
   description?: string;
   severity: IssueSeverity;
   status: IssueProgressStatus;
-  assignedToUids?: string[] | null; 
-  assignedToNames?: string[] | null; 
+  assignedToUids?: string[] | null; // Array of UIDs
+  assignedToNames?: string[] | null; // Array of names
   endDate?: Date | null;
   createdAt: Date;
   updatedAt?: Date;
