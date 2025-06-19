@@ -468,8 +468,8 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
     console.warn('taskService: countProjectSubTasks called with no projectId.');
     return 0;
   }
-  console.log(`taskService: countProjectSubTasks called for projectId: ${projectId}`);
-
+  console.log(`taskService: countProjectSubTasks - Querying 'tasks' collection with: projectId == '${projectId}', parentId != null`);
+  
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
@@ -479,25 +479,27 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
   try {
     const snapshot = await getCountFromServer(q);
     const count = snapshot.data().count;
-    console.log(`taskService: Successfully queried. Found ${count} sub-tasks for project ${projectId}.`);
+    if (count === 0) {
+      console.warn(`taskService: countProjectSubTasks - Query for projectId '${projectId}' (parentId != null) executed successfully but returned 0 sub-tasks. Please verify data and/or Firestore indexes if this is unexpected. Ensure tasks intended as sub-tasks have a non-null 'parentId' and the correct 'projectId'.`);
+    } else {
+      console.log(`taskService: countProjectSubTasks - Successfully queried. Found ${count} sub-tasks for project ${projectId}.`);
+    }
     return count;
   } catch (error: any) {
     const e = error as { code?: string; message?: string };
-    console.error(`taskService: Error counting sub-tasks for project ${projectId}. Message: ${e.message}. Code: ${e.code || 'N/A'}. Full error:`, error);
-    if (e.code === 'failed-precondition' && e.message && e.message.toLowerCase().includes("index")) {
-      console.error(`\n\n🚨🚨🚨 Firestore Index Required 🚨🚨🚨\n` +
-        `The query to count sub-tasks for project '${projectId}' failed because a Firestore index is missing or not yet active.\n` +
-        `DETAILS:\n` +
-        ` - Collection: 'tasks'\n` +
-        ` - Query conditions: projectId == '${projectId}', parentId != null\n` +
-        ` - Likely required index fields: 'projectId' (Ascending), 'parentId' (e.g., Ascending or Descending - check the detailed error message from Firebase for a direct link or exact specification).\n` +
-        `Please go to your Firebase Console -> Firestore Database -> Indexes, and create the required composite index.\n` +
-        `The detailed error message from Firebase (often including a URL to create the index) might be visible in your browser's network tab for the failing request, or earlier in the console if not caught cleanly.\n\n`);
-    } else if (e.message && e.message.toLowerCase().includes("index")) {
-        console.error(`An index-related error occurred while counting sub-tasks for project ${projectId}. Please check your Firestore indexes for the 'tasks' collection. Query: projectId == ${projectId}, parentId != null.`);
-    } else {
-      console.error(`An unexpected error occurred while counting sub-tasks for project ${projectId}.`);
-    }
+    console.error(`\n\n🚨🚨🚨 Firestore Index Might Be Required or Query Failed for countProjectSubTasks 🚨🚨🚨\n` +
+      `PROJECT ID: '${projectId}'\n` +
+      `QUERY: Firestore query on 'tasks' collection where 'projectId' == '${projectId}' AND 'parentId' != null.\n` +
+      `COMMON CAUSE: This type of query often requires a composite index.\n` +
+      `SUGGESTED INDEX:\n` +
+      `  - Collection: 'tasks'\n` +
+      `  - Fields:\n` +
+      `    1. 'projectId' (Ascending)\n` +
+      `    2. 'parentId' (Ascending OR Descending - Firestore will guide you. An ascending index on parentId often works for '!=' comparisons when combined with an equality filter on another field like projectId.)\n` +
+      `ACTION: Please check your Firebase Console -> Firestore Database -> Indexes. If the exact error message from Firebase provides a direct link to create the index, use that.\n` +
+      `OTHER CHECKS: Ensure 'parentId' fields are correctly set to a string ID for sub-tasks and 'null' for main tasks. Also, verify that 'projectId' on these sub-tasks matches the project ID being queried.\n` +
+      `Original error message: ${e.message}\n` +
+      `Error code: ${e.code || 'N/A'}\n\n`, error);
     return 0; 
   }
 };
@@ -540,4 +542,6 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     return 0; 
   }
 };
-
+    
+    
+    
