@@ -5,7 +5,7 @@ import type { Issue, IssueProgressStatus, IssueSeverity } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Edit2, Trash2, User, CheckSquare, AlertTriangle } from 'lucide-react'; // User icon for assignee
+import { CalendarDays, Edit2, Trash2, User, CheckSquare, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateIssueStatus, deleteIssue } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
@@ -30,24 +30,44 @@ interface IssueCardProps {
   projectId: string;
   taskId: string;
   onIssueUpdated: () => void;
-  // Add a prop to indicate if the current user can manage this issue
-  // This can be derived from whether the parent task is assigned to them if they are a supervisor
-  canManageIssue?: boolean; 
+  canManageIssue?: boolean; // This prop indicates if user can generally manage issues for the parent task
 }
 
-export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue = true }: IssueCardProps) {
+export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue }: IssueCardProps) {
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
   const { user } = useAuth();
 
-  const isSupervisorNotAssigned = user?.role === 'supervisor' && user.uid !== issue.assignedToUid;
-  const disableActions = !user || !canManageIssue || isSupervisorNotAssigned;
+  // Determine if the current user can edit or delete THIS specific issue
+  let currentUserCanEditOrDeleteThisIssue = false;
+  if (user) {
+    const isOwnerOfIssue = issue.ownerUid === user.uid;
+    const isSupervisorAssignedToIssue = user.role === 'supervisor' && issue.assignedToUid === user.uid;
+    if (isOwnerOfIssue || isSupervisorAssignedToIssue) {
+      currentUserCanEditOrDeleteThisIssue = true;
+    }
+  }
+
+  const disableCardActions = !currentUserCanEditOrDeleteThisIssue;
+
+  // Debugging logs (can be removed after confirming functionality)
+  console.log(`[IssueCard Debug] Issue ID: ${issue.id}, Title: "${issue.title}"`);
+  console.log(`  User:`, user ? { uid: user.uid, role: user.role } : null);
+  console.log(`  Issue Owner UID:`, issue.ownerUid);
+  console.log(`  Issue Assigned UID:`, issue.assignedToUid);
+  console.log(`  Prop canManageIssue (from parent task context):`, canManageIssue);
+  console.log(`  Derived currentUserCanEditOrDeleteThisIssue:`, currentUserCanEditOrDeleteThisIssue);
+  console.log(`  Final disableCardActions:`, disableCardActions);
 
 
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
-    if (disableActions) {
-      toast({ title: 'Permission Denied', description: 'You cannot modify this issue.', variant: 'destructive' });
+    if (disableCardActions) {
+      toast({ title: 'Permission Denied', description: 'You cannot modify this issue status.', variant: 'destructive' });
       return;
+    }
+    if (!user) {
+        toast({ title: 'Error', description: 'User not authenticated.', variant: 'destructive'});
+        return;
     }
     try {
       await updateIssueStatus(issue.id, user.uid, newStatus, issue.assignedToUid, issue.assignedToName);
@@ -59,9 +79,13 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
   };
 
   const handleDeleteIssue = async () => {
-     if (disableActions) {
+     if (disableCardActions) {
       toast({ title: 'Permission Denied', description: 'You cannot delete this issue.', variant: 'destructive' });
       return;
+    }
+    if (!user) {
+        toast({ title: 'Error', description: 'User not authenticated.', variant: 'destructive'});
+        return;
     }
     try {
       await deleteIssue(issue.id, user.uid);
@@ -127,13 +151,13 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
         </div>
         <div className="flex items-center justify-end gap-2 pt-2">
           {issue.status === 'Open' && (
-            <Button variant="outline" size="sm" onClick={() => handleStatusChange('Closed')} disabled={disableActions}>
+            <Button variant="outline" size="sm" onClick={() => handleStatusChange('Closed')} disabled={disableCardActions}>
               <CheckSquare className="mr-2 h-4 w-4" /> Close Issue
             </Button>
           )}
            <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={disableActions}>
+              <Button variant="outline" size="sm" disabled={disableCardActions}>
                 <Edit2 className="mr-2 h-4 w-4" /> Edit
               </Button>
             </DialogTrigger>
@@ -147,7 +171,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
           </Dialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={disableActions}>
+              <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={disableCardActions}>
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </Button>
             </AlertDialogTrigger>
@@ -171,5 +195,3 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
     </Card>
   );
 }
-
-    
