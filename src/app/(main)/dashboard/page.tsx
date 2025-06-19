@@ -19,11 +19,11 @@ export default function DashboardPage() {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   const isSupervisor = user?.role === 'supervisor';
-  const isAdminOrOwner = !isSupervisor && user; 
+  const isAdminOrOwner = !isSupervisor && user;
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      console.log('DashboardPage: fetchDashboardData called. Auth Loading:', authLoading, 'User:', user ? `${user.displayName} (Role: ${user.role}, UID: ${user.uid})` : 'null');
+      console.log('DashboardPage: fetchDashboardData called. Auth Loading:', authLoading, 'User:', user ? `${user.displayName || user.email} (Role: ${user.role}, UID: ${user.uid})` : 'null (before full user object resolution or not logged in)');
       if (authLoading || !user) {
         if (!authLoading && !user) {
             console.log('DashboardPage: Auth done, no user. Stopping dashboard loading.');
@@ -43,18 +43,18 @@ export default function DashboardPage() {
 
           if (assignedTasks.length > 0) {
             const projectIds = [...new Set(assignedTasks.map(task => task.projectId))];
-            console.log('DashboardPage: Supervisor - Extracted projectIds:', projectIds);
+            console.log('DashboardPage: Supervisor - Extracted projectIds from assigned tasks:', projectIds);
 
             if (projectIds.length > 0) {
               const supervisorProjects = await getProjectsByIds(projectIds);
               console.log('DashboardPage: Supervisor - Fetched supervisorProjects from IDs:', supervisorProjects);
               setProjectsToDisplay(supervisorProjects);
             } else {
-              console.log('DashboardPage: Supervisor - No unique project IDs found from tasks.');
+              console.log('DashboardPage: Supervisor - No unique project IDs found from tasks. This is unexpected if tasks were found.');
               setProjectsToDisplay([]);
             }
           } else {
-            console.log('DashboardPage: Supervisor - No tasks assigned to this user.');
+            console.log('DashboardPage: Supervisor - No tasks assigned to this user. This could be due to no matching data in Firestore or a missing/incorrect Firestore index for the getAllTasksAssignedToUser query. Check taskService logs for details.');
             setProjectsToDisplay([]);
           }
         } else if (isAdminOrOwner) {
@@ -74,7 +74,7 @@ export default function DashboardPage() {
 
     fetchDashboardData();
   }, [user, authLoading, isSupervisor, isAdminOrOwner]);
-  
+
   const pageTitle = isSupervisor ? "My Assigned Work" : "My Projects";
 
   if (authLoading || dashboardLoading) {
@@ -91,7 +91,7 @@ export default function DashboardPage() {
     <div className="space-y-8">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <h1 className="font-headline text-3xl font-semibold tracking-tight">{pageTitle}</h1>
-        {!isSupervisor && user && ( 
+        {!isSupervisor && user && (
           <Button asChild>
             <Link href="/projects/create">
               <FolderPlus className="mr-2 h-4 w-4" />
@@ -105,4 +105,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-    
