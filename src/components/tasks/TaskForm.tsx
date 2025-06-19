@@ -33,8 +33,8 @@ const baseTaskSchema = z.object({
 const subTaskSchema = baseTaskSchema.extend({
   description: z.string().max(1000).optional(),
   status: z.enum(taskStatuses),
-  dueDate: z.date().optional().nullable(),
-  assignedToUids: z.array(z.string()).optional().default([]), // Array of UIDs
+  dueDate: z.date({ required_error: "Due date is required." }),
+  assignedToUids: z.array(z.string()).optional().default([]), 
 });
 
 const mainTaskSchema = baseTaskSchema.extend({
@@ -58,8 +58,6 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
-  const [supervisors, setSupervisors] = useState<AppUser[]>([]);
-  const [members, setMembers] = useState<AppUser[]>([]);
   const [assignableUsers, setAssignableUsers] = useState<AppUser[]>([]);
 
   const isSubTask = !!(parentId || task?.parentId);
@@ -71,7 +69,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       name: task?.name || '',
       description: isSubTask ? (task?.description || '') : undefined,
       status: isSubTask ? (task?.status || 'To Do') : 'To Do',
-      dueDate: isSubTask ? (task?.dueDate || null) : null,
+      dueDate: isSubTask ? (task?.dueDate || undefined) : null, // undefined for new sub-task to trigger validation
       assignedToUids: isSubTask ? (task?.assignedToUids || []) : [],
     },
   });
@@ -81,14 +79,11 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       const fetchAssignableUsers = async () => {
         try {
           const fetchedSupervisors = await getUsersByRole('supervisor');
-          setSupervisors(fetchedSupervisors);
           const fetchedMembers = await getUsersByRole('member');
-          setMembers(fetchedMembers);
           
-          // Combine and de-duplicate
           const allUsersMap = new Map<string, AppUser>();
           fetchedSupervisors.forEach(u => allUsersMap.set(u.uid, u));
-          fetchedMembers.forEach(u => allUsersMap.set(u.uid, u)); // Overwrites if supervisor also member, UID is key
+          fetchedMembers.forEach(u => allUsersMap.set(u.uid, u));
           
           const combinedUsers = Array.from(allUsersMap.values()).sort((a, b) => 
             (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
@@ -102,7 +97,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
             description: "Could not load list of users for assignment.",
             variant: "destructive"
           });
-          setAssignableUsers([]); // Set to empty on error
+          setAssignableUsers([]); 
         }
       };
       fetchAssignableUsers();
@@ -123,12 +118,14 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
         return assignedUser?.displayName || uid; 
       });
     }
-
+    
     const taskPayload: any = {
       name: data.name,
       description: isSubTask ? (data as SubTaskFormValues).description || '' : '',
       status: isSubTask ? (data as SubTaskFormValues).status : 'To Do',
-      dueDate: (isSubTask && (data as SubTaskFormValues).dueDate) ? (data as SubTaskFormValues).dueDate : null,
+      // For sub-tasks, dueDate will be a Date object due to schema. Pass it as is.
+      // For main tasks, it will be null.
+      dueDate: isSubTask ? (data as SubTaskFormValues).dueDate : null,
       parentId: parentId || task?.parentId || null,
       assignedToUids: isSubTask ? (data as SubTaskFormValues).assignedToUids || [] : [],
       assignedToNames: isSubTask ? assignedToNamesForPayload || [] : [],
@@ -136,10 +133,11 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     
     if (!isSubTask) {
       delete taskPayload.description;
-      delete taskPayload.dueDate;
+      // dueDate is already null for main tasks from the line above
       delete taskPayload.assignedToUids;
       delete taskPayload.assignedToNames;
     }
+
 
     try {
       if (task) {
@@ -239,7 +237,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                     name="dueDate"
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
-                        <FormLabel>Due Date (Optional)</FormLabel>
+                        <FormLabel>Due Date</FormLabel>
                         <Popover>
                           <PopoverTrigger asChild>
                             <FormControl>
@@ -281,9 +279,9 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                           <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
                             <FormControl>
                                <Checkbox
-                                checked={field.value?.includes(assignableUser.uid)}
+                                checked={(field.value as string[])?.includes(assignableUser.uid)}
                                 onCheckedChange={(checked) => {
-                                  const currentUids = field.value || [];
+                                  const currentUids = (field.value as string[]) || [];
                                   return checked
                                     ? field.onChange([...currentUids, assignableUser.uid])
                                     : field.onChange(currentUids.filter((uid) => uid !== assignableUser.uid));
@@ -314,3 +312,4 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     </Card>
   );
 }
+
