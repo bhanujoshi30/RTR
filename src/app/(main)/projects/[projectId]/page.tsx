@@ -11,7 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList';
-import { Loader2, ArrowLeft, Edit, ListChecks, PlusCircle, CalendarDays } from 'lucide-react';
+import { IssueList } from '@/components/issues/IssueList';
+import { Loader2, ArrowLeft, Edit, ListChecks, PlusCircle, CalendarDays, LayoutDashboard, Bug } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -29,6 +30,7 @@ import { deleteProject } from '@/services/projectService';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectForm } from '@/components/projects/ProjectForm'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 
 export default function ProjectDetailsPage() {
@@ -56,11 +58,13 @@ export default function ProjectDetailsPage() {
         } else {
           setError('Project not found or you do not have permission to view it.');
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching project:', err);
         setError('Failed to load project details.');
         if ((err as any)?.message?.includes('index')) {
           setError('Failed to load project details. This might be due to a missing database index. Please check Firebase console.');
+        } else if ((err as any)?.message?.includes('permissions')) {
+           setError('Failed to load project details due to missing permissions. Please check Firestore security rules.');
         }
       } finally {
         setLoading(false);
@@ -68,7 +72,7 @@ export default function ProjectDetailsPage() {
     };
 
     fetchProject();
-  }, [projectId, user, authLoading, router]);
+  }, [projectId, user, authLoading]);
 
   const handleDeleteProject = async () => {
     if (!project) return;
@@ -91,21 +95,19 @@ export default function ProjectDetailsPage() {
     const fetchProject = async () => {
       if (!projectId) return;
       try {
-        setLoading(true);
+        // Optimistically update UI or simply refetch
         const fetchedProject = await getProjectById(projectId);
         if (fetchedProject) {
           setProject(fetchedProject);
         } else {
-          setError('Project not found or you do not have permission to view it.');
+          setError('Project not found or you do not have permission to view it after edit.');
         }
       } catch (err) {
         setError('Failed to reload project details after edit.');
-      } finally {
-        setLoading(false);
       }
     };
     fetchProject();
-    router.refresh();
+    // router.refresh(); // Might not be needed if state updates rerender
   };
 
 
@@ -167,7 +169,7 @@ export default function ProjectDetailsPage() {
                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                     <AlertDialogDescription>
                       This action cannot be undone. This will permanently delete the project
-                      and all associated tasks.
+                      and all associated tasks and issues.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
@@ -208,21 +210,38 @@ export default function ProjectDetailsPage() {
         </CardContent>
       </Card>
 
-      <div className="space-y-6 rounded-lg border bg-card p-6 shadow-lg">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <h2 className="font-headline text-2xl font-semibold flex items-center">
-            <ListChecks className="mr-3 h-7 w-7 text-primary" />
-            Tasks
-          </h2>
-          <Button asChild>
-            <Link href={`/projects/${projectId}/tasks/create`}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Task
-            </Link>
-          </Button>
-        </div>
-        <TaskList projectId={projectId} />
-      </div>
+      <Tabs defaultValue="overview" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
+          <TabsTrigger value="overview" className="text-sm">
+            <LayoutDashboard className="mr-2 h-4 w-4" /> Overview & Tasks
+          </TabsTrigger>
+          <TabsTrigger value="issues" className="text-sm">
+            <Bug className="mr-2 h-4 w-4" /> Issues
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="overview" className="mt-6">
+           <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
+            <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+              <h2 className="font-headline text-2xl font-semibold flex items-center">
+                <ListChecks className="mr-3 h-7 w-7 text-primary" />
+                Tasks
+              </h2>
+              <Button asChild>
+                <Link href={`/projects/${projectId}/tasks/create`}>
+                  <PlusCircle className="mr-2 h-4 w-4" />
+                  Add New Task
+                </Link>
+              </Button>
+            </div>
+            <TaskList projectId={projectId} />
+          </div>
+        </TabsContent>
+        <TabsContent value="issues" className="mt-6">
+          <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
+            <IssueList projectId={projectId} />
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

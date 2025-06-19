@@ -31,17 +31,17 @@ export const createTask = async (
     throw new Error('Project not found or access denied.');
   }
 
-  const newTaskData: Omit<Task, 'id' | 'createdAt'> & { createdAt: Timestamp } = {
+  const newTaskDataOmit = { // Omit<Task, 'id' | 'createdAt' | 'ownerUid'> & { createdAt: Timestamp, ownerUid: string } = { // This was getting too complex with TS
     projectId,
     ownerUid: user.uid,
     name: taskData.name,
     description: taskData.description || '',
     status: taskData.status,
-    dueDate: taskData.dueDate || undefined,
+    dueDate: taskData.dueDate || undefined, // Firestore handles undefined by not writing the field
     createdAt: serverTimestamp() as Timestamp,
   };
 
-  const newTaskRef = await addDoc(tasksCollection, newTaskData);
+  const newTaskRef = await addDoc(tasksCollection, newTaskDataOmit);
   return newTaskRef.id;
 };
 
@@ -55,7 +55,7 @@ export const getProjectTasks = async (projectId: string): Promise<Task[]> => {
   const q = query(
     tasksCollection, 
     where('projectId', '==', projectId),
-    where('ownerUid', '==', user.uid), // Ensure user only sees their tasks within the project
+    where('ownerUid', '==', user.uid), // Ensure user only sees their tasks
     orderBy('createdAt', 'desc')
   );
 
@@ -66,9 +66,9 @@ export const getProjectTasks = async (projectId: string): Promise<Task[]> => {
   } catch (error: any) {
     console.error('taskService: Error fetching project tasks for projectId:', projectId, 'uid:', user.uid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error("Firestore query for tasks requires a composite index. Please create it in the Firebase console. The error message should provide a direct link or details for manual creation: Fields to index are 'projectId' (ASC), 'ownerUid' (ASC), and 'createdAt' (DESC).");
+        console.error("Firestore query for tasks requires a composite index. Please create it in the Firebase console. The error message should provide a direct link or details for manual creation. Fields to index: 'projectId' (ASC), 'ownerUid' (ASC), and 'createdAt' (DESC).");
     }
-    throw error; // Re-throw the error so the component can catch it
+    throw error;
   }
 };
 
@@ -94,7 +94,10 @@ export const updateTask = async (
   if (!user) throw new Error('User not authenticated');
   
   const taskDocRef = doc(db, 'tasks', taskId);
-  // Add ownership check if necessary before update
+  const taskSnap = await getDoc(taskDocRef);
+  if (!taskSnap.exists() || taskSnap.data().ownerUid !== user.uid) {
+    throw new Error('Task not found or access denied for update.');
+  }
   await updateDoc(taskDocRef, updates);
 };
 
@@ -103,7 +106,10 @@ export const updateTaskStatus = async (taskId: string, status: TaskStatus): Prom
   if (!user) throw new Error('User not authenticated');
   
   const taskDocRef = doc(db, 'tasks', taskId);
-  // Add ownership check if necessary before update
+  const taskSnap = await getDoc(taskDocRef);
+  if (!taskSnap.exists() || taskSnap.data().ownerUid !== user.uid) {
+    throw new Error('Task not found or access denied for status update.');
+  }
   await updateDoc(taskDocRef, { status });
 };
 
@@ -112,6 +118,9 @@ export const deleteTask = async (taskId: string): Promise<void> => {
   if (!user) throw new Error('User not authenticated');
   
   const taskDocRef = doc(db, 'tasks', taskId);
-  // Add ownership check if necessary before delete
+  const taskSnap = await getDoc(taskDocRef);
+  if (!taskSnap.exists() || taskSnap.data().ownerUid !== user.uid) {
+    throw new Error('Task not found or access denied for deletion.');
+  }
   await deleteDoc(taskDocRef);
 };
