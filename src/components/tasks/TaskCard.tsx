@@ -66,7 +66,9 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
             const assignedSubtasks = await getAssignedSubTasksForUser(task.id, user.uid);
             console.log(`[TaskCard Debug] Fetched assignedSubtasks for ${task.id}:`, assignedSubtasks);
             setSubTaskCount(assignedSubtasks.length);
-            const newLabel = `${assignedSubtasks.length} Sub-task${assignedSubtasks.length !== 1 ? 's' : ''} (assigned to you)`;
+            const count = assignedSubtasks.length;
+            const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
+            const newLabel = `${count} ${taskWord} (assigned to you)`;
             setSubTaskCountLabel(newLabel);
             console.log(`[TaskCard Debug] Set label for ${task.id} (supervisor): ${newLabel}`);
           } else { 
@@ -74,7 +76,9 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
             const allSubtasks = await getSubTasks(task.id);
             console.log(`[TaskCard Debug] Fetched allSubtasks for ${task.id}:`, allSubtasks);
             setSubTaskCount(allSubtasks.length);
-            const newLabel = `${allSubtasks.length} Sub-task${allSubtasks.length !== 1 ? 's' : ''}`;
+            const count = allSubtasks.length;
+            const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
+            const newLabel = `${count} ${taskWord}`;
             setSubTaskCountLabel(newLabel);
             console.log(`[TaskCard Debug] Set label for ${task.id} (owner/other): ${newLabel}`);
           }
