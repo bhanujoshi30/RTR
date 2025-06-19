@@ -76,7 +76,7 @@ export const createTask = async (
   if (taskData.parentId) { 
     newTaskPayload.description = taskData.description || '';
     newTaskPayload.status = taskData.status || 'To Do';
-    if (taskData.dueDate === undefined && taskData.parentId) { // dueDate is mandatory for sub-tasks
+    if (taskData.dueDate === undefined && taskData.parentId) { 
         throw new Error('Due date is required for sub-tasks.');
     }
     newTaskPayload.dueDate = taskData.dueDate ? Timestamp.fromDate(taskData.dueDate) : null;
@@ -181,27 +181,47 @@ export const getAssignedSubTasksForUser = async (mainTaskId: string, userUid: st
 
 export const getTaskById = async (taskId: string, userUid: string, userRole?: UserRole): Promise<Task | null> => {
   if (!userUid) throw new Error('User not authenticated for getting task');
+  console.log(`[taskService.getTaskById] Attempting to fetch task: ${taskId} for user: ${userUid}, role: ${userRole}`);
 
   const taskDocRef = doc(db, 'tasks', taskId);
   const taskSnap = await getDoc(taskDocRef);
 
-  if (taskSnap.exists()) {
-    const taskData = mapDocumentToTask(taskSnap);
-    const isOwner = taskData.ownerUid === userUid;
-    
-    const canAccessSubTask = taskData.parentId && (isOwner || taskData.assignedToUids?.includes(userUid));
-    
-    const canAccessMainTask = !taskData.parentId && (isOwner || userRole === 'supervisor');
-
-    if (canAccessSubTask || canAccessMainTask) {
-      return taskData;
-    } else {
-      console.warn(`taskService: getTaskById - Access denied for user ${userUid} (role: ${userRole}) to task ${taskId}. Owner: ${taskData.ownerUid}, AssignedToUids: ${taskData.assignedToUids?.join(', ')}`);
-      return null; 
-    }
+  if (!taskSnap.exists()) {
+    console.warn(`[taskService.getTaskById] Task ${taskId} not found in Firestore.`);
+    return null;
   }
-  console.warn(`taskService: getTaskById - Task ${taskId} not found.`);
-  return null;
+
+  const taskData = mapDocumentToTask(taskSnap);
+  const isOwner = taskData.ownerUid === userUid;
+
+  console.log(`[taskService.getTaskById] Task data fetched for ${taskId}: OwnerUID=${taskData.ownerUid}, ParentID=${taskData.parentId}, AssignedToUids=${taskData.assignedToUids?.join(',')}`);
+  console.log(`[taskService.getTaskById] Current user ${userUid} isOwner: ${isOwner}`);
+
+  if (taskData.parentId) { // It's a sub-task
+    console.log(`[taskService.getTaskById] Task ${taskId} is a sub-task.`);
+    if (isOwner) {
+      console.log(`[taskService.getTaskById] Access granted to sub-task ${taskId} (owner).`);
+      return taskData;
+    }
+    if (taskData.assignedToUids?.includes(userUid)) {
+      console.log(`[taskService.getTaskById] Access granted to sub-task ${taskId} (user ${userUid} is in assignedToUids).`);
+      return taskData;
+    }
+    console.warn(`[taskService.getTaskById] Sub-task access denied for user ${userUid} (role: ${userRole}) to task ${taskId}. Not owner and not in assignedToUids.`);
+    return null;
+  } else { // It's a main task
+    console.log(`[taskService.getTaskById] Task ${taskId} is a main task.`);
+    if (isOwner || userRole === 'supervisor') {
+      console.log(`[taskService.getTaskById] Access granted to main task ${taskId} (owner or supervisor).`);
+      return taskData;
+    }
+    // Members might reach this page if they were trying to view a main task directly, 
+    // but generally they view sub-tasks. The UI should guide them appropriately.
+    // If a member has assigned work in *any* sub-task of this main task, they should be able to see the main task container.
+    // This check is simpler if we assume UI pathing is correct. For now, strict owner/supervisor for direct main task detail view.
+    console.warn(`[taskService.getTaskById] Main task access denied for user ${userUid} (role: ${userRole}) to task ${taskId}. Only owner or supervisor can view main task details page directly.`);
+    return null;
+  }
 };
 
 interface UpdateTaskData {
@@ -229,46 +249,35 @@ export const updateTask = async (
 
   const taskDataFromSnap = mapDocumentToTask(taskSnap); 
   const isOwner = taskDataFromSnap.ownerUid === userUid;
-  const isAssignedSupervisor = userRole === 'supervisor' && !!taskDataFromSnap.parentId && taskDataFromSnap.assignedToUids?.includes(userUid);
+  const isAssignedUser = !!taskDataFromSnap.parentId && (taskDataFromSnap.assignedToUids?.includes(userUid) ?? false);
+
 
   const updatePayload: any = { updatedAt: serverTimestamp() as Timestamp };
 
-  if (taskDataFromSnap.parentId) { 
-    if (!isOwner && !isAssignedSupervisor) {
-      throw new Error('Access denied. Only the owner or an assigned supervisor can update this sub-task.');
+  if (taskDataFromSnap.parentId) { // It's a Sub-task
+    if (!isOwner && !isAssignedUser) {
+      throw new Error('Access denied. You must own or be assigned to this sub-task to update it.');
     }
 
-    if (isOwner) { 
+    if (isOwner) { // Owner can edit all editable fields of a sub-task
       if (updates.name !== undefined) updatePayload.name = updates.name;
       if (updates.description !== undefined) updatePayload.description = updates.description;
       if (updates.status !== undefined) updatePayload.status = updates.status;
-      if (updates.dueDate !== undefined) { // Can be null if owner clears it
-           if (updates.dueDate === null) {
-               updatePayload.dueDate = null;
-           } else if (updates.dueDate) { // If it's a Date object
-               updatePayload.dueDate = Timestamp.fromDate(updates.dueDate);
-           }
-           // If updates.dueDate is undefined, it's not changed.
-      } else if (updates.dueDate === undefined && taskDataFromSnap.dueDate === null && updates.status !== undefined) {
-          // If due date was already null and form submission sends undefined for dueDate
-          // but other fields are updated, ensure it remains null unless explicitly set.
-          // This case is tricky; ensure schema validation on form makes it required or optional as needed.
-          // For now, if undefined, it means no change from form.
+      if (updates.dueDate !== undefined) { 
+           updatePayload.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
       }
-
-
       if (updates.assignedToUids !== undefined) {
         updatePayload.assignedToUids = updates.assignedToUids || [];
         updatePayload.assignedToNames = updates.assignedToNames || [];
       }
-    } else if (isAssignedSupervisor) { 
-      const supervisorAllowedUpdates: { status?: TaskStatus, description?: string, dueDate?: Date | null | Timestamp } = {};
+    } else if (isAssignedUser) { // Assigned user (supervisor or member) can only update specific fields
+      const allowedUpdates: { status?: TaskStatus, description?: string, dueDate?: Date | null | Timestamp } = {};
       let hasAllowedUpdate = false;
       
-      if (updates.status !== undefined) { supervisorAllowedUpdates.status = updates.status; hasAllowedUpdate = true;}
-      if (updates.description !== undefined) { supervisorAllowedUpdates.description = updates.description; hasAllowedUpdate = true;}
+      if (updates.status !== undefined) { allowedUpdates.status = updates.status; hasAllowedUpdate = true;}
+      if (updates.description !== undefined) { allowedUpdates.description = updates.description; hasAllowedUpdate = true;}
       if (updates.dueDate !== undefined) { 
-          supervisorAllowedUpdates.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null; 
+          allowedUpdates.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null; 
           hasAllowedUpdate = true;
       }
 
@@ -279,49 +288,35 @@ export const updateTask = async (
       );
 
       if (forbiddenAttempts.length > 0) {
-          throw new Error(`Supervisors can only update status, description, or due date of sub-tasks assigned to them. Attempted to change: ${forbiddenAttempts.join(', ')}`);
+          throw new Error(`Assigned users can only update status, description, or due date of sub-tasks. Attempted to change: ${forbiddenAttempts.join(', ')}`);
       }
       if(hasAllowedUpdate) {
-        Object.assign(updatePayload, supervisorAllowedUpdates);
+        Object.assign(updatePayload, allowedUpdates);
       } else {
         if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt) return; 
       }
     }
-  } else { 
+  } else { // It's a Main Task
     if (!isOwner) {
       throw new Error('Access denied. Only the project owner can edit main task details.');
     }
+    // Only name is directly editable for a main task via this form
     if (updates.name !== undefined) updatePayload.name = updates.name;
     
+    // Filter out any other attempted updates for main tasks
     const allowedMainTaskKeys = ['name', 'updatedAt'];
     Object.keys(updatePayload).forEach(key => {
-        if (!allowedMainTaskKeys.includes(key)) {
+        if (!allowedMainTaskKeys.includes(key as string)) {
             delete updatePayload[key];
         }
     });
-     if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt && updates.name === undefined) return; 
-  }
-
-  // Explicitly ensure dueDate is not passed if undefined (meaning "no change") for main tasks
-  if (!taskDataFromSnap.parentId && updatePayload.dueDate === undefined) {
-      delete updatePayload.dueDate;
+    // If only updatedAt is set and name wasn't changed, no need to update
+    if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt && updates.name === undefined) return; 
   }
   
-  // Explicitly ensure dueDate for sub-tasks is mandatory from the schema
-  if (taskDataFromSnap.parentId && updatePayload.dueDate === undefined && updates.dueDate === undefined && taskDataFromSnap.dueDate === null){
-    // If form doesn't send it, and it was null, keep it null, unless schema forces it to be set.
-    // The TaskForm schema for subTaskSchema now requires dueDate, so it should always come.
-    // This means if it's NOT in updatePayload, it means it wasn't in `updates`.
-    // If `updates.dueDate` was `undefined` and it was NOT a sub-task, it's fine.
-    // If `updates.dueDate` was `undefined` AND it IS a sub-task, the TaskForm schema should have caught this.
-    // However, if an existing sub-task has a null dueDate (from before it was mandatory) and it's being updated
-    // without touching dueDate, it should remain null unless the form forces a value.
-    // Current SubTask schema requires it: `dueDate: z.date({ required_error: "Due date is required." })`
-    // So, for sub-tasks, `updates.dueDate` should always be a Date object from the form.
+  if (Object.keys(updatePayload).length > 1) { // Ensure there's more than just updatedAt
+    await updateDoc(taskDocRef, updatePayload);
   }
-
-
-  await updateDoc(taskDocRef, updatePayload);
 };
 
 
@@ -335,16 +330,16 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
   }
   const taskData = mapDocumentToTask(taskSnap); 
   const isOwner = taskData.ownerUid === userUid;
-  const isAssignedSupervisor = userRole === 'supervisor' && !!taskData.parentId && taskData.assignedToUids?.includes(userUid);
+  const isAssignedUser = !!taskData.parentId && (taskData.assignedToUids?.includes(userUid) ?? false);
 
-  if (taskData.parentId) { 
-    if (isOwner || isAssignedSupervisor) {
+  if (taskData.parentId) { // Only sub-tasks have directly updatable statuses via this function
+    if (isOwner || isAssignedUser) { // Owner or any assigned user can update status
       await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
     } else {
-      throw new Error('Access denied for status update. Task not owned by you, or you are not a supervisor assigned to it.');
+      throw new Error('Access denied for status update. Task not owned by you, or you are not assigned to it.');
     }
   } else {
-    console.warn(`taskService: Attempted to update status for main task ${taskId}, which is not directly applicable via updateTaskStatus.`);
+    console.warn(`taskService: Attempted to update status for main task ${taskId} via updateTaskStatus, which is not directly applicable. Main task status is derived or not set this way.`);
   }
 };
 
