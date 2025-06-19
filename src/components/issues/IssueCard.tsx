@@ -5,7 +5,7 @@ import type { Issue, IssueProgressStatus, IssueSeverity, UserRole } from '@/type
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle } from 'lucide-react'; // Changed User to Users
+import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle } from 'lucide-react'; 
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateIssueStatus, deleteIssue } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
@@ -28,23 +28,22 @@ import { useAuth } from '@/hooks/useAuth';
 interface IssueCardProps {
   issue: Issue;
   projectId: string;
-  taskId: string; // Parent SubTask ID
+  taskId: string; 
   onIssueUpdated: () => void;
+  canManageIssue?: boolean; // Prop from IssueList indicating if current user can generally add issues to this parent task
 }
 
-export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCardProps) {
+export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue }: IssueCardProps) {
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
   const { user } = useAuth();
 
-  // Edit/Delete: Only issue owner.
-  const canEditOrDeleteThisIssue = user && issue.ownerUid === user.uid;
+  const isIssueOwner = user && issue.ownerUid === user.uid;
+  const isSupervisorAssignedToIssue = user?.role === 'supervisor' && issue.assignedToUids?.includes(user.uid);
 
-  // Change Status: Issue owner OR any supervisor assigned to this specific issue.
-  const canChangeStatusOfThisIssue = user && (
-    issue.ownerUid === user.uid ||
-    (user.role === 'supervisor' && issue.assignedToUids?.includes(user.uid))
-  );
+  const canEditOrDeleteThisIssue = isIssueOwner;
+  const canChangeStatusOfThisIssue = isIssueOwner || isSupervisorAssignedToIssue;
+
 
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
     if (!canChangeStatusOfThisIssue) {
@@ -56,7 +55,6 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
         return;
     }
     try {
-      // updateIssueStatus doesn't take assignees as direct params anymore for this simple status change.
       await updateIssueStatus(issue.id, user.uid, newStatus);
       toast({ title: 'Issue Updated', description: `Status of "${issue.title}" changed to ${newStatus}.` });
       onIssueUpdated();
@@ -89,12 +87,12 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
 
   const getSeverityBadgeColor = (severity: IssueSeverity) => {
     if (severity === 'Critical') return 'bg-red-500 hover:bg-red-500 text-white';
-    return 'bg-yellow-400 hover:bg-yellow-400 text-yellow-900'; // Normal
+    return 'bg-yellow-400 hover:bg-yellow-400 text-yellow-900'; 
   };
 
   const getStatusBadgeColor = (status: IssueProgressStatus) => {
     if (status === 'Open') return 'bg-green-500 hover:bg-green-500 text-white';
-    return 'bg-gray-500 hover:bg-gray-500 text-white'; // Closed
+    return 'bg-gray-500 hover:bg-gray-500 text-white'; 
   };
 
   const displayAssignedNames = issue.assignedToNames && issue.assignedToNames.length > 0 
@@ -127,9 +125,9 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
           <div className="flex items-center">
             <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
             Created {issue.createdAt ? formatDistanceToNow(issue.createdAt, { addSuffix: true }) : 'N/A'}
-            {issue.endDate && (
+            {issue.dueDate && ( // Changed from endDate
               <span className="ml-2 border-l pl-2">
-                Due: {format(issue.endDate, 'PP')}
+                Due: {format(issue.dueDate, 'PP')}
               </span>
             )}
           </div>
@@ -186,3 +184,4 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
     </Card>
   );
 }
+

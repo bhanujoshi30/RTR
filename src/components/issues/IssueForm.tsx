@@ -31,14 +31,14 @@ const issueSchema = z.object({
   severity: z.enum(issueSeverities),
   status: z.enum(issueProgressStatuses),
   assignedToUids: z.array(z.string()).optional().default([]),
-  endDate: z.date().optional().nullable(),
+  dueDate: z.date({ required_error: "Due date is required." }), // Changed from endDate and made mandatory
 });
 
 type IssueFormValues = z.infer<typeof issueSchema>;
 
 interface IssueFormProps {
   projectId: string;
-  taskId: string; // This is the parent SubTask ID
+  taskId: string; 
   issue?: Issue;
   onFormSuccess: () => void;
 }
@@ -47,7 +47,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
-  const [supervisors, setSupervisors] = useState<AppUser[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<AppUser[]>([]);
 
   const form = useForm<IssueFormValues>({
     resolver: zodResolver(issueSchema),
@@ -57,25 +57,35 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       severity: issue?.severity || 'Normal',
       status: issue?.status || 'Open',
       assignedToUids: issue?.assignedToUids || [],
-      endDate: issue?.endDate || null,
+      dueDate: issue?.dueDate || undefined, // undefined for new to trigger validation
     },
   });
 
   useEffect(() => {
-    const fetchSupervisors = async () => {
+    const fetchAssignableUsers = async () => {
       try {
         const fetchedSupervisors = await getUsersByRole('supervisor');
-        setSupervisors(fetchedSupervisors);
+        const fetchedMembers = await getUsersByRole('member');
+        
+        const allUsersMap = new Map<string, AppUser>();
+        fetchedSupervisors.forEach(u => allUsersMap.set(u.uid, u));
+        fetchedMembers.forEach(u => allUsersMap.set(u.uid, u));
+        
+        const combinedUsers = Array.from(allUsersMap.values()).sort((a, b) => 
+          (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
+        );
+        setAssignableUsers(combinedUsers);
       } catch (error) {
-        console.error("Failed to fetch supervisors for IssueForm:", error);
+        console.error("Failed to fetch assignable users for IssueForm:", error);
         toast({
           title: "Error",
-          description: "Could not load list of supervisors.",
+          description: "Could not load list of users for assignment.",
           variant: "destructive"
         });
+        setAssignableUsers([]);
       }
     };
-    fetchSupervisors();
+    fetchAssignableUsers();
   }, [toast]);
 
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
@@ -92,15 +102,15 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     let assignedToNames: string[] | undefined = undefined;
     if (data.assignedToUids && data.assignedToUids.length > 0) {
       assignedToNames = data.assignedToUids.map(uid => {
-        const supervisor = supervisors.find(s => s.uid === uid);
-        return supervisor?.displayName || uid;
+        const assignedUser = assignableUsers.find(u => u.uid === uid);
+        return assignedUser?.displayName || uid;
       });
     }
 
     const issueDataPayload = {
       ...data,
       assignedToNames: assignedToNames || [],
-      endDate: data.endDate ? data.endDate : null,
+      dueDate: data.dueDate, // Already a Date object from form
     };
 
     try {
@@ -203,24 +213,24 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           name="assignedToUids"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assigned To Supervisors</FormLabel>
-              {supervisors.length === 0 && <p className="text-sm text-muted-foreground">Loading supervisors...</p>}
+              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
+              {assignableUsers.length === 0 && <p className="text-sm text-muted-foreground">Loading users...</p>}
                <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                {supervisors.map(supervisor => (
-                  <FormItem key={supervisor.uid} className="flex flex-row items-start space-x-3 space-y-0">
+                {assignableUsers.map(assignableUser => (
+                  <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
                     <FormControl>
                       <Checkbox
-                        checked={field.value?.includes(supervisor.uid)}
+                        checked={field.value?.includes(assignableUser.uid)}
                         onCheckedChange={(checked) => {
                           const currentUids = field.value || [];
                           return checked
-                            ? field.onChange([...currentUids, supervisor.uid])
-                            : field.onChange(currentUids.filter((uid) => uid !== supervisor.uid));
+                            ? field.onChange([...currentUids, assignableUser.uid])
+                            : field.onChange(currentUids.filter((uid) => uid !== assignableUser.uid));
                         }}
                       />
                     </FormControl>
                     <FormLabel className="font-normal">
-                      {supervisor.displayName} ({supervisor.email})
+                      {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
                     </FormLabel>
                   </FormItem>
                 ))}
@@ -231,10 +241,10 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         />
         <FormField
           control={form.control}
-          name="endDate"
+          name="dueDate"
           render={({ field }) => (
             <FormItem className="flex flex-col">
-              <FormLabel>End Date (Optional)</FormLabel>
+              <FormLabel>Due Date</FormLabel>
               <Popover>
                 <PopoverTrigger asChild>
                   <FormControl>
@@ -273,3 +283,4 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Form>
   );
 }
+

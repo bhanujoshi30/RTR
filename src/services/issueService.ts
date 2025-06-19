@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import type { Issue, IssueSeverity, IssueProgressStatus, Task } from '@/types';
+import type { Issue, IssueSeverity, IssueProgressStatus, Task, UserRole } from '@/types';
 import {
   collection,
   addDoc,
@@ -20,7 +20,7 @@ import {
   arrayUnion,
   runTransaction
 } from 'firebase/firestore';
-import { getTaskById, updateTask as updateParentTask } from './taskService'; // Renamed to avoid conflict
+import { getTaskById, updateTask as updateParentTask } from './taskService'; 
 
 const issuesCollection = collection(db, 'issues');
 
@@ -31,7 +31,7 @@ interface CreateIssueData {
   status: IssueProgressStatus;
   assignedToUids?: string[] | null;
   assignedToNames?: string[] | null;
-  endDate?: Date | null;
+  dueDate: Date; // Changed from endDate
 }
 
 const mapDocumentToIssue = (docSnapshot: any): Issue => {
@@ -39,7 +39,7 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
   return {
     id: docSnapshot.id,
     projectId: data.projectId,
-    taskId: data.taskId, // Parent SubTask ID
+    taskId: data.taskId, 
     ownerUid: data.ownerUid,
     title: data.title,
     description: data.description,
@@ -49,12 +49,11 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
     assignedToNames: data.assignedToNames || [],
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
-    endDate: data.endDate instanceof Timestamp ? data.endDate.toDate() : (data.endDate ? new Date(data.endDate) : null),
+    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : new Date()), // Changed from endDate
   };
 };
 
-// Helper for the mandate logic
-async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUids: string[], issueAssigneeNames: string[], performingUserUid: string, performingUserRole?: string) {
+async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUids: string[], issueAssigneeNames: string[], performingUserUid: string, performingUserRole?: UserRole) {
   if (!issueAssigneeUids || issueAssigneeUids.length === 0) return;
 
   const parentTaskRef = doc(db, 'tasks', parentTaskId);
@@ -76,9 +75,8 @@ async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUi
       issueAssigneeUids.forEach((issueUid, index) => {
         if (!newParentAssigneeUids.includes(issueUid)) {
           newParentAssigneeUids.push(issueUid);
-          // Ensure corresponding name is also added
-          const issueName = issueAssigneeNames[index] || issueUid; // Fallback to UID if name somehow missing
-          if (!newParentAssigneeNames.includes(issueName)) { // Basic check, could be more robust with UID-name map
+          const issueName = issueAssigneeNames[index] || issueUid; 
+          if (!newParentAssigneeNames.some(name => currentParentAssigneeUids[currentParentAssigneeNames.indexOf(name)] === issueUid)) { // Ensure name corresponds to UID if possible
              newParentAssigneeNames.push(issueName);
           }
           needsUpdate = true;
@@ -86,9 +84,6 @@ async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUi
       });
 
       if (needsUpdate) {
-        // The performingUserUid is the one initiating the issue creation/update
-        // The updateParentTask service function will handle its own permission checks.
-        // We are passing the original user's UID and role.
         transaction.update(parentTaskRef, {
           assignedToUids: newParentAssigneeUids,
           assignedToNames: newParentAssigneeNames,
@@ -99,10 +94,6 @@ async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUi
     });
   } catch (error) {
     console.error(`Mandate Error: Failed to update parent sub-task ${parentTaskId} assignees:`, error);
-    // Decide if this error should propagate and fail the issue creation/update
-    // For now, log it and let the issue operation proceed if it was otherwise successful.
-    // A more robust solution might involve a dedicated "assign user to task and its items" flow.
-    // throw error; // Or handle more gracefully
   }
 }
 
@@ -110,7 +101,7 @@ async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUi
 export const createIssue = async (projectId: string, taskId: string, userUid: string, issueData: CreateIssueData): Promise<string> => {
   if (!userUid) throw new Error('User not authenticated');
 
-  const taskDocRef = doc(db, 'tasks', taskId); // taskId is the parent SubTask ID
+  const taskDocRef = doc(db, 'tasks', taskId); 
   const taskSnap = await getDoc(taskDocRef);
   const taskData = taskSnap.data() as Task | undefined;
 
@@ -118,7 +109,6 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
     throw new Error('Parent sub-task not found or does not belong to the project.');
   }
   
-  // User must be owner of the sub-task OR assigned to the sub-task to create an issue under it.
   const isOwnerOfSubTask = taskData?.ownerUid === userUid;
   const isAssignedToSubTask = taskData?.assignedToUids?.includes(userUid);
 
@@ -129,11 +119,11 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
   const newIssuePayload = {
     ...issueData,
     projectId,
-    taskId, // Parent SubTask ID
-    ownerUid: userUid, // Creator of the issue
+    taskId, 
+    ownerUid: userUid, 
     assignedToUids: issueData.assignedToUids || [],
     assignedToNames: issueData.assignedToNames || [],
-    endDate: issueData.endDate ? Timestamp.fromDate(issueData.endDate) : null,
+    dueDate: Timestamp.fromDate(issueData.dueDate), // Changed from endDate
     createdAt: serverTimestamp() as Timestamp,
     updatedAt: serverTimestamp() as Timestamp,
   };
@@ -141,7 +131,6 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
   try {
     const newIssueRef = await addDoc(issuesCollection, newIssuePayload);
     
-    // Mandate Logic: Ensure issue assignees are also assigned to the parent sub-task
     if (newIssuePayload.assignedToUids && newIssuePayload.assignedToUids.length > 0) {
       const userDoc = await getDoc(doc(db, 'users', userUid));
       const performingUserRole = userDoc.exists() ? userDoc.data()?.role as UserRole : undefined;
@@ -160,7 +149,6 @@ export const getTaskIssues = async (taskId: string, userUid: string, isSuperviso
     return [];
   }
 
-  // taskId here refers to the parent SubTask ID
   const q = query(
     issuesCollection,
     where('taskId', '==', taskId),
@@ -217,7 +205,6 @@ export const getIssueById = async (issueId: string, userUid: string): Promise<Is
 
   if (issueSnap.exists()) {
     const issueData = mapDocumentToIssue(issueSnap);
-    // Anyone who created OR is assigned can view. Further restrictions can be added if needed.
     if (issueData.ownerUid === userUid || issueData.assignedToUids?.includes(userUid)) {
         return issueData;
     }
@@ -232,7 +219,7 @@ interface UpdateIssueData {
   status?: IssueProgressStatus;
   assignedToUids?: string[] | null;
   assignedToNames?: string[] | null;
-  endDate?: Date | null | undefined;
+  dueDate?: Date; // Changed from endDate, made non-nullable for update payload
 }
 
 export const updateIssue = async (issueId: string, userUid: string, parentSubTaskId: string, updates: UpdateIssueData): Promise<void> => {
@@ -244,8 +231,7 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
       throw new Error('Issue not found.');
   }
 
-  const issueData = mapDocumentToIssue(issueSnap); // Use mapped data
-  // Only owner of the issue can edit all fields.
+  const issueData = mapDocumentToIssue(issueSnap); 
   if (issueData.ownerUid !== userUid) {
     throw new Error('Access denied. Only the issue creator can edit it.');
   }
@@ -264,14 +250,13 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
     updatePayload.assignedToNames = updates.assignedToNames || [];
   }
 
-  if (updates.endDate !== undefined) {
-    updatePayload.endDate = updates.endDate ? Timestamp.fromDate(updates.endDate) : null;
+  if (updates.dueDate !== undefined) {
+    updatePayload.dueDate = Timestamp.fromDate(updates.dueDate); // Changed from endDate
   }
 
   try {
     await updateDoc(issueDocRef, updatePayload as any);
 
-    // Mandate Logic: Ensure new/updated issue assignees are also assigned to the parent sub-task
     const finalAssignedUids = updatePayload.assignedToUids || issueData.assignedToUids || [];
     const finalAssignedNames = updatePayload.assignedToNames || issueData.assignedToNames || [];
 
@@ -295,8 +280,7 @@ export const updateIssueStatus = async (issueId: string, userUid: string, status
    if (!issueSnap.exists()){
       throw new Error('Issue not found.');
   }
-  const issueData = mapDocumentToIssue(issueSnap); // Use mapped data
-  // User who created issue OR is assigned to issue can update status.
+  const issueData = mapDocumentToIssue(issueSnap); 
   if (issueData.ownerUid !== userUid && !issueData.assignedToUids?.includes(userUid)) {
     throw new Error('Access denied. You did not create this issue nor are you assigned to it.');
   }
@@ -332,14 +316,12 @@ export const deleteIssue = async (issueId: string, userUid: string): Promise<voi
 export const deleteIssuesForTask = async (taskId: string, userUid: string): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated for deleting issues for task');
 
-  // taskId is the parent SubTask ID
   const q = query(issuesCollection, where('taskId', '==', taskId));
   const batch = writeBatch(db);
 
   try {
     const querySnapshot = await getDocs(q);
     querySnapshot.forEach(docSnap => {
-      // Add check: only delete if userUid is owner of the issue or parent task? For now, assume if parent task is deleted, its issues go.
       batch.delete(docSnap.ref);
     });
     await batch.commit();
@@ -348,3 +330,4 @@ export const deleteIssuesForTask = async (taskId: string, userUid: string): Prom
     console.error('issueService: Error deleting issues for task ID (sub-task ID):', taskId, error.message, error.code ? `(${error.code})` : '', error.stack);
   }
 };
+

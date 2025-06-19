@@ -36,7 +36,7 @@ export interface Task {
   description?: string;
   status: TaskStatus; // Status is user-editable only for sub-tasks
   createdAt: Date;
-  dueDate?: Date | null; // Applicable only for sub-tasks
+  dueDate: Date; // Made mandatory from previous change
   ownerUid: string;
   assignedToUids?: string[] | null; // Array of UIDs, applicable for sub-tasks
   assignedToNames?: string[] | null; // Array of names, applicable for sub-tasks
@@ -54,7 +54,8 @@ export interface Issue {
   status: IssueProgressStatus;
   assignedToUids?: string[] | null; // Array of UIDs
   assignedToNames?: string[] | null; // Array of names
-  endDate?: Date | null;
+  dueDate: Date; // Renamed from endDate and made mandatory
   createdAt: Date;
   updatedAt?: Date;
 }
+
