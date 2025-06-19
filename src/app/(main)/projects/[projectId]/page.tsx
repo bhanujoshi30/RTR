@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList'; // Will now list Main Tasks
-import { Loader2, ArrowLeft, Edit, ListChecks, PlusCircle, CalendarDays, LayoutDashboard, Trash2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers } from 'lucide-react'; // Added Layers here
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -104,7 +104,7 @@ export default function ProjectDetailsPage() {
       }
     };
     fetchProject();
-    router.refresh(); // Added to ensure project list might refresh if dashboard also re-renders
+    router.refresh(); 
   };
 
 
