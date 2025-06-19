@@ -1,6 +1,7 @@
 
 import type { User as FirebaseUser } from 'firebase/auth';
-import type { Timestamp } from 'firebase/firestore';
+// Remove Timestamp import from here if not used elsewhere, or keep if other raw Timestamps are needed.
+// For client-facing types, we'll use JavaScript Date objects.
 
 export interface User extends FirebaseUser {}
 
@@ -15,7 +16,7 @@ export interface Project {
   name: string;
   description?: string;
   ownerUid: string;
-  createdAt: Timestamp;
+  createdAt: Date; // Changed from Timestamp
   status: ProjectStatus;
   progress: number; // 0-100
 }
@@ -23,27 +24,26 @@ export interface Project {
 export interface Task {
   id: string;
   projectId: string;
-  parentId?: string | null; // ID of the main task if this is a sub-task
+  parentId?: string | null; 
   name: string;
-  // Details below are primarily for sub-tasks. Main tasks might not use them directly.
   description?: string;
-  status: TaskStatus; // Status might apply to sub-tasks or roll up to main tasks
-  createdAt: Timestamp;
-  dueDate?: Timestamp | null;
+  status: TaskStatus; 
+  createdAt: Date; // Changed from Timestamp
+  dueDate?: Date | null; // Changed from Timestamp
   ownerUid: string;
 }
 
 export interface Issue {
   id: string;
   projectId: string;
-  taskId: string; // ID of the sub-task this issue belongs to
+  taskId: string; 
   ownerUid: string;
   title: string;
   description?: string;
   severity: IssueSeverity;
   status: IssueProgressStatus;
   assignedToName?: string;
-  endDate?: Timestamp | null;
-  createdAt: Timestamp;
-  updatedAt?: Timestamp;
+  endDate?: Date | null; // Changed from Timestamp
+  createdAt: Date; // Changed from Timestamp
+  updatedAt?: Date; // Changed from Timestamp
 }

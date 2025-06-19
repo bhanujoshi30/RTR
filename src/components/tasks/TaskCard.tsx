@@ -24,12 +24,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useEffect, useState } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 
 interface TaskCardProps {
   task: Task;
   onTaskUpdated: () => void;
-  isMainTaskView?: boolean; // True if this card is for a main task in the project's main task list
-  isSubTaskView?: boolean; // True if this card is for a sub-task in a sub-task list
+  isMainTaskView?: boolean; 
+  isSubTaskView?: boolean; 
 }
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
@@ -38,14 +39,15 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   const { toast } = useToast();
   const router = useRouter();
   const [subTaskCount, setSubTaskCount] = useState(0);
+  const { user } = useAuth();
 
-  const isActuallyMainTask = !task.parentId; // Determine if the task object itself is a main task
+  const isActuallyMainTask = !task.parentId; 
 
   useEffect(() => {
-    if (isActuallyMainTask) {
+    if (isActuallyMainTask && user) {
       const fetchCount = async () => {
         try {
-          const subtasks = await getSubTasks(task.id);
+          const subtasks = await getSubTasks(task.id, user.uid);
           setSubTaskCount(subtasks.length);
         } catch (error) {
           console.error("Failed to fetch sub-task count for main task:", task.id, error);
@@ -53,16 +55,16 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
       };
       fetchCount();
     }
-  }, [task.id, isActuallyMainTask]);
+  }, [task.id, isActuallyMainTask, user]);
 
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
-    if (isActuallyMainTask) { // Main tasks don't have their own status to change directly
+    if (isActuallyMainTask || !user) { 
       toast({ title: 'Info', description: 'Main task status is derived from sub-tasks or not applicable.'});
       return;
     }
     try {
-      await updateTaskStatus(task.id, newStatus);
+      await updateTaskStatus(task.id, user.uid, newStatus);
       toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
       onTaskUpdated(); 
     } catch (error) {
@@ -71,8 +73,9 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   };
   
   const handleDeleteTask = async () => {
+    if (!user) return;
     try {
-      await deleteTask(task.id);
+      await deleteTask(task.id, user.uid);
       toast({ title: 'Task Deleted', description: `"${task.name}" has been deleted.` });
       onTaskUpdated();
     } catch (error: any) {
@@ -107,7 +110,7 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
             {cardIcon}
             <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
           </div>
-          {!isActuallyMainTask && task.status && ( // Only show status badge for sub-tasks
+          {!isActuallyMainTask && task.status && ( 
             <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
               {task.status}
             </Badge>
@@ -118,7 +121,6 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
             </Badge>
           )}
         </div>
-        {/* Description only for sub-tasks or if explicitly set for main tasks (though concept is they don't have one) */}
         {(!isActuallyMainTask && task.description) && (
           <CardDescription className="pt-1 line-clamp-2">{task.description}</CardDescription>
         )}
@@ -127,18 +129,16 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center text-xs text-muted-foreground">
             <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-            Created {task.createdAt ? formatDistanceToNow(task.createdAt.toDate(), { addSuffix: true }) : 'N/A'}
-            {/* Due date only for sub-tasks */}
+            Created {task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true }) : 'N/A'}
             {(!isActuallyMainTask && task.dueDate) && (
               <span className="ml-2 border-l pl-2">
-                Due: {format(task.dueDate.toDate(), 'PP')}
+                Due: {format(task.dueDate, 'PP')}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            {/* Status select only for sub-tasks */}
             {!isActuallyMainTask && (
-              <Select value={task.status} onValueChange={handleStatusChange}>
+              <Select value={task.status} onValueChange={handleStatusChange} disabled={!user}>
                 <SelectTrigger className="w-full sm:w-[150px] h-9 text-xs">
                   <SelectValue placeholder="Change status" />
                 </SelectTrigger>
@@ -155,14 +155,13 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
                 <Eye className="h-4 w-4" />
                 <span className="sr-only">View Details</span>
             </Button>
-             {/* Edit button leads to Task Detail page which handles edit dialog */}
             <Button variant="outline" size="icon" className="h-9 w-9" title="Edit Task" onClick={handleViewTask}>
                 <Edit2 className="h-4 w-4" />
                  <span className="sr-only">Edit Task</span>
             </Button>
              <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title={isActuallyMainTask ? "Delete Main Task & Sub-tasks" : "Delete Sub-task"}>
+                  <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title={isActuallyMainTask ? "Delete Main Task & Sub-tasks" : "Delete Sub-task"} disabled={!user}>
                     <Trash2 className="h-4 w-4" />
                     <span className="sr-only">Delete</span>
                   </Button>

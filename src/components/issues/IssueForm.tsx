@@ -18,7 +18,7 @@ import { CalendarIcon, Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth'; // Import useAuth
+import { useAuth } from '@/hooks/useAuth'; 
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -44,7 +44,7 @@ interface IssueFormProps {
 export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth(); // Get the authenticated user
+  const { user } = useAuth(); 
 
   const form = useForm<IssueFormValues>({
     resolver: zodResolver(issueSchema),
@@ -54,7 +54,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       severity: issue?.severity || 'Normal',
       status: issue?.status || 'Open',
       assignedToName: issue?.assignedToName || '',
-      endDate: issue?.endDate ? issue.endDate.toDate() : null,
+      endDate: issue?.endDate || null, // issue.endDate is now a JS Date or null
     },
   });
 
@@ -117,7 +117,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             <FormItem>
               <FormLabel>Description (Optional)</FormLabel>
               <FormControl>
-                <Textarea placeholder="More details about the issue" {...field} rows={3} />
+                <Textarea placeholder="More details about the issue" {...field} value={field.value ?? ''} rows={3} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -176,7 +176,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             <FormItem>
               <FormLabel>Assigned To (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="Name of person assigned" {...field} />
+                <Input placeholder="Name of person assigned" {...field} value={field.value ?? ''}/>
               </FormControl>
               <FormMessage />
             </FormItem>

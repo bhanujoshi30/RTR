@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+// import Link from 'next/link'; // Not used directly for navigation here, router.push is used
 import { getTaskById, deleteTask } from '@/services/taskService';
 import type { Task } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ import { IssueList } from '@/components/issues/IssueList';
 import { SubTaskList } from '@/components/tasks/SubTaskList';
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription } from "@/components/ui/alert-dialog"; // Renamed to avoid conflict
 import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -56,7 +56,9 @@ export default function TaskDetailsPage() {
   };
 
   useEffect(() => {
-    fetchTaskDetails();
+    if(user && !authLoading){
+      fetchTaskDetails();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, projectId, user, authLoading]);
 
@@ -136,8 +138,8 @@ export default function TaskDetailsPage() {
               )}
               <Dialog open={showAddEditTaskModal && !!editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen);}}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={() => { setEditingTask(task); setShowAddEditTaskModal(true); }}>
-                    <Edit className="mr-2 h-4 w-4" /> Edit {isSubTask ? "Sub-task" : "Main Task Name"}
+                  <Button variant="outline" size="sm" onClick={() => { setEditingTask(task); setShowAddEditTaskModal(true); }} disabled={!user}>
+                    <Edit className="mr-2 h-4 w-4" /> Edit {isSubTask ? "Sub-task" : "Main Task"}
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="sm:max-w-xl">
@@ -146,7 +148,7 @@ export default function TaskDetailsPage() {
                       Edit {isSubTask ? "Sub-task" : "Main Task"}
                     </DialogTitle>
                      <DialogDescription>
-                        {isSubTask ? "Modify the details of this sub-task." : "Update the name of this main task."}
+                        {isSubTask ? "Modify the details of this sub-task." : "Update the name or details of this main task."}
                     </DialogDescription>
                   </DialogHeader>
                   {editingTask && user && <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />}
@@ -154,14 +156,14 @@ export default function TaskDetailsPage() {
               </Dialog>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                  <Button variant="destructive" size="sm" disabled={!user}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete "{task.name}"?</AlertDialogTitle>
-                    <AlertDialogDescription>
+                    <AlertDialogTaskTitle>Delete "{task.name}"?</AlertDialogTaskTitle>
+                    <AlertDialogTaskDescription>
                       This action cannot be undone and will permanently delete this {isSubTask ? "sub-task and its issues." : "main task, all its sub-tasks, and their issues."}
-                    </AlertDialogDescription>
+                    </AlertDialogTaskDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -187,7 +189,7 @@ export default function TaskDetailsPage() {
                         <p className="text-sm font-medium text-muted-foreground">Created At</p>
                         <div className="flex items-center text-base">
                             <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                            {task.createdAt ? format(task.createdAt.toDate(), 'PPP p') : 'N/A'}
+                            {task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}
                         </div>
                     </div>
                     {task.dueDate && (
@@ -195,7 +197,7 @@ export default function TaskDetailsPage() {
                             <p className="text-sm font-medium text-muted-foreground">Due Date</p>
                             <div className="flex items-center text-base">
                                 <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                                {format(task.dueDate.toDate(), 'PPP')}
+                                {format(task.dueDate, 'PPP')}
                             </div>
                         </div>
                     )}
@@ -204,7 +206,7 @@ export default function TaskDetailsPage() {
              {isMainTask && (
                  <div className="flex items-center text-sm text-muted-foreground">
                     <CalendarDays className="mr-2 h-4 w-4" />
-                    Created {task.createdAt ? format(task.createdAt.toDate(), 'PPP p') : 'N/A'}
+                    Created {task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}
                  </div>
              )}
         </CardContent>
@@ -219,7 +221,7 @@ export default function TaskDetailsPage() {
             </h2>
             <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
               <DialogTrigger asChild>
-                <Button onClick={() => { setEditingTask(null); setShowAddEditTaskModal(true); }}>
+                <Button onClick={() => { setEditingTask(null); setShowAddEditTaskModal(true); }} disabled={!user}>
                   <PlusCircle className="mr-2 h-4 w-4" /> Add New Sub-task
                 </Button>
               </DialogTrigger>
@@ -252,8 +254,8 @@ export default function TaskDetailsPage() {
                 <div><h4 className="font-semibold">Name:</h4><p>{task.name}</p></div>
                 {task.description && (<div><h4 className="font-semibold">Description:</h4><p className="whitespace-pre-wrap">{task.description}</p></div>)}
                 <div><h4 className="font-semibold">Status:</h4><p>{task.status}</p></div>
-                <div><h4 className="font-semibold">Created:</h4><p>{task.createdAt ? format(task.createdAt.toDate(), 'PPP p') : 'N/A'}</p></div>
-                {task.dueDate && (<div><h4 className="font-semibold">Due Date:</h4><p>{format(task.dueDate.toDate(), 'PPP')}</p></div>)}
+                <div><h4 className="font-semibold">Created:</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
+                {task.dueDate && (<div><h4 className="font-semibold">Due Date:</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}
               </CardContent>
             </Card>
           </TabsContent>

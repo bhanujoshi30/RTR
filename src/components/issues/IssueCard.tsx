@@ -23,7 +23,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { IssueForm } from './IssueForm';
 import { useState } from 'react';
-import { useAuth } from '@/hooks/useAuth'; // Import useAuth
+import { useAuth } from '@/hooks/useAuth'; 
 
 interface IssueCardProps {
   issue: Issue;
@@ -35,7 +35,7 @@ interface IssueCardProps {
 export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCardProps) {
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
-  const { user } = useAuth(); // Get the authenticated user
+  const { user } = useAuth(); 
 
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
     if (!user) {
@@ -104,10 +104,10 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
         <div className="flex flex-col gap-2 text-xs text-muted-foreground">
           <div className="flex items-center">
             <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-            Created {issue.createdAt ? formatDistanceToNow(issue.createdAt.toDate(), { addSuffix: true }) : 'N/A'}
+            Created {issue.createdAt ? formatDistanceToNow(issue.createdAt, { addSuffix: true }) : 'N/A'}
             {issue.endDate && (
               <span className="ml-2 border-l pl-2">
-                Due: {format(issue.endDate.toDate(), 'PP')}
+                Due: {format(issue.endDate, 'PP')}
               </span>
             )}
           </div>

@@ -1,3 +1,4 @@
+
 import type { Project } from '@/types';
 import Link from 'next/link';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,7 +55,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
       <CardFooter className="flex flex-col items-start gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
          <div className="flex items-center text-xs text-muted-foreground">
           <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-          Created {project.createdAt ? formatDistanceToNow(project.createdAt.toDate(), { addSuffix: true }) : 'recently'}
+          Created {project.createdAt ? formatDistanceToNow(project.createdAt, { addSuffix: true }) : 'recently'}
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/projects/${project.id}`}>

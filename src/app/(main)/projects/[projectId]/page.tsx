@@ -68,7 +68,9 @@ export default function ProjectDetailsPage() {
   };
   
   useEffect(() => {
-    fetchProjectDetails();
+    if(user && !authLoading){
+      fetchProjectDetails();
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, user, authLoading]);
 
@@ -90,7 +92,7 @@ export default function ProjectDetailsPage() {
 
   const handleProjectFormSuccess = () => {
     setShowEditModal(false);
-    fetchProjectDetails(); // Refetch project details after edit
+    fetchProjectDetails(); 
     router.refresh(); 
   };
 
@@ -187,7 +189,7 @@ export default function ProjectDetailsPage() {
               <p className="text-sm font-medium text-muted-foreground">Created At</p>
               <div className="flex items-center text-base">
                 <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                {project.createdAt ? format(project.createdAt.toDate(), 'PPP') : 'N/A'}
+                {project.createdAt ? format(project.createdAt, 'PPP') : 'N/A'}
               </div>
             </div>
           </div>

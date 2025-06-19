@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/firebase'; // Removed auth import
+import { db } from '@/lib/firebase'; 
 import type { Project, ProjectStatus } from '@/types';
 import {
   collection,
@@ -16,11 +16,19 @@ import {
   serverTimestamp,
   Timestamp,
   orderBy,
-  writeBatch
 } from 'firebase/firestore';
 import { deleteAllTasksForProject } from './taskService'; 
 
 const projectsCollection = collection(db, 'projects');
+
+const mapDocumentToProject = (docSnapshot: any): Project => {
+  const data = docSnapshot.data();
+  return {
+    id: docSnapshot.id,
+    ...data,
+    createdAt: (data.createdAt as Timestamp)?.toDate ? (data.createdAt as Timestamp).toDate() : new Date(data.createdAt),
+  } as Project;
+};
 
 export const createProject = async (
   userUid: string, 
@@ -34,15 +42,19 @@ export const createProject = async (
   if (!userUid) {
     throw new Error('User not authenticated for creating project');
   }
+  console.log('projectService: createProject called with data:', projectData);
+  console.log('projectService: currentUser:', userUid);
 
   const projectPayload = {
     ...projectData,
     ownerUid: userUid,
     createdAt: serverTimestamp() as Timestamp,
   };
+  console.log('projectService: Payload for Firestore addDoc:', projectPayload);
 
   try {
     const newProjectRef = await addDoc(projectsCollection, projectPayload);
+    console.log('projectService: Firestore addDoc successful. New project Ref ID:', newProjectRef.id);
     return newProjectRef.id;
   } catch (error: any) {
     console.error('projectService: Error in createProject:', error.message, error.code ? `(${error.code})` : '', error.stack);
@@ -51,6 +63,7 @@ export const createProject = async (
 };
 
 export const getUserProjects = async (userUid: string): Promise<Project[]> => {
+  console.log(`projectService: getUserProjects for user: ${userUid}`);
   if (!userUid) {
     return [];
   }
@@ -58,7 +71,8 @@ export const getUserProjects = async (userUid: string): Promise<Project[]> => {
   const q = query(projectsCollection, where('ownerUid', '==', userUid), orderBy('createdAt', 'desc'));
   try {
     const querySnapshot = await getDocs(q);
-    const projects = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+    const projects = querySnapshot.docs.map(mapDocumentToProject);
+    console.log(`projectService: Fetched ${projects.length} projects.`);
     return projects;
   } catch (error: any) {
     console.error('projectService: Error fetching user projects for uid:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
@@ -81,7 +95,7 @@ export const getProjectById = async (projectId: string, userUid: string): Promis
     if (projectSnap.exists()) {
       const projectData = projectSnap.data();
       if (projectData.ownerUid === userUid) {
-        return { id: projectSnap.id, ...projectData } as Project;
+        return mapDocumentToProject(projectSnap);
       } else {
         console.warn('projectService: User UID', userUid, 'does not own project ID:', projectId, 'Project owner UID:', projectData.ownerUid);
         throw new Error('Access denied. You do not own this project.');

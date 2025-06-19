@@ -20,11 +20,10 @@ import { CalendarIcon, Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { Timestamp } from 'firebase/firestore';
+import { useAuth } from '@/hooks/useAuth';
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 
-// Schema for sub-tasks (full details)
 const subTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
   description: z.string().max(1000).optional(),
@@ -32,26 +31,26 @@ const subTaskSchema = z.object({
   dueDate: z.date().optional().nullable(),
 });
 
-// Schema for main tasks (only name)
 const mainTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
-  description: z.string().max(1000).optional().nullable().default(null), // Default to null or undefined
-  status: z.enum(taskStatuses).default('To Do'), // Default status, though not directly used for main task logic
+  description: z.string().max(1000).optional().nullable().default(null), 
+  status: z.enum(taskStatuses).default('To Do'), 
   dueDate: z.date().optional().nullable().default(null),
 });
 
 
 interface TaskFormProps {
   projectId: string;
-  task?: Task; // For editing existing task
-  parentId?: string | null; // If creating/editing a sub-task, this is the main task's ID
-  onFormSuccess?: () => void; // Callback to close modal or refresh list
+  task?: Task; 
+  parentId?: string | null; 
+  onFormSuccess?: () => void; 
 }
 
 export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
 
   const isSubTask = !!(parentId || task?.parentId);
   const currentSchema = isSubTask ? subTaskSchema : mainTaskSchema;
@@ -62,38 +61,40 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       name: task?.name || '',
       description: isSubTask ? (task?.description || '') : undefined,
       status: isSubTask ? (task?.status || 'To Do') : 'To Do',
-      dueDate: isSubTask ? (task?.dueDate ? task.dueDate.toDate() : null) : null,
+      dueDate: task?.dueDate || null, // task.dueDate is now a JS Date or null
     },
   });
 
   const onSubmit: SubmitHandler<z.infer<typeof currentSchema>> = async (data) => {
+    if (!user) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
+      return;
+    }
     setLoading(true);
     
     const taskPayload: any = {
       name: data.name,
-      // Only include these fields if it's a sub-task
       description: isSubTask ? data.description || '' : '',
-      status: isSubTask ? data.status : 'To Do', // Main tasks conceptually don't have status displayed
-      dueDate: (isSubTask && data.dueDate) ? Timestamp.fromDate(data.dueDate) : null,
+      status: isSubTask ? data.status : 'To Do', 
+      dueDate: (isSubTask && data.dueDate) ? data.dueDate : null, // Pass Date object directly, service will handle conversion
       parentId: parentId || task?.parentId || null,
     };
     
     try {
-      if (task) { // Editing existing task
-        await updateTask(task.id, taskPayload);
+      if (task) { 
+        await updateTask(task.id, user.uid, taskPayload);
         toast({ title: 'Task Updated', description: `"${data.name}" has been updated.` });
-      } else { // Creating new task
-        await createTask(projectId, taskPayload);
+      } else { 
+        await createTask(projectId, user.uid, taskPayload);
         toast({ title: 'Task Created', description: `"${data.name}" has been added.` });
       }
       
       if (onFormSuccess) {
         onFormSuccess();
       } else {
-        // Default navigation if not handled by onFormSuccess (e.g. creating main task from dedicated page)
-        if (parentId) { // if it was a subtask, refresh current main task page
-             router.push(`/projects/${projectId}/tasks/${parentId}`);
-        } else { // if it was a main task, go back to project page
+        if (parentId || task?.parentId) { 
+             router.push(`/projects/${projectId}/tasks/${parentId || task?.parentId}`);
+        } else { 
             router.push(`/projects/${projectId}`);
         }
       }
@@ -211,7 +212,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
             )}
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full sm:w-auto" disabled={loading}>
+            <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {task ? 'Save Changes' : (isSubTask ? 'Add Sub-task' : 'Create Main Task')}
             </Button>
