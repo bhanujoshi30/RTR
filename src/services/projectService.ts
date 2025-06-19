@@ -99,10 +99,13 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
 
     if (projectSnap.exists()) {
       const projectData = mapDocumentToProject(projectSnap); // Use mapping function
-      if (projectData.ownerUid === userUid || userRole === 'supervisor' || userRole === 'admin') {
+      // Allow access if owner, supervisor, admin, OR member
+      // Members are allowed here because the dashboard would have only listed the project
+      // if they had an assigned task or issue within it.
+      if (projectData.ownerUid === userUid || userRole === 'supervisor' || userRole === 'admin' || userRole === 'member') {
         return projectData;
       } else {
-        console.warn('projectService: User UID', userUid, 'does not own project ID:', projectId, 'Project owner UID:', projectData.ownerUid);
+        console.warn('projectService: User UID', userUid, 'does not own project ID:', projectId, 'Project owner UID:', projectData.ownerUid, 'Role:', userRole);
         throw new Error('Access denied. You do not own this project or lack permissions.');
       }
     } else {
