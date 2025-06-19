@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle } from 'lucide-react'; // Added ListChecks, AlertTriangle
+import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 
 interface ProjectCardProps {
@@ -50,8 +50,14 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </div>
           <Progress value={project.progress} className="h-2 w-full" aria-label={`Project progress: ${project.progress}%`} />
         </div>
-        {(project.totalSubTasks !== undefined || project.totalOpenIssues !== undefined) && (
+        {(project.totalMainTasks !== undefined || project.totalSubTasks !== undefined || project.totalOpenIssues !== undefined) && (
           <div className="space-y-1 text-sm text-muted-foreground">
+            {project.totalMainTasks !== undefined && (
+              <div className="flex items-center">
+                <Layers className="mr-2 h-4 w-4 text-indigo-600" />
+                <span>{project.totalMainTasks} Main Task{project.totalMainTasks !== 1 ? 's' : ''}</span>
+              </div>
+            )}
             {project.totalSubTasks !== undefined && (
               <div className="flex items-center">
                 <ListChecks className="mr-2 h-4 w-4 text-sky-600" />

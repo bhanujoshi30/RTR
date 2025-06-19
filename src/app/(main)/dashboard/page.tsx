@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
 import type { Project } from '@/types';
-import { getAllTasksAssignedToUser, countProjectSubTasks } from '@/services/taskService';
+import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
@@ -74,13 +74,15 @@ export default function DashboardPage() {
           const projectsWithCounts = await Promise.all(
             baseProjects.map(async (project) => {
               console.log(`DashboardPage: Processing project ${project.id} (${project.name}) for counts.`);
-              const [subTaskCount, openIssueCount] = await Promise.all([
+              const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
+                countProjectMainTasks(project.id),
                 countProjectSubTasks(project.id),
                 countProjectOpenIssues(project.id)
               ]);
-              console.log(`DashboardPage: Counts received for project ${project.id}: SubTasks=${subTaskCount}, OpenIssues=${openIssueCount}`);
+              console.log(`DashboardPage: Counts received for project ${project.id}: MainTasks=${mainTaskCount}, SubTasks=${subTaskCount}, OpenIssues=${openIssueCount}`);
               return {
                 ...project,
+                totalMainTasks: mainTaskCount,
                 totalSubTasks: subTaskCount,
                 totalOpenIssues: openIssueCount,
               };
