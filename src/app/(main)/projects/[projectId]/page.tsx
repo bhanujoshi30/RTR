@@ -43,20 +43,19 @@ export default function ProjectDetailsPage() {
 
   const { user, loading: authLoading } = useAuth();
   const isSupervisor = user?.role === 'supervisor';
+  const isMember = user?.role === 'member';
 
   const fetchProjectDetails = async () => {
     if (authLoading || !user || !projectId) return;
 
     try {
       setLoading(true);
-      // Supervisors might need to view projects they don't own if they have tasks in them.
-      // getProjectById now allows supervisor role to bypass strict ownership if project ID is known.
       const fetchedProject = await getProjectById(projectId, user.uid, user.role);
       if (fetchedProject) {
         setProject(fetchedProject);
       } else {
         setError('Project not found or you do not have permission to view it.');
-        router.push('/dashboard'); // Redirect if project not accessible
+        router.push('/dashboard'); 
       }
     } catch (err: any) {
       console.error('Error fetching project:', err);
@@ -80,7 +79,7 @@ export default function ProjectDetailsPage() {
   }, [projectId, user, authLoading]);
 
   const handleDeleteProject = async () => {
-    if (!project || !user || isSupervisor) return; // Supervisors cannot delete
+    if (!project || !user || isSupervisor || isMember) return; // Supervisors or Members cannot delete
     try {
       await deleteProject(project.id, user.uid);
       toast({ title: 'Project Deleted', description: `"${project.name}" has been deleted.` });
@@ -126,6 +125,8 @@ export default function ProjectDetailsPage() {
   if (!project) {
     return <p className="text-center text-muted-foreground py-10">Project not found.</p>;
   }
+  
+  const canManageProject = user && !isSupervisor && !isMember;
 
   return (
     <div className="space-y-8">
@@ -137,7 +138,7 @@ export default function ProjectDetailsPage() {
         <CardHeader>
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <CardTitle className="font-headline text-3xl tracking-tight">{project.name}</CardTitle>
-            {!isSupervisor && user && ( // Hide controls for supervisors
+            {canManageProject && ( 
               <div className="flex items-center gap-2">
                 <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
                   <DialogTrigger asChild>
@@ -209,7 +210,7 @@ export default function ProjectDetailsPage() {
             <Layers className="mr-3 h-7 w-7 text-primary" /> 
             Main Tasks
           </h2>
-          {!isSupervisor && user && ( // Hide "Add New Main Task" for supervisors
+          {canManageProject && ( 
             <Button asChild>
               <Link href={`/projects/${projectId}/tasks/create`}> 
                 <PlusCircle className="mr-2 h-4 w-4" />
@@ -218,7 +219,6 @@ export default function ProjectDetailsPage() {
             </Button>
           )}
         </div>
-        {/* TaskList will show all main tasks for the project. Filtering logic for supervisors will be within SubTaskList. */}
         {user && <TaskList projectId={projectId} />} 
       </div>
     </div>
