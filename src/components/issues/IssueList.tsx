@@ -45,9 +45,7 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
       setError(`Failed to load issues. ${err.message?.includes("index") ? "A database index might be required. Check console for details." : ""}`);
     } finally {
       setLoading(false);
-      if (onIssueListChange) {
-        onIssueListChange();
-      }
+      // Do NOT call onIssueListChange here automatically. It will be called by specific actions.
     }
   };
 
@@ -58,10 +56,21 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, user, authLoading]);
 
-  const handleFormSuccess = () => {
+  const handleFormSuccess = async () => {
     setShowCreateModal(false);
-    fetchParentTaskAndIssues(); 
+    await fetchParentTaskAndIssues(); 
+    if (onIssueListChange) {
+      onIssueListChange();
+    }
   };
+
+  const handleIssueCardUpdate = async () => {
+    await fetchParentTaskAndIssues(); // Refreshes IssueList's own data
+    if (onIssueListChange) {
+      onIssueListChange(); // Tell parent TaskDetailsPage to refresh if an issue was updated
+    }
+  };
+
 
   if (loading || authLoading) {
     return (
@@ -118,7 +127,7 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
                 issue={issue} 
                 projectId={projectId} 
                 taskId={taskId} 
-                onIssueUpdated={fetchParentTaskAndIssues}
+                onIssueUpdated={handleIssueCardUpdate}
                 canManageIssue={canManageIssuesForThisTask || (isSupervisor && issue.assignedToUids?.includes(user?.uid || ''))}
             />
           ))}
@@ -127,3 +136,5 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
     </div>
   );
 }
+
+        
