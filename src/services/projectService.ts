@@ -1,3 +1,4 @@
+
 import { db, auth } from '@/lib/firebase';
 import type { Project, ProjectStatus } from '@/types';
 import {
@@ -23,57 +24,127 @@ export const createProject = async (projectData: {
   status: ProjectStatus;
   progress: number;
 }): Promise<string> => {
+  console.log('projectService: createProject called with data:', projectData);
   const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+  console.log('projectService: currentUser:', user ? user.uid : 'null');
+  
+  if (!user) {
+    console.error('projectService: User not authenticated for createProject');
+    throw new Error('User not authenticated');
+  }
 
-  const newProjectRef = await addDoc(projectsCollection, {
+  const projectPayload = {
     ...projectData,
     ownerUid: user.uid,
     createdAt: serverTimestamp() as Timestamp,
-  });
-  return newProjectRef.id;
+  };
+  console.log('projectService: Payload for Firestore addDoc:', projectPayload);
+
+  try {
+    const newProjectRef = await addDoc(projectsCollection, projectPayload);
+    console.log('projectService: Firestore addDoc successful. New project Ref ID:', newProjectRef.id);
+    return newProjectRef.id;
+  } catch (error: any) {
+    console.error('projectService: Error calling addDoc in createProject:', error.message, error.stack, error);
+    throw error; 
+  }
 };
 
 export const getUserProjects = async (): Promise<Project[]> => {
   const user = auth.currentUser;
-  if (!user) return [];
+  if (!user) {
+    console.log('projectService: getUserProjects - User not authenticated, returning empty array.');
+    return [];
+  }
+  console.log('projectService: getUserProjects for user:', user.uid);
 
   const q = query(projectsCollection, where('ownerUid', '==', user.uid), orderBy('createdAt', 'desc'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+  try {
+    const querySnapshot = await getDocs(q);
+    const projects = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+    console.log('projectService: Fetched projects:', projects.length);
+    return projects;
+  } catch (error: any) {
+    console.error('projectService: Error fetching user projects:', error.message, error.stack, error);
+    throw error;
+  }
 };
 
 export const getProjectById = async (projectId: string): Promise<Project | null> => {
+  console.log('projectService: getProjectById called for ID:', projectId);
   const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+  if (!user) {
+    console.error('projectService: User not authenticated for getProjectById');
+    throw new Error('User not authenticated');
+  }
+  console.log('projectService: getProjectById - Current user:', user.uid);
 
   const projectDocRef = doc(db, 'projects', projectId);
-  const projectSnap = await getDoc(projectDocRef);
+  try {
+    const projectSnap = await getDoc(projectDocRef);
 
-  if (projectSnap.exists() && projectSnap.data().ownerUid === user.uid) {
-    return { id: projectSnap.id, ...projectSnap.data() } as Project;
+    if (projectSnap.exists()) {
+      const projectData = projectSnap.data();
+      console.log('projectService: Project found. Owner UID:', projectData.ownerUid);
+      if (projectData.ownerUid === user.uid) {
+        console.log('projectService: User owns project. Returning project data.');
+        return { id: projectSnap.id, ...projectData } as Project;
+      } else {
+        console.warn('projectService: User does not own project ID:', projectId);
+        return null; 
+      }
+    } else {
+      console.warn('projectService: Project not found for ID:', projectId);
+      return null;
+    }
+  } catch (error: any) {
+    console.error('projectService: Error fetching project by ID:', projectId, error.message, error.stack, error);
+    throw error;
   }
-  return null;
 };
 
 export const updateProject = async (
   projectId: string,
   updates: Partial<Pick<Project, 'name' | 'description' | 'status' | 'progress'>>
 ): Promise<void> => {
+  console.log('projectService: updateProject called for ID:', projectId, 'with updates:', updates);
   const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+  if (!user) {
+    console.error('projectService: User not authenticated for updateProject');
+    throw new Error('User not authenticated');
+  }
   
   const projectDocRef = doc(db, 'projects', projectId);
-  // Optionally, add a check here to ensure the user owns the project before updating
-  // For brevity, assuming AuthGuard and page-level checks handle this.
-  await updateDoc(projectDocRef, updates);
+  // You might want to add a check here to ensure the user owns the project before updating
+  // For example, call getProjectById and see if it returns a project.
+  // For now, assuming higher-level checks or rules handle this.
+  console.log('projectService: Attempting to update project document.');
+  try {
+    await updateDoc(projectDocRef, updates);
+    console.log('projectService: Project update successful for ID:', projectId);
+  } catch (error: any) {
+    console.error('projectService: Error updating project ID:', projectId, error.message, error.stack, error);
+    throw error;
+  }
 };
 
 export const deleteProject = async (projectId: string): Promise<void> => {
+  console.log('projectService: deleteProject called for ID:', projectId);
    const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+  if (!user) {
+    console.error('projectService: User not authenticated for deleteProject');
+    throw new Error('User not authenticated');
+  }
 
   // TODO: Also delete associated tasks when deleting a project
   const projectDocRef = doc(db, 'projects', projectId);
-  await deleteDoc(projectDocRef);
+  // Add ownership check here as well before deleting.
+  console.log('projectService: Attempting to delete project document.');
+  try {
+    await deleteDoc(projectDocRef);
+    console.log('projectService: Project delete successful for ID:', projectId);
+  } catch (error: any) {
+    console.error('projectService: Error deleting project ID:', projectId, error.message, error.stack, error);
+    throw error;
+  }
 };

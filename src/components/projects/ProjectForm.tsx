@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -49,25 +50,33 @@ export function ProjectForm({ project }: ProjectFormProps) {
   });
 
   const onSubmit: SubmitHandler<ProjectFormValues> = async (data) => {
+    console.log('ProjectForm onSubmit triggered. Data:', data);
     setLoading(true);
     try {
       if (project) {
+        console.log('Calling updateProject for project ID:', project.id, 'with data:', data);
         await updateProject(project.id, data);
+        console.log('updateProject successful.');
         toast({ title: 'Project Updated', description: `"${data.name}" has been updated.` });
         router.push(`/projects/${project.id}`);
       } else {
+        console.log('Calling createProject with data:', data);
         const newProjectId = await createProject(data);
+        console.log('createProject successful. New Project ID:', newProjectId);
         toast({ title: 'Project Created', description: `"${data.name}" has been created.` });
         router.push(`/projects/${newProjectId}`);
       }
-      router.refresh(); // Ensure fresh data on redirect
+      console.log('Refreshing router...');
+      router.refresh(); 
     } catch (error: any) {
+      console.error('Error in ProjectForm onSubmit:', error.message, error.stack, error);
       toast({
         title: project ? 'Update Failed' : 'Creation Failed',
         description: error.message || 'An unexpected error occurred.',
         variant: 'destructive',
       });
     } finally {
+      console.log('ProjectForm onSubmit finally block. Setting loading to false.');
       setLoading(false);
     }
   };
