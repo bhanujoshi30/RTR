@@ -70,12 +70,12 @@ export default function TaskDetailsPage() {
       } else {
         console.error(`TaskDetailsPage: Fetched task is null or projectId mismatch. Task ID: ${taskId}, Project ID from params: ${projectId}, Fetched Task Project ID: ${fetchedTask?.projectId}`);
         setError(`Task not found (ID: ${taskId}) or does not belong to this project (Project ID from task: ${fetchedTask?.projectId}, Expected: ${projectId}). Check console for more details from taskService.`);
-        // router.push(`/projects/${projectId}`); // Temporarily commented out to see error and logs
+        router.push(`/projects/${projectId}`); 
       }
     } catch (err: any) {
       console.error(`TaskDetailsPage: Error fetching task details for task ${taskId}:`, err);
       setError(`Failed to load task details for ${taskId}. ${err.message || 'Unknown error'}. Check console for more details from taskService.`);
-       // router.push(`/projects/${projectId}`); // Temporarily commented out
+       router.push(`/projects/${projectId}`); 
     } finally {
       setLoading(false);
     }

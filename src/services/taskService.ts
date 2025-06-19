@@ -218,12 +218,12 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
     }
   } else { // It's a main task
     console.log(`[taskService.getTaskById] Task ${taskId} is a main task. Checking permissions...`);
-    // For main tasks, only owner or supervisor can view details page directly
-    if (isOwner || userRole === 'supervisor') {
-      console.log(`[taskService.getTaskById] Access GRANTED to main task ${taskId} (user is owner or supervisor).`);
+    // For main tasks, owner, supervisor, or member (to view sub-tasks) can access.
+    if (isOwner || userRole === 'supervisor' || userRole === 'member') {
+      console.log(`[taskService.getTaskById] Access GRANTED to main task ${taskId} (user is owner, supervisor, or member).`);
       return taskData;
     }
-    console.warn(`[taskService.getTaskById] Main task access DENIED for user ${userUid} (Role: ${userRole}) to task ${taskId}. Only owner or supervisor can view main task details page directly.`);
+    console.warn(`[taskService.getTaskById] Main task access DENIED for user ${userUid} (Role: ${userRole}) to task ${taskId}. This should generally not happen if the previous check included 'member'.`);
     return null; // Access denied for main task
   }
 };
@@ -455,5 +455,3 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
     throw error;
   }
 };
-
-    
