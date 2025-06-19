@@ -21,7 +21,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getUsersByRole } from '@/services/userService';
-import { getTaskById } from '@/services/taskService'; // Import getTaskById
+import { getTaskById } from '@/services/taskService';
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -87,7 +87,6 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           return;
         }
 
-        // Fetch all potential assignees (supervisors and members)
         const [supervisors, members] = await Promise.all([
           getUsersByRole('supervisor'),
           getUsersByRole('member')
@@ -96,10 +95,9 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         const allPotentialAssigneesMap = new Map<string, AppUser>();
         [...supervisors, ...members].forEach(u => allPotentialAssigneesMap.set(u.uid, u));
 
-        // Filter these users to only those assigned to the parent sub-task
         const filteredUsers = parentAssigneeUids
           .map(uid => allPotentialAssigneesMap.get(uid))
-          .filter(Boolean) as AppUser[]; // Filter out undefined if a UID in parentTask doesn't match any fetched user
+          .filter(Boolean) as AppUser[]; 
 
         const sortedFilteredUsers = filteredUsers.sort((a, b) =>
           (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
@@ -147,7 +145,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       ...data,
       assignedToUids: data.assignedToUids || [],
       assignedToNames: assignedToNamesForPayload || [],
-      dueDate: Timestamp.fromDate(data.dueDate),
+      dueDate: data.dueDate, // Pass JavaScript Date directly
     };
 
     try {
@@ -322,7 +320,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           )}
         />
         <div className="flex justify-end">
-          <Button type="submit" disabled={loading || !user || loadingAssignableUsers || assignableUsersForIssue.length === 0 && !issue?.id /* Allow editing existing even if assignees change */}>
+          <Button type="submit" disabled={loading || !user || loadingAssignableUsers || (assignableUsersForIssue.length === 0 && !issue?.id) }>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {issue ? 'Save Changes' : 'Create Issue'}
           </Button>
@@ -331,3 +329,4 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Form>
   );
 }
+
