@@ -30,38 +30,31 @@ interface IssueCardProps {
   projectId: string;
   taskId: string;
   onIssueUpdated: () => void;
-  canManageIssue?: boolean; // This prop indicates if user can generally manage issues for the parent task
+  canManageIssue?: boolean; 
 }
 
-export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue }: IssueCardProps) {
+export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCardProps) {
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
   const { user } = useAuth();
 
-  // Determine if the current user can edit or delete THIS specific issue
-  let currentUserCanEditOrDeleteThisIssue = false;
+  let canEditOrDeleteThisIssue = false;
+  let canChangeStatusOfThisIssue = false;
+
   if (user) {
     const isOwnerOfIssue = issue.ownerUid === user.uid;
     const isSupervisorAssignedToIssue = user.role === 'supervisor' && issue.assignedToUid === user.uid;
-    if (isOwnerOfIssue || isSupervisorAssignedToIssue) {
-      currentUserCanEditOrDeleteThisIssue = true;
+
+    if (isOwnerOfIssue) {
+      canEditOrDeleteThisIssue = true;
+      canChangeStatusOfThisIssue = true;
+    } else if (isSupervisorAssignedToIssue) {
+      canChangeStatusOfThisIssue = true;
     }
   }
 
-  const disableCardActions = !currentUserCanEditOrDeleteThisIssue;
-
-  // Debugging logs (can be removed after confirming functionality)
-  console.log(`[IssueCard Debug] Issue ID: ${issue.id}, Title: "${issue.title}"`);
-  console.log(`  User:`, user ? { uid: user.uid, role: user.role } : null);
-  console.log(`  Issue Owner UID:`, issue.ownerUid);
-  console.log(`  Issue Assigned UID:`, issue.assignedToUid);
-  console.log(`  Prop canManageIssue (from parent task context):`, canManageIssue);
-  console.log(`  Derived currentUserCanEditOrDeleteThisIssue:`, currentUserCanEditOrDeleteThisIssue);
-  console.log(`  Final disableCardActions:`, disableCardActions);
-
-
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
-    if (disableCardActions) {
+    if (!canChangeStatusOfThisIssue) {
       toast({ title: 'Permission Denied', description: 'You cannot modify this issue status.', variant: 'destructive' });
       return;
     }
@@ -79,7 +72,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
   };
 
   const handleDeleteIssue = async () => {
-     if (disableCardActions) {
+     if (!canEditOrDeleteThisIssue) {
       toast({ title: 'Permission Denied', description: 'You cannot delete this issue.', variant: 'destructive' });
       return;
     }
@@ -151,13 +144,13 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
         </div>
         <div className="flex items-center justify-end gap-2 pt-2">
           {issue.status === 'Open' && (
-            <Button variant="outline" size="sm" onClick={() => handleStatusChange('Closed')} disabled={disableCardActions}>
+            <Button variant="outline" size="sm" onClick={() => handleStatusChange('Closed')} disabled={!canChangeStatusOfThisIssue}>
               <CheckSquare className="mr-2 h-4 w-4" /> Close Issue
             </Button>
           )}
            <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={disableCardActions}>
+              <Button variant="outline" size="sm" disabled={!canEditOrDeleteThisIssue}>
                 <Edit2 className="mr-2 h-4 w-4" /> Edit
               </Button>
             </DialogTrigger>
@@ -171,7 +164,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
           </Dialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={disableCardActions}>
+              <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={!canEditOrDeleteThisIssue}>
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </Button>
             </AlertDialogTrigger>
