@@ -1,5 +1,7 @@
 
-import { db, auth } from '@/lib/firebase';
+'use server';
+
+import { db } from '@/lib/firebase'; // Removed auth import
 import type { Project, ProjectStatus } from '@/types';
 import {
   collection,
@@ -16,24 +18,26 @@ import {
   orderBy,
   writeBatch
 } from 'firebase/firestore';
-import { deleteAllTasksForProject } from './taskService'; // Import helper
+import { deleteAllTasksForProject } from './taskService'; 
 
 const projectsCollection = collection(db, 'projects');
 
-export const createProject = async (projectData: {
-  name: string;
-  description?: string;
-  status: ProjectStatus;
-  progress: number;
-}): Promise<string> => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('User not authenticated');
+export const createProject = async (
+  userUid: string, 
+  projectData: {
+    name: string;
+    description?: string;
+    status: ProjectStatus;
+    progress: number;
+  }
+): Promise<string> => {
+  if (!userUid) {
+    throw new Error('User not authenticated for creating project');
   }
 
   const projectPayload = {
     ...projectData,
-    ownerUid: user.uid,
+    ownerUid: userUid,
     createdAt: serverTimestamp() as Timestamp,
   };
 
@@ -46,19 +50,18 @@ export const createProject = async (projectData: {
   }
 };
 
-export const getUserProjects = async (): Promise<Project[]> => {
-  const user = auth.currentUser;
-  if (!user) {
+export const getUserProjects = async (userUid: string): Promise<Project[]> => {
+  if (!userUid) {
     return [];
   }
   
-  const q = query(projectsCollection, where('ownerUid', '==', user.uid), orderBy('createdAt', 'desc'));
+  const q = query(projectsCollection, where('ownerUid', '==', userUid), orderBy('createdAt', 'desc'));
   try {
     const querySnapshot = await getDocs(q);
     const projects = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
     return projects;
   } catch (error: any) {
-    console.error('projectService: Error fetching user projects:', error.message, error.code ? `(${error.code})` : '', error.stack);
+    console.error('projectService: Error fetching user projects for uid:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && error.message.includes("query requires an index")) {
         console.error("Firestore query for projects requires a composite index. Please create it in the Firebase console. The error message should provide a direct link or details. Fields to index: 'ownerUid' (ASC), 'createdAt' (DESC).");
     }
@@ -66,10 +69,9 @@ export const getUserProjects = async (): Promise<Project[]> => {
   }
 };
 
-export const getProjectById = async (projectId: string): Promise<Project | null> => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('User not authenticated');
+export const getProjectById = async (projectId: string, userUid: string): Promise<Project | null> => {
+  if (!userUid) {
+    throw new Error('User not authenticated for getting project by ID');
   }
 
   const projectDocRef = doc(db, 'projects', projectId);
@@ -78,10 +80,10 @@ export const getProjectById = async (projectId: string): Promise<Project | null>
 
     if (projectSnap.exists()) {
       const projectData = projectSnap.data();
-      if (projectData.ownerUid === user.uid) {
+      if (projectData.ownerUid === userUid) {
         return { id: projectSnap.id, ...projectData } as Project;
       } else {
-        console.warn('projectService: User does not own project ID:', projectId);
+        console.warn('projectService: User UID', userUid, 'does not own project ID:', projectId, 'Project owner UID:', projectData.ownerUid);
         throw new Error('Access denied. You do not own this project.');
       }
     } else {
@@ -89,23 +91,23 @@ export const getProjectById = async (projectId: string): Promise<Project | null>
       return null;
     }
   } catch (error: any) {
-    console.error('projectService: Error fetching project by ID:', projectId, error.message, error.code ? `(${error.code})` : '', error.stack);
+    console.error('projectService: Error fetching project by ID:', projectId, 'for user UID:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;
   }
 };
 
 export const updateProject = async (
   projectId: string,
+  userUid: string,
   updates: Partial<Pick<Project, 'name' | 'description' | 'status' | 'progress'>>
 ): Promise<void> => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('User not authenticated');
+  if (!userUid) {
+    throw new Error('User not authenticated for updating project');
   }
   
   const projectDocRef = doc(db, 'projects', projectId);
   const projectSnap = await getDoc(projectDocRef);
-  if (!projectSnap.exists() || projectSnap.data().ownerUid !== user.uid) {
+  if (!projectSnap.exists() || projectSnap.data().ownerUid !== userUid) {
     throw new Error('Project not found or access denied for update.');
   }
   
@@ -117,23 +119,19 @@ export const updateProject = async (
   }
 };
 
-export const deleteProject = async (projectId: string): Promise<void> => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('User not authenticated');
+export const deleteProject = async (projectId: string, userUid: string): Promise<void> => {
+  if (!userUid) {
+    throw new Error('User not authenticated for deleting project');
   }
 
   const projectDocRef = doc(db, 'projects', projectId);
   const projectSnap = await getDoc(projectDocRef);
-  if (!projectSnap.exists() || projectSnap.data().ownerUid !== user.uid) {
+  if (!projectSnap.exists() || projectSnap.data().ownerUid !== userUid) {
     throw new Error('Project not found or access denied for deletion.');
   }
 
   try {
-    // Delete all tasks (and their sub-tasks/issues) associated with the project
-    await deleteAllTasksForProject(projectId);
-
-    // Delete the project document itself
+    await deleteAllTasksForProject(projectId, userUid);
     await deleteDoc(projectDocRef);
 
   } catch (error: any) {

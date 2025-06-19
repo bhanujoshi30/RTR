@@ -17,6 +17,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { Save, Loader2 } from 'lucide-react';
 
 const projectStatuses: ProjectStatus[] = ['Not Started', 'In Progress', 'Completed'];
@@ -31,14 +32,15 @@ const projectSchema = z.object({
 type ProjectFormValues = z.infer<typeof projectSchema>;
 
 interface ProjectFormProps {
-  project?: Project; // For editing existing project
-  onFormSuccess?: () => void; // Optional: Callback for successful submission, e.g., to close a modal
+  project?: Project; 
+  onFormSuccess?: () => void; 
 }
 
 export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth();
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
@@ -51,23 +53,29 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
   });
 
   const onSubmit: SubmitHandler<ProjectFormValues> = async (data) => {
+    if (!user) {
+      toast({
+        title: 'Authentication Error',
+        description: 'You must be logged in to perform this action.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setLoading(true);
     try {
       if (project) {
-        await updateProject(project.id, data);
+        await updateProject(project.id, user.uid, data);
         toast({ title: 'Project Updated', description: `"${data.name}" has been updated.` });
-        // No router.push needed here if onFormSuccess handles UI changes like modal closing.
-        // router.refresh() will be called by the parent or here if no onFormSuccess.
       } else {
-        const newProjectId = await createProject(data);
+        const newProjectId = await createProject(user.uid, data);
         toast({ title: 'Project Created', description: `"${data.name}" has been created.` });
-        router.push(`/projects/${newProjectId}`); // Redirect to the new project page
+        router.push(`/projects/${newProjectId}`); 
       }
       
       if (onFormSuccess) {
-        onFormSuccess(); // Call success callback (e.g., close modal)
+        onFormSuccess(); 
       }
-      router.refresh(); // Refresh data on the current or new page
+      router.refresh(); 
     } catch (error: any) {
       toast({
         title: project ? 'Update Failed' : 'Creation Failed',
@@ -156,7 +164,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
             />
           </CardContent>
           <CardFooter>
-            <Button type="submit" className="w-full sm:w-auto" disabled={loading}>
+            <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               {project ? 'Save Changes' : 'Create Project'}
             </Button>

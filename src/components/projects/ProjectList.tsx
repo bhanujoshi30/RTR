@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -21,10 +22,10 @@ export function ProjectList() {
     const fetchProjects = async () => {
       try {
         setLoading(true);
-        const userProjects = await getUserProjects();
+        const userProjects = await getUserProjects(user.uid);
         setProjects(userProjects);
         setError(null);
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching projects:', err);
         setError('Failed to load projects.');
       } finally {
@@ -45,7 +46,7 @@ export function ProjectList() {
   }
 
   if (error) {
-    return <p className="text-center text-destructive">{error}</p>;
+    return <p className="text-center text-destructive py-4">{error}</p>;
   }
 
   if (projects.length === 0) {
