@@ -50,30 +50,34 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
     if (isActuallyMainTask && user && task.id) { 
       const fetchCount = async () => {
         try {
-          const subtasks = await getSubTasks(task.id, user.uid, isSupervisor);
+          // For a main task, count sub-tasks. 
+          // Supervisors see counts based on their assigned sub-tasks if the main task is NOT owned by them.
+          // Owners see total sub-tasks.
+          const subtasks = await getSubTasks(task.id, user.uid, isSupervisor && task.ownerUid !== user.uid);
           setSubTaskCount(subtasks.length);
         } catch (error: any) {
-          if (error.message && error.message.includes("index is currently building")) {
-            console.warn(`Sub-task count for main task ${task.id} is unavailable because a Firestore index is still building. Please wait a few minutes and refresh.`);
+          if (error.message && (error.message.includes("index is currently building") || error.message.includes("index is building"))) {
+            console.warn(`Sub-task count for main task ${task.id} is unavailable because a Firestore index is still building. Displaying 0 for now. Please wait a few minutes and refresh. Error: ${error.message}`);
+            setSubTaskCount(0); // Default to 0 if index is building
           } else {
             console.error("Failed to fetch sub-task count for main task:", task.id, error);
-          }
-          
-           if (isSupervisor) { 
+            // Fallback if supervisor specific query fails (e.g. different index missing)
+            if (isSupervisor && task.ownerUid !== user.uid) {
                 try {
                     const generalSubtasks = await getSubTasks(task.id, task.ownerUid, false); // Attempt fallback with ownerUid and non-supervisor view
                     setSubTaskCount(generalSubtasks.length);
-                } catch (e: any) { 
-                    if (e.message && e.message.includes("index is currently building")) {
-                        console.warn(`Fallback sub-task count for main task ${task.id} is unavailable because a Firestore index is still building. Please wait and refresh.`);
+                } catch (e: any) {
+                     if (e.message && (e.message.includes("index is currently building") || e.message.includes("index is building"))) {
+                        console.warn(`Fallback sub-task count for main task ${task.id} is also unavailable (index building). Displaying 0. Error: ${e.message}`);
                     } else {
                         console.error("Fallback failed to fetch sub-task count for main task:", task.id, "Error:", e);
                     }
                     setSubTaskCount(0); 
                 }
-           } else {
-                setSubTaskCount(0); 
-           }
+            } else {
+                 setSubTaskCount(0);
+            }
+          }
         }
       };
       fetchCount();
