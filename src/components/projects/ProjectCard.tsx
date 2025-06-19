@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { FolderKanban, CalendarDays, ExternalLink } from 'lucide-react';
+import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle } from 'lucide-react'; // Added ListChecks, AlertTriangle
 import { formatDistanceToNow } from 'date-fns';
 
 interface ProjectCardProps {
@@ -42,15 +42,30 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </CardDescription>
         )}
       </CardHeader>
-      <CardContent className="flex-grow">
-        <div className="mb-2">
+      <CardContent className="flex-grow space-y-3">
+        <div>
           <div className="flex justify-between text-sm text-muted-foreground">
             <span>Progress</span>
             <span>{project.progress}%</span>
           </div>
           <Progress value={project.progress} className="h-2 w-full" aria-label={`Project progress: ${project.progress}%`} />
         </div>
-        
+        {(project.totalSubTasks !== undefined || project.totalOpenIssues !== undefined) && (
+          <div className="space-y-1 text-sm text-muted-foreground">
+            {project.totalSubTasks !== undefined && (
+              <div className="flex items-center">
+                <ListChecks className="mr-2 h-4 w-4 text-sky-600" />
+                <span>{project.totalSubTasks} Sub-task{project.totalSubTasks !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+            {project.totalOpenIssues !== undefined && (
+              <div className="flex items-center">
+                <AlertTriangle className="mr-2 h-4 w-4 text-amber-600" />
+                <span>{project.totalOpenIssues} Open Issue{project.totalOpenIssues !== 1 ? 's' : ''}</span>
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
       <CardFooter className="flex flex-col items-start gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
          <div className="flex items-center text-xs text-muted-foreground">

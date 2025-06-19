@@ -17,6 +17,7 @@ import {
   orderBy,
   getDoc,
   writeBatch,
+  getCountFromServer,
 } from 'firebase/firestore';
 import { deleteIssuesForTask, hasOpenIssues } from './issueService';
 
@@ -459,5 +460,29 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
       console.error("Firestore query for getAllTasksAssignedToUser (sub-tasks) requires an index. Example fields: assignedToUids (array-contains), parentId (ASC), createdAt (DESC). Check Firebase console for the exact index needed from the error message link.");
     }
     throw error;
+  }
+};
+
+export const countProjectSubTasks = async (projectId: string): Promise<number> => {
+  if (!projectId) return 0;
+  console.log(`taskService: countProjectSubTasks for projectId: ${projectId}`);
+
+  const q = query(
+    tasksCollection,
+    where('projectId', '==', projectId),
+    where('parentId', '!=', null)
+  );
+
+  try {
+    const snapshot = await getCountFromServer(q);
+    const count = snapshot.data().count;
+    console.log(`taskService: Found ${count} sub-tasks for project ${projectId}.`);
+    return count;
+  } catch (error: any) {
+    console.error(`taskService: Error counting sub-tasks for project ${projectId}:`, error.message, error.stack);
+    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
+      console.error(`Firestore query for counting sub-tasks (projectId: ${projectId}) requires a composite index. Please create it in the Firebase console. Expected fields: 'projectId' (ASC), 'parentId' (ASC/DESC). The error message from Firebase often provides a direct link to create it.`);
+    }
+    return 0; // Return 0 on error to prevent breaking the UI, though an error will be logged.
   }
 };

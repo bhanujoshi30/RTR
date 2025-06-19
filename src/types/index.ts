@@ -26,6 +26,8 @@ export interface Project {
   createdAt: Date;
   status: ProjectStatus;
   progress: number; // 0-100
+  totalSubTasks?: number;
+  totalOpenIssues?: number;
 }
 
 export interface Task {

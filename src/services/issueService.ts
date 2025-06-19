@@ -18,7 +18,8 @@ import {
   getDoc,
   writeBatch,
   arrayUnion,
-  runTransaction
+  runTransaction,
+  getCountFromServer,
 } from 'firebase/firestore';
 import { getTaskById, updateTaskStatus as updateParentTaskStatus } from './taskService'; 
 
@@ -372,5 +373,29 @@ export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
         console.error("Firestore query for checking open issues requires a composite index. Please create it in the Firebase console. Collection: 'issues', Fields: 'taskId' (ASC), 'status' (ASC).");
     }
     throw new Error(`Failed to check for open issues for task ${taskId}. ${error.message}`);
+  }
+};
+
+export const countProjectOpenIssues = async (projectId: string): Promise<number> => {
+  if (!projectId) return 0;
+  console.log(`issueService: countProjectOpenIssues for projectId: ${projectId}`);
+
+  const q = query(
+    issuesCollection,
+    where('projectId', '==', projectId),
+    where('status', '==', 'Open')
+  );
+
+  try {
+    const snapshot = await getCountFromServer(q);
+    const count = snapshot.data().count;
+    console.log(`issueService: Found ${count} open issues for project ${projectId}.`);
+    return count;
+  } catch (error: any) {
+    console.error(`issueService: Error counting open issues for project ${projectId}:`, error.message, error.stack);
+    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
+      console.error(`Firestore query for counting open issues (projectId: ${projectId}) requires a composite index. Please create it in the Firebase console. Expected fields: 'projectId' (ASC), 'status' (ASC). The error message from Firebase often provides a direct link to create it.`);
+    }
+    return 0; 
   }
 };
