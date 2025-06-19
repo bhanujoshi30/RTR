@@ -74,11 +74,25 @@ export default function DashboardPage() {
           const projectsWithCounts = await Promise.all(
             baseProjects.map(async (project) => {
               console.log(`DashboardPage: Processing project ${project.id} (${project.name}) for counts.`);
+
+              const mainTaskCountPromise = countProjectMainTasks(project.id);
+              const subTaskCountPromise = countProjectSubTasks(project.id);
+              const openIssueCountPromise = countProjectOpenIssues(project.id);
+              
+              console.log(`DashboardPage: [Project: ${project.id}] Initiating countProjectMainTasks.`);
+              console.log(`DashboardPage: [Project: ${project.id}] Initiating countProjectSubTasks.`);
+              console.log(`DashboardPage: [Project: ${project.id}] Initiating countProjectOpenIssues.`);
+
               const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
-                countProjectMainTasks(project.id),
-                countProjectSubTasks(project.id),
-                countProjectOpenIssues(project.id)
+                mainTaskCountPromise,
+                subTaskCountPromise,
+                openIssueCountPromise
               ]);
+              
+              console.log(`DashboardPage: [Project: ${project.id}] Resolved mainTaskCount: ${mainTaskCount}`);
+              console.log(`DashboardPage: [Project: ${project.id}] Resolved subTaskCount: ${subTaskCount}`);
+              console.log(`DashboardPage: [Project: ${project.id}] Resolved openIssueCount: ${openIssueCount}`);
+
               console.log(`DashboardPage: Counts received for project ${project.id}: MainTasks=${mainTaskCount}, SubTasks=${subTaskCount}, OpenIssues=${openIssueCount}`);
               return {
                 ...project,
