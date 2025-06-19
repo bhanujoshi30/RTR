@@ -50,23 +50,29 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
     if (isActuallyMainTask && user && task.id) { 
       const fetchCount = async () => {
         try {
-          // For supervisors, this count ideally should be of *their* assigned subtasks.
-          // However, getSubTasks modified for supervisor view is for the SubTaskList.
-          // For simplicity on TaskCard, we show total subtasks if owner, or could fetch assigned if supervisor.
-          // Current getSubTasks in service has supervisor logic, let's use it if supervisor.
           const subtasks = await getSubTasks(task.id, user.uid, isSupervisor);
           setSubTaskCount(subtasks.length);
-        } catch (error) {
-          console.error("Failed to fetch sub-task count for main task:", task.id, error);
-          // If supervisor view fails (e.g. no index for assignedToUid query), show 0 or generic count.
-          // Fallback: try fetching as owner if supervisor specific fetch fails (though this might not be desired)
-           if (isSupervisor) { // if supervisor and specific fetch failed, try general count
+        } catch (error: any) {
+          if (error.message && error.message.includes("index is currently building")) {
+            console.warn(`Sub-task count for main task ${task.id} is unavailable because a Firestore index is still building. Please wait a few minutes and refresh.`);
+          } else {
+            console.error("Failed to fetch sub-task count for main task:", task.id, error);
+          }
+          
+           if (isSupervisor) { 
                 try {
-                    const generalSubtasks = await getSubTasks(task.id, task.ownerUid, false);
+                    const generalSubtasks = await getSubTasks(task.id, task.ownerUid, false); // Attempt fallback with ownerUid and non-supervisor view
                     setSubTaskCount(generalSubtasks.length);
-                } catch (e) { setSubTaskCount(0); }
+                } catch (e: any) { 
+                    if (e.message && e.message.includes("index is currently building")) {
+                        console.warn(`Fallback sub-task count for main task ${task.id} is unavailable because a Firestore index is still building. Please wait and refresh.`);
+                    } else {
+                        console.error("Fallback failed to fetch sub-task count for main task:", task.id, "Error:", e);
+                    }
+                    setSubTaskCount(0); 
+                }
            } else {
-                setSubTaskCount(0);
+                setSubTaskCount(0); 
            }
         }
       };
@@ -155,7 +161,7 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
           {isActuallyMainTask && (
              <Badge variant="outline">
               {subTaskCount} Sub-task{subTaskCount !== 1 ? 's' : ''}
-              {isSupervisor && " (assigned to you)"} 
+              {isSupervisor && user && task.ownerUid !== user.uid && " (assigned to you)"} 
             </Badge>
           )}
         </div>
