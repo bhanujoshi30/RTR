@@ -59,6 +59,8 @@ export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
         reload: async () => {},
         toJSON: () => ({} as any),
         role: data.role as UserRole,
+        createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
+        updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
       } as User;
     });
     console.log(`userService: Fetched ${usersWithRole.length} users with role '${role}'.`);
@@ -66,7 +68,7 @@ export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
   } catch (error: any) {
     console.error(`userService: Error fetching users with role '${role}':`, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error("Firestore query for users by role requires an index on 'role' (ASC) and 'displayName' (ASC). Please create it in the Firebase console.");
+        console.error(`Firestore query for users by role ('${role}') and ordered by 'displayName' requires a composite index. Please create it in the Firebase console. The typical fields would be 'role' (ASC) and 'displayName' (ASC). The error message from Firebase usually provides a direct link to create it.`);
     }
     throw error; 
   }
@@ -99,9 +101,8 @@ export const getAllUsers = async (requestingUserUid: string): Promise<User[]> =>
         reload: async () => {},
         toJSON: () => ({} as any),
         role: data.role as UserRole,
-         // Add other fields as necessary from your 'users' collection document
-        createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined, // Example if you store createdAt
-        updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined, // Example if you store updatedAt
+        createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
+        updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
       } as User;
     });
     console.log(`userService: Fetched ${allUsers.length} total users.`);
