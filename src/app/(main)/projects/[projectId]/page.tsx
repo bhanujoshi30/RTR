@@ -1,4 +1,5 @@
-"use client"; // For client-side data fetching and interactivity
+
+"use client"; 
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -26,7 +27,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { deleteProject } from '@/services/projectService';
 import { useToast } from '@/hooks/use-toast';
-import { ProjectForm } from '@/components/projects/ProjectForm'; // For editing
+import { ProjectForm } from '@/components/projects/ProjectForm'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 
 
@@ -58,6 +59,10 @@ export default function ProjectDetailsPage() {
       } catch (err) {
         console.error('Error fetching project:', err);
         setError('Failed to load project details.');
+        // It's possible the error is due to missing index, so we guide the user.
+        if ((err as any)?.message?.includes('index')) {
+          setError('Failed to load project details. This might be due to a missing database index. Please check Firebase console.');
+        }
       } finally {
         setLoading(false);
       }
@@ -80,6 +85,13 @@ export default function ProjectDetailsPage() {
         variant: 'destructive',
       });
     }
+  };
+
+  const handleProjectFormSuccess = () => {
+    setShowEditModal(false);
+    // The router.refresh() in ProjectForm will handle data update.
+    // We might need to trigger a re-fetch of the project specifically if router.refresh() isn't sufficient
+    // For now, let's assume router.refresh() called within ProjectForm is enough.
   };
 
   const getStatusColor = (status: Project['status']) => {
@@ -128,7 +140,7 @@ export default function ProjectDetailsPage() {
                   <DialogHeader>
                     <DialogTitle className="font-headline text-2xl">Edit Project</DialogTitle>
                   </DialogHeader>
-                  <ProjectForm project={project} />
+                  <ProjectForm project={project} onFormSuccess={handleProjectFormSuccess} />
                 </DialogContent>
               </Dialog>
               <AlertDialog>
