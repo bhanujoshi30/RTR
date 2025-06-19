@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db, auth } from '@/lib/firebase';
+import { db } from '@/lib/firebase'; // Removed auth import as UID is passed
 import type { Issue, IssueSeverity, IssueProgressStatus } from '@/types';
 import {
   collection,
@@ -30,14 +30,12 @@ interface CreateIssueData {
   endDate?: Date | null;
 }
 
-export const createIssue = async (projectId: string, taskId: string, issueData: CreateIssueData): Promise<string> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+export const createIssue = async (projectId: string, taskId: string, userUid: string, issueData: CreateIssueData): Promise<string> => {
+  if (!userUid) throw new Error('User not authenticated');
 
-  // Verify task ownership indirectly via project
   const taskDocRef = doc(db, 'tasks', taskId);
   const taskSnap = await getDoc(taskDocRef);
-  if (!taskSnap.exists() || taskSnap.data().projectId !== projectId || taskSnap.data().ownerUid !== user.uid) {
+  if (!taskSnap.exists() || taskSnap.data().projectId !== projectId || taskSnap.data().ownerUid !== userUid) {
     throw new Error('Task not found or access denied.');
   }
 
@@ -45,7 +43,7 @@ export const createIssue = async (projectId: string, taskId: string, issueData: 
     ...issueData,
     projectId,
     taskId,
-    ownerUid: user.uid,
+    ownerUid: userUid, // Use passed userUid
     endDate: issueData.endDate ? Timestamp.fromDate(issueData.endDate) : null,
     createdAt: serverTimestamp() as Timestamp,
     updatedAt: serverTimestamp() as Timestamp,
@@ -60,19 +58,16 @@ export const createIssue = async (projectId: string, taskId: string, issueData: 
   }
 };
 
-// Renamed from getProjectIssues to getTaskIssues
-export const getTaskIssues = async (taskId: string): Promise<Issue[]> => {
-  const user = auth.currentUser;
-  if (!user) {
-    console.warn('issueService: getTaskIssues called without authenticated user.');
+export const getTaskIssues = async (taskId: string, userUid: string): Promise<Issue[]> => {
+  if (!userUid) {
+    console.warn('issueService: getTaskIssues called without authenticated user UID.');
     return [];
   }
   
-  // Firestore index required: taskId (ASC), ownerUid (ASC), createdAt (DESC)
   const q = query(
     issuesCollection,
     where('taskId', '==', taskId),
-    where('ownerUid', '==', user.uid),
+    where('ownerUid', '==', userUid), // Use passed userUid
     orderBy('createdAt', 'desc')
   );
 
@@ -81,7 +76,7 @@ export const getTaskIssues = async (taskId: string): Promise<Issue[]> => {
     const issues = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Issue));
     return issues;
   } catch (error: any) {
-    console.error('issueService: Error fetching task issues for taskId:', taskId, 'uid:', user.uid, error.message, error.code ? `(${error.code})` : '', error.stack);
+    console.error('issueService: Error fetching task issues for taskId:', taskId, 'uid:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
         console.error("Firestore query for issues requires a composite index. Please create it in the Firebase console. The error message should provide a direct link or details. Fields to index are likely 'taskId' (ASC), 'ownerUid' (ASC), and 'createdAt' (DESC).");
     }
@@ -89,14 +84,13 @@ export const getTaskIssues = async (taskId: string): Promise<Issue[]> => {
   }
 };
 
-export const getIssueById = async (issueId: string): Promise<Issue | null> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+export const getIssueById = async (issueId: string, userUid: string): Promise<Issue | null> => {
+  if (!userUid) throw new Error('User not authenticated');
 
   const issueDocRef = doc(db, 'issues', issueId);
   const issueSnap = await getDoc(issueDocRef);
 
-  if (issueSnap.exists() && issueSnap.data().ownerUid === user.uid) {
+  if (issueSnap.exists() && issueSnap.data().ownerUid === userUid) { // Use passed userUid
     return { id: issueSnap.id, ...issueSnap.data() } as Issue;
   }
   return null;
@@ -111,13 +105,12 @@ interface UpdateIssueData {
   endDate?: Date | null | undefined; 
 }
 
-export const updateIssue = async (issueId: string, updates: UpdateIssueData): Promise<void> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+export const updateIssue = async (issueId: string, userUid: string, updates: UpdateIssueData): Promise<void> => {
+  if (!userUid) throw new Error('User not authenticated');
   
   const issueDocRef = doc(db, 'issues', issueId);
   const issueSnap = await getDoc(issueDocRef);
-  if (!issueSnap.exists() || issueSnap.data().ownerUid !== user.uid) {
+  if (!issueSnap.exists() || issueSnap.data().ownerUid !== userUid) { // Use passed userUid
     throw new Error('Issue not found or access denied.');
   }
 
@@ -142,13 +135,12 @@ export const updateIssue = async (issueId: string, updates: UpdateIssueData): Pr
   }
 };
 
-export const updateIssueStatus = async (issueId: string, status: IssueProgressStatus): Promise<void> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+export const updateIssueStatus = async (issueId: string, userUid: string, status: IssueProgressStatus): Promise<void> => {
+  if (!userUid) throw new Error('User not authenticated');
   
   const issueDocRef = doc(db, 'issues', issueId);
   const issueSnap = await getDoc(issueDocRef);
-  if (!issueSnap.exists() || issueSnap.data().ownerUid !== user.uid) {
+  if (!issueSnap.exists() || issueSnap.data().ownerUid !== userUid) { // Use passed userUid
     throw new Error('Issue not found or access denied.');
   }
 
@@ -160,13 +152,12 @@ export const updateIssueStatus = async (issueId: string, status: IssueProgressSt
   }
 };
 
-export const deleteIssue = async (issueId: string): Promise<void> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+export const deleteIssue = async (issueId: string, userUid: string): Promise<void> => {
+  if (!userUid) throw new Error('User not authenticated');
   
   const issueDocRef = doc(db, 'issues', issueId);
   const issueSnap = await getDoc(issueDocRef);
-  if (!issueSnap.exists() || issueSnap.data().ownerUid !== user.uid) {
+  if (!issueSnap.exists() || issueSnap.data().ownerUid !== userUid) { // Use passed userUid
     throw new Error('Issue not found or access denied.');
   }
 
@@ -178,12 +169,10 @@ export const deleteIssue = async (issueId: string): Promise<void> => {
   }
 };
 
-// New function to delete all issues for a specific task
-export const deleteIssuesForTask = async (taskId: string): Promise<void> => {
-  const user = auth.currentUser;
-  if (!user) throw new Error('User not authenticated');
+export const deleteIssuesForTask = async (taskId: string, userUid: string): Promise<void> => {
+  if (!userUid) throw new Error('User not authenticated');
 
-  const q = query(issuesCollection, where('taskId', '==', taskId), where('ownerUid', '==', user.uid));
+  const q = query(issuesCollection, where('taskId', '==', taskId), where('ownerUid', '==', userUid)); // Use passed userUid
   const batch = writeBatch(db);
   
   try {

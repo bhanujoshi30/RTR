@@ -18,7 +18,7 @@ import { CalendarIcon, Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-// import { Timestamp } from 'firebase/firestore'; // Not needed directly here for form values
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -35,8 +35,8 @@ const issueSchema = z.object({
 type IssueFormValues = z.infer<typeof issueSchema>;
 
 interface IssueFormProps {
-  projectId: string; // Still needed to associate issue with project context
-  taskId: string; // New: to associate issue with a task
+  projectId: string;
+  taskId: string;
   issue?: Issue;
   onFormSuccess: () => void;
 }
@@ -44,6 +44,7 @@ interface IssueFormProps {
 export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const { user } = useAuth(); // Get the authenticated user
 
   const form = useForm<IssueFormValues>({
     resolver: zodResolver(issueSchema),
@@ -58,6 +59,15 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   });
 
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
+    if (!user) {
+      toast({
+        title: 'Authentication Error',
+        description: 'You must be logged in to perform this action.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
     const issueDataPayload = {
       ...data,
@@ -66,10 +76,10 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
     try {
       if (issue) {
-        await updateIssue(issue.id, issueDataPayload);
+        await updateIssue(issue.id, user.uid, issueDataPayload);
         toast({ title: 'Issue Updated', description: `"${data.title}" has been updated.` });
       } else {
-        await createIssue(projectId, taskId, issueDataPayload); // Pass taskId here
+        await createIssue(projectId, taskId, user.uid, issueDataPayload);
         toast({ title: 'Issue Created', description: `"${data.title}" has been added.` });
       }
       onFormSuccess();
@@ -207,7 +217,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           )}
         />
         <div className="flex justify-end">
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading || !user}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {issue ? 'Save Changes' : 'Create Issue'}
           </Button>

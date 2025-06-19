@@ -20,24 +20,30 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { IssueForm } from './IssueForm';
 import { useState } from 'react';
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth
 
 interface IssueCardProps {
   issue: Issue;
-  projectId: string; // Keep for context if IssueForm needs it
-  taskId: string; // For editing context
+  projectId: string;
+  taskId: string;
   onIssueUpdated: () => void;
 }
 
 export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCardProps) {
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
+  const { user } = useAuth(); // Get the authenticated user
 
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
+    if (!user) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
+      return;
+    }
     try {
-      await updateIssueStatus(issue.id, newStatus);
+      await updateIssueStatus(issue.id, user.uid, newStatus);
       toast({ title: 'Issue Updated', description: `Status of "${issue.title}" changed to ${newStatus}.` });
       onIssueUpdated();
     } catch (error) {
@@ -46,8 +52,12 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
   };
   
   const handleDeleteIssue = async () => {
+    if (!user) {
+      toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
+      return;
+    }
     try {
-      await deleteIssue(issue.id);
+      await deleteIssue(issue.id, user.uid);
       toast({ title: 'Issue Deleted', description: `"${issue.title}" has been deleted.` });
       onIssueUpdated();
     } catch (error: any) {
@@ -110,26 +120,27 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
         </div>
         <div className="flex items-center justify-end gap-2 pt-2">
           {issue.status === 'Open' && (
-            <Button variant="outline" size="sm" onClick={() => handleStatusChange('Closed')}>
+            <Button variant="outline" size="sm" onClick={() => handleStatusChange('Closed')} disabled={!user}>
               <CheckSquare className="mr-2 h-4 w-4" /> Close Issue
             </Button>
           )}
            <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" disabled={!user}>
                 <Edit2 className="mr-2 h-4 w-4" /> Edit
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
               <DialogHeader>
                 <DialogTitle className="font-headline text-xl">Edit Issue</DialogTitle>
+                <DialogDescription>Modify the details of this issue.</DialogDescription>
               </DialogHeader>
-              <IssueForm projectId={projectId} taskId={taskId} issue={issue} onFormSuccess={() => { setShowEditModal(false); onIssueUpdated(); }} />
+              {user && <IssueForm projectId={projectId} taskId={taskId} issue={issue} onFormSuccess={() => { setShowEditModal(false); onIssueUpdated(); }} />}
             </DialogContent>
           </Dialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground">
+              <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={!user}>
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </Button>
             </AlertDialogTrigger>

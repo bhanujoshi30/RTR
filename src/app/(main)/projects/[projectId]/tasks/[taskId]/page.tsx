@@ -11,9 +11,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IssueList } from '@/components/issues/IssueList';
-import { SubTaskList } from '@/components/tasks/SubTaskList'; // New component
-import { TaskForm } from '@/components/tasks/TaskForm'; // For Add/Edit Sub-task dialog
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { SubTaskList } from '@/components/tasks/SubTaskList';
+import { TaskForm } from '@/components/tasks/TaskForm';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -32,7 +32,7 @@ export default function TaskDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const [showAddEditTaskModal, setShowAddEditTaskModal] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); // For edit main task name or edit sub-task
+  const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); 
   
   const isMainTask = task && !task.parentId;
   const isSubTask = task && !!task.parentId;
@@ -41,7 +41,7 @@ export default function TaskDetailsPage() {
     if (authLoading || !user || !taskId) return;
     try {
       setLoading(true);
-      const fetchedTask = await getTaskById(taskId);
+      const fetchedTask = await getTaskById(taskId, user.uid);
       if (fetchedTask && fetchedTask.projectId === projectId) {
         setTask(fetchedTask);
       } else {
@@ -63,19 +63,18 @@ export default function TaskDetailsPage() {
   const handleTaskFormSuccess = () => {
     setShowAddEditTaskModal(false);
     setEditingTask(null);
-    fetchTaskDetails(); // Refresh current task details
-    // If on a main task page, sub-task list will also refresh via its own useEffect or passed prop
-    router.refresh(); // General refresh
+    fetchTaskDetails(); 
+    router.refresh(); 
   };
   
   const handleDeleteCurrentTask = async () => {
-    if (!task) return;
+    if (!task || !user) return;
     try {
-      await deleteTask(task.id);
+      await deleteTask(task.id, user.uid);
       toast({ title: 'Task Deleted', description: `"${task.name}" has been deleted.` });
-      if (task.parentId) { // If sub-task, go to main task
+      if (task.parentId) { 
         router.push(`/projects/${projectId}/tasks/${task.parentId}`);
-      } else { // If main task, go to project
+      } else { 
         router.push(`/projects/${projectId}`);
       }
       router.refresh();
@@ -146,8 +145,11 @@ export default function TaskDetailsPage() {
                     <DialogTitle className="font-headline text-xl">
                       Edit {isSubTask ? "Sub-task" : "Main Task"}
                     </DialogTitle>
+                     <DialogDescription>
+                        {isSubTask ? "Modify the details of this sub-task." : "Update the name of this main task."}
+                    </DialogDescription>
                   </DialogHeader>
-                  {editingTask && <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />}
+                  {editingTask && user && <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />}
                 </DialogContent>
               </Dialog>
               <AlertDialog>
@@ -224,12 +226,13 @@ export default function TaskDetailsPage() {
               <DialogContent className="sm:max-w-xl">
                 <DialogHeader>
                   <DialogTitle className="font-headline text-xl">Add New Sub-task</DialogTitle>
+                  <DialogDescription>Fill in the details for the new sub-task.</DialogDescription>
                 </DialogHeader>
-                <TaskForm projectId={projectId} parentId={taskId} onFormSuccess={handleTaskFormSuccess} />
+                {user && <TaskForm projectId={projectId} parentId={taskId} onFormSuccess={handleTaskFormSuccess} />}
               </DialogContent>
             </Dialog>
           </div>
-          <SubTaskList mainTaskId={taskId} projectId={projectId} />
+          {user && <SubTaskList mainTaskId={taskId} projectId={projectId} />}
         </div>
       )}
 
@@ -255,7 +258,7 @@ export default function TaskDetailsPage() {
             </Card>
           </TabsContent>
           <TabsContent value="issues" className="mt-6">
-            <IssueList projectId={projectId} taskId={taskId} />
+            {user && <IssueList projectId={projectId} taskId={taskId} />}
           </TabsContent>
           <TabsContent value="timeline" className="mt-6">
             <Card><CardHeader><CardTitle>Timeline</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Timeline for this sub-task (to be implemented).</p></CardContent></Card>
