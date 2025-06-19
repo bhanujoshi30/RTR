@@ -50,9 +50,9 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   // For main tasks, only owner can perform full edit or delete.
   const canFullyEditOrDeleteThisTask = isOwnerOfThisTask;
 
-  // For sub-tasks, status can be changed by owner OR an assigned supervisor.
-  const isAssignedToThisSubTask = !isActuallyMainTask && task.assignedToUids?.includes(user?.uid || '');
-  const canChangeSubTaskStatus = user && (isOwnerOfThisTask || (isSupervisor && isAssignedToThisSubTask));
+  // For sub-tasks, status can be changed by owner OR any user assigned to it.
+  const isAssignedToThisSubTask = !isActuallyMainTask && (task.assignedToUids?.includes(user?.uid || '') ?? false);
+  const canChangeSubTaskStatus = user && (isOwnerOfThisTask || isAssignedToThisSubTask);
 
 
   useEffect(() => {
@@ -92,7 +92,8 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
       };
       fetchCount();
     }
-  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor, isOwnerOfThisTask]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor]);
 
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
@@ -145,7 +146,6 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   };
 
   const handleEditTask = () => {
-    // Only owners can edit main tasks or sub-tasks (general edit form)
     if (!isOwnerOfThisTask) {
          toast({ title: 'Permission Denied', description: 'Only the task owner can edit task details.', variant: 'destructive'});
         return;
@@ -155,7 +155,6 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
 
   const cardIcon = isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />;
   
-  // General Edit button (leading to TaskForm) is only for the owner of the task (main or sub)
   const showEditButton = isOwnerOfThisTask;
   
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
