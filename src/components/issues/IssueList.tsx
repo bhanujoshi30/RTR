@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from 'react';
 import { getTaskIssues } from '@/services/issueService';
-import type { Issue } from '@/types';
+import { getTaskById } from '@/services/taskService'; // To check task assignment
+import type { Issue, Task } from '@/types';
 import { IssueCard } from './IssueCard';
 import { Button } from '@/components/ui/button';
 import { Loader2, PlusCircle, Bug } from 'lucide-react';
@@ -22,16 +23,26 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [parentTask, setParentTask] = useState<Task | null>(null);
 
-  const fetchIssues = async () => {
+  const isSupervisor = user?.role === 'supervisor';
+  // An issue can be managed by a supervisor if the parent task is assigned to them, or if the user is the owner.
+  const canManageIssuesForThisTask = user && (parentTask?.ownerUid === user.uid || (isSupervisor && parentTask?.assignedToUid === user.uid));
+
+
+  const fetchParentTaskAndIssues = async () => {
     if (authLoading || !user || !taskId) return;
     try {
       setLoading(true);
-      const taskIssues = await getTaskIssues(taskId, user.uid); // Pass user.uid
+      // Fetch parent task to check its assignment for supervisor role
+      const fetchedTask = await getTaskById(taskId, user.uid);
+      setParentTask(fetchedTask);
+
+      const taskIssues = await getTaskIssues(taskId, user.uid, isSupervisor && fetchedTask?.assignedToUid === user.uid);
       setIssues(taskIssues);
       setError(null);
     } catch (err: any) {
-      console.error('Error fetching issues for task:', taskId, err);
+      console.error('Error fetching issues or parent task for task:', taskId, err);
       setError(`Failed to load issues. ${err.message?.includes("index") ? "A database index might be required. Check console for details." : ""}`);
     } finally {
       setLoading(false);
@@ -39,15 +50,15 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
   };
 
   useEffect(() => {
-    if (user && !authLoading) { // Ensure user object is available
-        fetchIssues();
+    if (user && !authLoading) { 
+        fetchParentTaskAndIssues();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, user, authLoading]);
 
   const handleFormSuccess = () => {
     setShowCreateModal(false);
-    fetchIssues(); 
+    fetchParentTaskAndIssues(); 
   };
 
   if (loading || authLoading) {
@@ -70,21 +81,23 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
           <Bug className="mr-3 h-6 w-6 text-primary" />
           Task Issues
         </h3>
-        <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-          <DialogTrigger asChild>
-            <Button size="sm" disabled={!user}>
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Issue
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="font-headline text-xl">Add New Issue</DialogTitle>
-              <DialogDescription>Fill in the details below to create a new issue for this task.</DialogDescription>
-            </DialogHeader>
-            {user && <IssueForm projectId={projectId} taskId={taskId} onFormSuccess={handleFormSuccess} />}
-          </DialogContent>
-        </Dialog>
+        {canManageIssuesForThisTask && (
+          <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+            <DialogTrigger asChild>
+              <Button size="sm">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add New Issue
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="font-headline text-xl">Add New Issue</DialogTitle>
+                <DialogDescription>Fill in the details below to create a new issue for this task.</DialogDescription>
+              </DialogHeader>
+              {user && <IssueForm projectId={projectId} taskId={taskId} onFormSuccess={handleFormSuccess} />}
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       {issues.length === 0 ? (
@@ -92,16 +105,25 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
           <Bug className="mx-auto h-12 w-12 text-muted-foreground/50" />
           <h3 className="mt-3 font-headline text-lg font-semibold">No issues for this task yet</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add issues to this task to start tracking them.
+            {canManageIssuesForThisTask ? "Add issues to this task to start tracking them." : "No issues reported for this task."}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {issues.map((issue) => (
-            <IssueCard key={issue.id} issue={issue} projectId={projectId} taskId={taskId} onIssueUpdated={fetchIssues} />
+            <IssueCard 
+                key={issue.id} 
+                issue={issue} 
+                projectId={projectId} 
+                taskId={taskId} 
+                onIssueUpdated={fetchParentTaskAndIssues}
+                canManageIssue={canManageIssuesForThisTask || (isSupervisor && issue.assignedToUid === user?.uid)}
+            />
           ))}
         </div>
       )}
     </div>
   );
 }
+
+    

@@ -10,7 +10,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface SubTaskListProps {
   mainTaskId: string;
-  projectId: string; // Pass projectId for navigation within TaskCard potentially
+  projectId: string; 
 }
 
 export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
@@ -18,20 +18,23 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
+  
+  const isSupervisor = user?.role === 'supervisor';
 
   const fetchSubTasks = async () => {
-    console.log('SubTaskList: fetchSubTasks called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null');
+    console.log('SubTaskList: fetchSubTasks called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null', 'isSupervisor:', isSupervisor);
     if (authLoading || !user || !mainTaskId) {
       console.log('SubTaskList: Skipping fetch, auth loading, no user, or no mainTaskId.');
-      if(!authLoading && !user && mainTaskId) setLoading(false); // Stop loading if auth is done and no user, but mainTaskId is present
+      if(!authLoading && !user && mainTaskId) setLoading(false); 
       return;
     }
     
     setLoading(true);
     setError(null);
     try {
-      console.log(`SubTaskList: Attempting to fetch sub-tasks for mainTaskId: ${mainTaskId}, userUid: ${user.uid}`);
-      const fetchedSubTasks = await getSubTasks(mainTaskId, user.uid);
+      console.log(`SubTaskList: Attempting to fetch sub-tasks for mainTaskId: ${mainTaskId}, userUid: ${user.uid}, isSupervisorView: ${isSupervisor}`);
+      // Pass isSupervisor as the flag to filter tasks for supervisors
+      const fetchedSubTasks = await getSubTasks(mainTaskId, user.uid, isSupervisor);
       console.log('SubTaskList: Fetched sub-tasks:', fetchedSubTasks);
       setSubTasks(fetchedSubTasks);
     } catch (err: any) {
@@ -57,7 +60,7 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
         setError('Cannot load sub-tasks: User not authenticated.');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mainTaskId, user, authLoading]);
+  }, [mainTaskId, user, authLoading, isSupervisor]); // Added isSupervisor to dependencies
 
   const onSubTaskUpdated = () => {
     console.log('SubTaskList: onSubTaskUpdated called, re-fetching sub-tasks.');
@@ -80,13 +83,16 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   }
 
   if (subTasks.length === 0) {
+    const message = isSupervisor 
+      ? "No sub-tasks assigned to you under this main task." 
+      : "No sub-tasks yet. Add sub-tasks to this main task.";
     console.log('SubTaskList: Render - No sub-tasks found.');
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <ListChecks className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-3 font-headline text-lg font-semibold">No sub-tasks yet</h3>
+        <h3 className="mt-3 font-headline text-lg font-semibold">{isSupervisor ? "No Assigned Sub-tasks" : "No Sub-tasks Yet"}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Add sub-tasks to this main task.
+          {message}
         </p>
       </div>
     );
@@ -105,3 +111,5 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
     </div>
   );
 }
+
+    

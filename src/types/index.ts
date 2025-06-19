@@ -41,8 +41,8 @@ export interface Task {
   createdAt: Date;
   dueDate?: Date | null;
   ownerUid: string;
-  assignedToUid?: string; 
-  assignedToName?: string; 
+  assignedToUid?: string | null; 
+  assignedToName?: string | null; 
 }
 
 export interface Issue {
@@ -54,9 +54,11 @@ export interface Issue {
   description?: string;
   severity: IssueSeverity;
   status: IssueProgressStatus;
-  assignedToUid?: string; 
-  assignedToName?: string; 
+  assignedToUid?: string | null; 
+  assignedToName?: string | null; 
   endDate?: Date | null;
   createdAt: Date;
   updatedAt?: Date;
 }
+
+    

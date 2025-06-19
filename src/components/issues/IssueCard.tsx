@@ -30,24 +30,27 @@ interface IssueCardProps {
   projectId: string;
   taskId: string;
   onIssueUpdated: () => void;
+  // Add a prop to indicate if the current user can manage this issue
+  // This can be derived from whether the parent task is assigned to them if they are a supervisor
+  canManageIssue?: boolean; 
 }
 
-export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCardProps) {
+export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue = true }: IssueCardProps) {
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
   const { user } = useAuth();
 
+  const isSupervisorNotAssigned = user?.role === 'supervisor' && user.uid !== issue.assignedToUid;
+  const disableActions = !user || !canManageIssue || isSupervisorNotAssigned;
+
+
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
-    if (!user) {
-      toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
+    if (disableActions) {
+      toast({ title: 'Permission Denied', description: 'You cannot modify this issue.', variant: 'destructive' });
       return;
     }
     try {
-      // Pass assignedToUid and assignedToName if they are part of the update,
-      // though updateIssueStatus typically only handles status.
-      // For a simple status update, these aren't needed unless your updateIssueStatus service function expects them.
-      // Assuming updateIssueStatus only needs status:
-      await updateIssueStatus(issue.id, user.uid, newStatus);
+      await updateIssueStatus(issue.id, user.uid, newStatus, issue.assignedToUid, issue.assignedToName);
       toast({ title: 'Issue Updated', description: `Status of "${issue.title}" changed to ${newStatus}.` });
       onIssueUpdated();
     } catch (error) {
@@ -56,8 +59,8 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
   };
 
   const handleDeleteIssue = async () => {
-    if (!user) {
-      toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
+     if (disableActions) {
+      toast({ title: 'Permission Denied', description: 'You cannot delete this issue.', variant: 'destructive' });
       return;
     }
     try {
@@ -115,7 +118,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
               </span>
             )}
           </div>
-          {issue.assignedToName && ( // Display assignedToName
+          {issue.assignedToName && ( 
             <div className="flex items-center">
               <User className="mr-1.5 h-3.5 w-3.5" />
               Assigned to: {issue.assignedToName}
@@ -124,13 +127,13 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
         </div>
         <div className="flex items-center justify-end gap-2 pt-2">
           {issue.status === 'Open' && (
-            <Button variant="outline" size="sm" onClick={() => handleStatusChange('Closed')} disabled={!user}>
+            <Button variant="outline" size="sm" onClick={() => handleStatusChange('Closed')} disabled={disableActions}>
               <CheckSquare className="mr-2 h-4 w-4" /> Close Issue
             </Button>
           )}
            <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" disabled={!user}>
+              <Button variant="outline" size="sm" disabled={disableActions}>
                 <Edit2 className="mr-2 h-4 w-4" /> Edit
               </Button>
             </DialogTrigger>
@@ -144,7 +147,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
           </Dialog>
           <AlertDialog>
             <AlertDialogTrigger asChild>
-              <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={!user}>
+              <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={disableActions}>
                 <Trash2 className="mr-2 h-4 w-4" /> Delete
               </Button>
             </AlertDialogTrigger>
@@ -168,3 +171,5 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
     </Card>
   );
 }
+
+    

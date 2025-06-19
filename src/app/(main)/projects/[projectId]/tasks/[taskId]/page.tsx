@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-// import Link from 'next/link'; // Not used directly for navigation here, router.push is used
 import { getTaskById, deleteTask } from '@/services/taskService';
 import type { Task } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,7 @@ import { IssueList } from '@/components/issues/IssueList';
 import { SubTaskList } from '@/components/tasks/SubTaskList';
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription, AlertDialogTrigger } from "@/components/ui/alert-dialog"; // Renamed to avoid conflict
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -34,22 +33,31 @@ export default function TaskDetailsPage() {
   const [showAddEditTaskModal, setShowAddEditTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); 
   
+  const isSupervisor = user?.role === 'supervisor';
   const isMainTask = task && !task.parentId;
   const isSubTask = task && !!task.parentId;
+  const isAssignedToCurrentUserSupervisor = isSubTask && isSupervisor && task?.assignedToUid === user?.uid;
+  const isOwner = user && task?.ownerUid === user.uid;
+
+  const canEditCurrentTask = isOwner || (isAssignedToCurrentUserSupervisor && !isMainTask); // Supervisor can edit assigned sub-task status/issues
+  const canDeleteCurrentTask = isOwner; // Only owner can delete
+  const canAddSubTask = isOwner && isMainTask; // Only owner can add sub-tasks to a main task
 
   const fetchTaskDetails = async () => {
     if (authLoading || !user || !taskId) return;
     try {
       setLoading(true);
-      const fetchedTask = await getTaskById(taskId, user.uid);
+      const fetchedTask = await getTaskById(taskId, user.uid); // getTaskById allows assigned supervisor to view
       if (fetchedTask && fetchedTask.projectId === projectId) {
         setTask(fetchedTask);
       } else {
         setError('Task not found or does not belong to this project.');
+        router.push(`/projects/${projectId}`); // or /dashboard
       }
     } catch (err) {
       console.error('Error fetching task:', err);
       setError('Failed to load task details.');
+       router.push(`/projects/${projectId}`);
     } finally {
       setLoading(false);
     }
@@ -70,7 +78,10 @@ export default function TaskDetailsPage() {
   };
   
   const handleDeleteCurrentTask = async () => {
-    if (!task || !user) return;
+    if (!task || !user || !canDeleteCurrentTask) {
+        toast({ title: 'Permission Denied', description: 'You do not have permission to delete this task.', variant: 'destructive' });
+        return;
+    }
     try {
       await deleteTask(task.id, user.uid);
       toast({ title: 'Task Deleted', description: `"${task.name}" has been deleted.` });
@@ -136,50 +147,58 @@ export default function TaskDetailsPage() {
                   {task.status}
                 </Badge>
               )}
-              <Dialog open={showAddEditTaskModal && !!editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen);}}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" onClick={() => { setEditingTask(task); setShowAddEditTaskModal(true); }} disabled={!user}>
-                    <Edit className="mr-2 h-4 w-4" /> Edit {isSubTask ? "Sub-task" : "Main Task"}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-xl">
-                  <DialogHeader>
-                    <DialogTitle className="font-headline text-xl">
-                      Edit {isSubTask ? "Sub-task" : "Main Task"}
-                    </DialogTitle>
-                     <DialogDescription>
-                        {isSubTask ? "Modify the details of this sub-task." : "Update the name or details of this main task."}
-                    </DialogDescription>
-                  </DialogHeader>
-                  {editingTask && user && <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />}
-                </DialogContent>
-              </Dialog>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={!user}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTaskTitle>Delete "{task.name}"?</AlertDialogTaskTitle>
-                    <AlertDialogTaskDescription>
-                      This action cannot be undone and will permanently delete this {isSubTask ? "sub-task and its issues." : "main task, all its sub-tasks, and their issues."}
-                    </AlertDialogTaskDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteCurrentTask} className="bg-destructive hover:bg-destructive/90">
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              {canEditCurrentTask && (
+                <Dialog open={showAddEditTaskModal && !!editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen);}}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm" onClick={() => { setEditingTask(task); setShowAddEditTaskModal(true); }}>
+                      <Edit className="mr-2 h-4 w-4" /> Edit {isSubTask ? "Sub-task" : "Main Task"}
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-xl">
+                    <DialogHeader>
+                      <DialogTitle className="font-headline text-xl">
+                        Edit {isSubTask ? "Sub-task" : "Main Task"}
+                      </DialogTitle>
+                      <DialogDescription>
+                          {isSubTask ? "Modify the details of this sub-task." : "Update the name or details of this main task."}
+                      </DialogDescription>
+                    </DialogHeader>
+                    {/* Supervisors can only edit status of assigned sub-tasks via TaskCard, not full form here unless expanded */}
+                    {editingTask && user && (!isSupervisor || isOwner) && <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />}
+                    {editingTask && user && isAssignedToCurrentUserSupervisor && (
+                        <p className="p-4 text-sm text-muted-foreground">Supervisors can update task status via the task card or list view. For other edits, please contact the project owner.</p>
+                    )}
+                  </DialogContent>
+                </Dialog>
+              )}
+              {canDeleteCurrentTask && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTaskTitle>Delete "{task.name}"?</AlertDialogTaskTitle>
+                      <AlertDialogTaskDescription>
+                        This action cannot be undone and will permanently delete this {isSubTask ? "sub-task and its issues." : "main task, all its sub-tasks, and their issues."}
+                      </AlertDialogTaskDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeleteCurrentTask} className="bg-destructive hover:bg-destructive/90">
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           </div>
           {isSubTask && task.description && (
             <CardDescription className="mt-2 text-lg">{task.description}</CardDescription>
           )}
            {isMainTask && (
-             <CardDescription className="mt-2 text-lg">This is a main task. Manage its sub-tasks below.</CardDescription>
+             <CardDescription className="mt-2 text-lg">This is a main task. Manage its sub-tasks below. {isSupervisor && "You will see sub-tasks assigned to you."}</CardDescription>
            )}
         </CardHeader>
         <CardContent>
@@ -217,23 +236,26 @@ export default function TaskDetailsPage() {
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center rounded-lg border bg-card p-6 shadow-sm">
             <h2 className="font-headline text-2xl font-semibold flex items-center">
               <ListChecks className="mr-3 h-7 w-7 text-primary" />
-              Sub-tasks
+              Sub-tasks {isSupervisor && "(Assigned to you)"}
             </h2>
-            <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
-              <DialogTrigger asChild>
-                <Button onClick={() => { setEditingTask(null); setShowAddEditTaskModal(true); }} disabled={!user}>
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add New Sub-task
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-xl">
-                <DialogHeader>
-                  <DialogTitle className="font-headline text-xl">Add New Sub-task</DialogTitle>
-                  <DialogDescription>Fill in the details for the new sub-task.</DialogDescription>
-                </DialogHeader>
-                {user && <TaskForm projectId={projectId} parentId={taskId} onFormSuccess={handleTaskFormSuccess} />}
-              </DialogContent>
-            </Dialog>
+            {canAddSubTask && (
+              <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
+                <DialogTrigger asChild>
+                  <Button onClick={() => { setEditingTask(null); setShowAddEditTaskModal(true); }}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> Add New Sub-task
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle className="font-headline text-xl">Add New Sub-task</DialogTitle>
+                    <DialogDescription>Fill in the details for the new sub-task.</DialogDescription>
+                  </DialogHeader>
+                  {user && <TaskForm projectId={projectId} parentId={taskId} onFormSuccess={handleTaskFormSuccess} />}
+                </DialogContent>
+              </Dialog>
+            )}
           </div>
+          {/* SubTaskList is now aware of supervisor role via its own useAuth() and getSubTasks service modification */}
           {user && <SubTaskList mainTaskId={taskId} projectId={projectId} />}
         </div>
       )}
@@ -260,6 +282,7 @@ export default function TaskDetailsPage() {
             </Card>
           </TabsContent>
           <TabsContent value="issues" className="mt-6">
+             {/* IssueList needs to be aware if only issues for assigned tasks should be manageable by supervisor */}
             {user && <IssueList projectId={projectId} taskId={taskId} />}
           </TabsContent>
           <TabsContent value="timeline" className="mt-6">
@@ -273,5 +296,5 @@ export default function TaskDetailsPage() {
     </div>
   );
 }
-
+    
     

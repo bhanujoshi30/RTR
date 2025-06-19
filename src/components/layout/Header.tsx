@@ -37,14 +37,22 @@ export function Header() {
     }
   };
 
-  const navLinks = [
+  const isSupervisor = user?.role === 'supervisor';
+  const isAdmin = user?.email === ADMIN_EMAIL;
+
+  const baseNavLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="mr-2 h-4 w-4" /> },
-    { href: '/projects/create', label: 'New Project', icon: <FolderPlus className="mr-2 h-4 w-4" /> },
   ];
 
-  if (user?.email === ADMIN_EMAIL) {
-    navLinks.push({ href: '/users', label: 'Users', icon: <Users className="mr-2 h-4 w-4" /> });
+  const conditionalNavLinks = [];
+  if (!isSupervisor) { // Hide "New Project" for supervisors
+    conditionalNavLinks.push({ href: '/projects/create', label: 'New Project', icon: <FolderPlus className="mr-2 h-4 w-4" /> });
   }
+  if (isAdmin) { // "Users" tab only for admin
+    conditionalNavLinks.push({ href: '/users', label: 'Users', icon: <Users className="mr-2 h-4 w-4" /> });
+  }
+  
+  const navLinks = [...baseNavLinks, ...conditionalNavLinks];
 
 
   const NavItems = ({isMobile = false} : {isMobile?: boolean}) => (
@@ -90,6 +98,7 @@ export function Header() {
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{user.displayName || user.email}</p>
                     {user.displayName && user.email && <p className="text-xs leading-none text-muted-foreground">{user.email}</p>}
+                     {user.role && <p className="text-xs leading-none text-muted-foreground capitalize">Role: {user.role}</p>}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
@@ -128,3 +137,5 @@ export function Header() {
     </header>
   );
 }
+
+    

@@ -42,17 +42,21 @@ export default function ProjectDetailsPage() {
   const [showEditModal, setShowEditModal] = useState(false);
 
   const { user, loading: authLoading } = useAuth();
+  const isSupervisor = user?.role === 'supervisor';
 
   const fetchProjectDetails = async () => {
     if (authLoading || !user || !projectId) return;
 
     try {
       setLoading(true);
-      const fetchedProject = await getProjectById(projectId, user.uid);
+      // Supervisors might need to view projects they don't own if they have tasks in them.
+      // getProjectById now allows supervisor role to bypass strict ownership if project ID is known.
+      const fetchedProject = await getProjectById(projectId, user.uid, user.role);
       if (fetchedProject) {
         setProject(fetchedProject);
       } else {
         setError('Project not found or you do not have permission to view it.');
+        router.push('/dashboard'); // Redirect if project not accessible
       }
     } catch (err: any) {
       console.error('Error fetching project:', err);
@@ -61,6 +65,7 @@ export default function ProjectDetailsPage() {
         setError('Failed to load project details. This might be due to a missing database index. Please check Firebase console.');
       } else if ((err as any)?.message?.includes('permissions') || (err as any)?.message?.includes('Access denied')) {
          setError('Failed to load project details due to missing permissions or access denial. Please check Firestore security rules and project ownership.');
+         router.push('/dashboard');
       }
     } finally {
       setLoading(false);
@@ -75,7 +80,7 @@ export default function ProjectDetailsPage() {
   }, [projectId, user, authLoading]);
 
   const handleDeleteProject = async () => {
-    if (!project || !user) return;
+    if (!project || !user || isSupervisor) return; // Supervisors cannot delete
     try {
       await deleteProject(project.id, user.uid);
       toast({ title: 'Project Deleted', description: `"${project.name}" has been deleted.` });
@@ -132,41 +137,43 @@ export default function ProjectDetailsPage() {
         <CardHeader>
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <CardTitle className="font-headline text-3xl tracking-tight">{project.name}</CardTitle>
-            <div className="flex items-center gap-2">
-               <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm" disabled={!user}>
-                    <Edit className="mr-2 h-4 w-4" /> Edit Project
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-2xl">
-                  <DialogHeader>
-                    <DialogTitle className="font-headline text-2xl">Edit Project</DialogTitle>
-                  </DialogHeader>
-                  {user && <ProjectForm project={project} onFormSuccess={handleProjectFormSuccess} />}
-                </DialogContent>
-              </Dialog>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" size="sm" disabled={!user}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete the project
-                      and all associated tasks (main tasks, sub-tasks, and issues).
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive hover:bg-destructive/90">
-                      Delete Project
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </div>
+            {!isSupervisor && user && ( // Hide controls for supervisors
+              <div className="flex items-center gap-2">
+                <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      <Edit className="mr-2 h-4 w-4" /> Edit Project
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle className="font-headline text-2xl">Edit Project</DialogTitle>
+                    </DialogHeader>
+                    <ProjectForm project={project} onFormSuccess={handleProjectFormSuccess} />
+                  </DialogContent>
+                </Dialog>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the project
+                        and all associated tasks (main tasks, sub-tasks, and issues).
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive hover:bg-destructive/90">
+                        Delete Project
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            )}
           </div>
           {project.description && <CardDescription className="mt-2 text-lg">{project.description}</CardDescription>}
         </CardHeader>
@@ -202,15 +209,20 @@ export default function ProjectDetailsPage() {
             <Layers className="mr-3 h-7 w-7 text-primary" /> 
             Main Tasks
           </h2>
-          <Button asChild disabled={!user}>
-            <Link href={`/projects/${projectId}/tasks/create`}> 
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Main Task
-            </Link>
-          </Button>
+          {!isSupervisor && user && ( // Hide "Add New Main Task" for supervisors
+            <Button asChild>
+              <Link href={`/projects/${projectId}/tasks/create`}> 
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Add New Main Task
+              </Link>
+            </Button>
+          )}
         </div>
+        {/* TaskList will show all main tasks for the project. Filtering logic for supervisors will be within SubTaskList. */}
         {user && <TaskList projectId={projectId} />} 
       </div>
     </div>
   );
 }
+
+    
