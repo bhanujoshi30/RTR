@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import type { Task, TaskStatus } from '@/types';
+import type { Task, TaskStatus, UserRole } from '@/types';
 import {
   collection,
   addDoc,
@@ -97,8 +97,6 @@ export const createTask = async (
 };
 
 export const getProjectMainTasks = async (projectId: string): Promise<Task[]> => {
-  // Removed userUid from parameters as owner check is not needed here.
-  // Access to the project page implies the user (owner or supervisor) should see its main tasks.
   console.log('taskService: getProjectMainTasks for projectId:', projectId);
 
   const q = query(
@@ -138,14 +136,9 @@ export const getSubTasks = async (parentId: string, userUid: string, isSuperviso
       orderBy('createdAt', 'asc')
     );
   } else {
-    // If not supervisor view, assume it's an owner viewing their own tasks' sub-tasks.
-    // Or, a supervisor viewing a project they were granted access to, showing all sub-tasks under a main task.
-    // To show ALL sub-tasks under a main task for any authorized viewer (owner or supervisor):
      q = query(
       tasksCollection,
       where('parentId', '==', parentId),
-      // No ownerUid or assignedToUid filter here if we want to show all subtasks of a main task
-      // that the user (owner or supervisor) has access to view (determined at project/main task level).
       orderBy('createdAt', 'asc')
     );
   }
@@ -159,7 +152,7 @@ export const getSubTasks = async (parentId: string, userUid: string, isSuperviso
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
        const indexFields = isSupervisorView
          ? "parentId (ASC), assignedToUid (ASC), createdAt (ASC)"
-         : "parentId (ASC), createdAt (ASC)"; // Adjusted for broader sub-task view
+         : "parentId (ASC), createdAt (ASC)"; 
        console.error(`Firestore query for sub-tasks requires an index. Please create it in the Firebase console. Fields: ${indexFields}. The error message from Firebase usually provides a direct link to create it.`);
     }
     throw error;
@@ -167,7 +160,7 @@ export const getSubTasks = async (parentId: string, userUid: string, isSuperviso
 };
 
 
-export const getTaskById = async (taskId: string, userUid: string): Promise<Task | null> => {
+export const getTaskById = async (taskId: string, userUid: string, userRole?: UserRole): Promise<Task | null> => {
   if (!userUid) throw new Error('User not authenticated for getting task');
 
   const taskDocRef = doc(db, 'tasks', taskId);
@@ -175,11 +168,18 @@ export const getTaskById = async (taskId: string, userUid: string): Promise<Task
 
   if (taskSnap.exists()) {
     const taskData = taskSnap.data();
-    // A user can get a task if they own it OR if they are assigned to it (supervisor case for sub-tasks)
-    if (taskData.ownerUid === userUid || taskData.assignedToUid === userUid) {
+    const isOwner = taskData.ownerUid === userUid;
+    const isAssignedToThisSubTask = taskData.parentId && taskData.assignedToUid === userUid; // User is assigned to this specific sub-task
+    const isSupervisorViewingAnyMainTask = userRole === 'supervisor' && !taskData.parentId; // Supervisor viewing a main task
+
+    if (isOwner || isAssignedToThisSubTask || isSupervisorViewingAnyMainTask) {
       return mapDocumentToTask(taskSnap);
+    } else {
+      console.warn(`taskService: getTaskById - Access denied for user ${userUid} (role: ${userRole}) to task ${taskId}. Owner: ${taskData.ownerUid}, AssignedToSubTask: ${taskData.assignedToUid}`);
+      return null;
     }
   }
+  console.warn(`taskService: getTaskById - Task ${taskId} not found.`);
   return null;
 };
 
@@ -196,7 +196,7 @@ export const updateTask = async (
   taskId: string,
   userUid: string,
   updates: UpdateTaskData,
-  userRole?: string
+  userRole?: UserRole
 ): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated for updating task');
 
@@ -227,12 +227,9 @@ export const updateTask = async (
 
   if (!taskDataFromSnap.parentId) { // This is a main task
     if (!isOwner) throw new Error('Only project owner can edit main task name.');
-    // For main tasks, only allow 'name' to be updated via this form.
-    // Other fields (like description, status, dueDate, assignee) are not applicable or managed differently for main tasks.
     const mainTaskUpdate: Partial<Pick<Task, 'name'>> & {updatedAt: Timestamp} = {updatedAt: serverTimestamp() as Timestamp};
     if (updates.name !== undefined) mainTaskUpdate.name = updates.name;
     
-    // Check if other fields were attempted to be updated and warn/ignore
     const allowedKeysForMainTask: (keyof UpdateTaskData)[] = ['name'];
     const attemptedUpdates = Object.keys(updates) as (keyof UpdateTaskData)[];
     const disallowedUpdates = attemptedUpdates.filter(key => !allowedKeysForMainTask.includes(key) && (updates as any)[key] !== undefined);
@@ -245,14 +242,11 @@ export const updateTask = async (
   }
 
   // This is a sub-task
-  if (isAssignedSupervisor && !isOwner) { // Supervisor editing an assigned sub-task
-    // Supervisors can only update status or specific fields they manage for sub-tasks assigned to them.
-    // For now, let's assume they can only update 'status'. If other fields are needed, expand this.
+  if (isAssignedSupervisor && !isOwner) { 
     if (Object.keys(updates).length === 1 && updates.status) {
       await updateDoc(taskDocRef, { status: updates.status, updatedAt: serverTimestamp() as Timestamp });
       return;
     } else if (updates.status && Object.keys(updates).every(key => ['status', 'description', 'dueDate'].includes(key)) ) {
-      // Allow status, description, due date update by assigned supervisor
       const supervisorAllowedUpdates: any = {updatedAt: serverTimestamp() as Timestamp};
       if(updates.status) supervisorAllowedUpdates.status = updates.status;
       if(updates.description !== undefined) supervisorAllowedUpdates.description = updates.description;
@@ -264,11 +258,10 @@ export const updateTask = async (
       throw new Error("Supervisors can only update status, description, or due date of sub-tasks assigned to them.");
     }
   }
-  // Owner can update any field in the sub-task
   await updateDoc(taskDocRef, updatePayload);
 };
 
-export const updateTaskStatus = async (taskId: string, userUid: string, status: TaskStatus, userRole?: string): Promise<void> => {
+export const updateTaskStatus = async (taskId: string, userUid: string, status: TaskStatus, userRole?: UserRole): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated for updating task status');
 
   const taskDocRef = doc(db, 'tasks', taskId);
@@ -280,7 +273,7 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
   const isOwner = taskData.ownerUid === userUid;
   const isAssignedSupervisor = userRole === 'supervisor' && taskData.assignedToUid === userUid;
 
-  if (taskData.parentId) { // Only sub-tasks have status directly updatable this way
+  if (taskData.parentId) { 
     if (isOwner || isAssignedSupervisor) {
       await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
     } else {
@@ -297,25 +290,20 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
   const taskDocRef = doc(db, 'tasks', taskId);
   const taskSnap = await getDoc(taskDocRef);
   if (!taskSnap.exists() || taskSnap.data().ownerUid !== userUid) {
-    // Only owner can delete task
     throw new Error('Task not found or access denied for deletion.');
   }
 
   const taskDataFromSnap = taskSnap.data();
   const batch = writeBatch(db);
 
-  // Delete the task itself
   batch.delete(taskDocRef);
-  // Delete associated issues
-  await deleteIssuesForTask(taskId, userUid); // This function itself might use a batch or individual deletes
+  await deleteIssuesForTask(taskId, userUid); 
 
-  // If it's a main task, delete all its sub-tasks and their issues
-  if (!taskDataFromSnap.parentId) { // It's a main task
+  if (!taskDataFromSnap.parentId) { 
     const subTasksQuery = query(tasksCollection, where('parentId', '==', taskId), where('ownerUid', '==', userUid));
     const subTasksSnapshot = await getDocs(subTasksQuery);
     for (const subTaskDoc of subTasksSnapshot.docs) {
       batch.delete(subTaskDoc.ref);
-      // Delete issues for each sub-task
       await deleteIssuesForTask(subTaskDoc.id, userUid);
     }
   }
@@ -328,17 +316,13 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
   }
 };
 
-// This function is called when a project is deleted by its owner.
-// It needs to delete ALL tasks (main and sub) for that project, regardless of sub-task assignees.
 export const deleteAllTasksForProject = async (projectId: string, projectOwnerUid: string): Promise<void> => {
   if (!projectOwnerUid) throw new Error("User not authenticated for deleting all project tasks");
 
-  // Query for all tasks (main and sub) belonging to the project and owned by the project owner
-  // This ensures we only delete tasks that the project owner legitimately controls.
   const projectTasksQuery = query(
     tasksCollection,
     where("projectId", "==", projectId),
-    where("ownerUid", "==", projectOwnerUid) // Ensure owner is deleting their own tasks
+    where("ownerUid", "==", projectOwnerUid) 
   );
 
   const batch = writeBatch(db);
@@ -351,9 +335,6 @@ export const deleteAllTasksForProject = async (projectId: string, projectOwnerUi
 
     for (const taskDoc of tasksSnapshot.docs) {
       batch.delete(taskDoc.ref);
-      // Delete issues for each task being deleted
-      // Assuming deleteIssuesForTask is robust enough or also checks ownership if necessary,
-      // but in project deletion context, usually all sub-data is wiped.
       await deleteIssuesForTask(taskDoc.id, projectOwnerUid);
     }
     await batch.commit();
@@ -373,8 +354,8 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   const q = query(
     tasksCollection,
     where('assignedToUid', '==', userUid),
-    where('parentId', '!=', null), // Ensure it's a sub-task
-    orderBy('parentId'), // Required for the '!=' filter if other orderBy is used
+    where('parentId', '!=', null), 
+    orderBy('parentId'), 
     orderBy('createdAt', 'desc')
   );
 

@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { getTaskIssues } from '@/services/issueService';
-import { getTaskById } from '@/services/taskService'; // To check task assignment
+import { getTaskById } from '@/services/taskService'; 
 import type { Issue, Task } from '@/types';
 import { IssueCard } from './IssueCard';
 import { Button } from '@/components/ui/button';
@@ -26,7 +26,6 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
   const [parentTask, setParentTask] = useState<Task | null>(null);
 
   const isSupervisor = user?.role === 'supervisor';
-  // An issue can be managed by a supervisor if the parent task is assigned to them, or if the user is the owner.
   const canManageIssuesForThisTask = user && (parentTask?.ownerUid === user.uid || (isSupervisor && parentTask?.assignedToUid === user.uid));
 
 
@@ -34,8 +33,7 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
     if (authLoading || !user || !taskId) return;
     try {
       setLoading(true);
-      // Fetch parent task to check its assignment for supervisor role
-      const fetchedTask = await getTaskById(taskId, user.uid);
+      const fetchedTask = await getTaskById(taskId, user.uid, user.role); 
       setParentTask(fetchedTask);
 
       const taskIssues = await getTaskIssues(taskId, user.uid, isSupervisor && fetchedTask?.assignedToUid === user.uid);
@@ -125,5 +123,3 @@ export function IssueList({ projectId, taskId }: IssueListProps) {
     </div>
   );
 }
-
-    

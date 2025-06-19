@@ -1,18 +1,15 @@
 
-// Removed: import type { User as FirebaseUser } from 'firebase/auth';
-
 export type UserRole = 'admin' | 'supervisor' | 'member';
 
-// User interface is now a plain object, not extending FirebaseUser
 export interface User {
   uid: string;
   displayName: string | null;
   email: string | null;
   photoURL: string | null;
-  emailVerified?: boolean; // This is a serializable property from FirebaseUser
-  role?: UserRole; // This will come from your Firestore 'users' collection
-  createdAt?: Date; // From Firestore 'users' collection document
-  updatedAt?: Date; // From Firestore 'users' collection document
+  emailVerified?: boolean; 
+  role?: UserRole; 
+  createdAt?: Date; 
+  updatedAt?: Date; 
 }
 
 export type ProjectStatus = 'Not Started' | 'In Progress' | 'Completed';
@@ -60,5 +57,3 @@ export interface Issue {
   createdAt: Date;
   updatedAt?: Date;
 }
-
-    

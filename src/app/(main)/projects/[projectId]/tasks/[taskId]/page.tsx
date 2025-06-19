@@ -39,22 +39,22 @@ export default function TaskDetailsPage() {
   const isAssignedToCurrentUserSupervisor = isSubTask && isSupervisor && task?.assignedToUid === user?.uid;
   const isOwner = user && task?.ownerUid === user.uid;
 
-  const canEditCurrentTask = isOwner || (isAssignedToCurrentUserSupervisor && !isMainTask); // Supervisor can edit assigned sub-task status/issues
-  const canDeleteCurrentTask = isOwner; // Only owner can delete
-  const canAddSubTask = isOwner && isMainTask; // Only owner can add sub-tasks to a main task
+  const canEditCurrentTask = isOwner || (isAssignedToCurrentUserSupervisor && !isMainTask); 
+  const canDeleteCurrentTask = isOwner; 
+  const canAddSubTask = isOwner && isMainTask; 
 
   const fetchTaskDetails = async () => {
     if (authLoading || !user || !taskId) return;
     try {
       setLoading(true);
-      const fetchedTask = await getTaskById(taskId, user.uid); // getTaskById allows assigned supervisor to view
+      const fetchedTask = await getTaskById(taskId, user.uid, user.role); 
       if (fetchedTask && fetchedTask.projectId === projectId) {
         setTask(fetchedTask);
       } else {
         setError('Task not found or does not belong to this project.');
-        router.push(`/projects/${projectId}`); // or /dashboard
+        router.push(`/projects/${projectId}`); 
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching task:', err);
       setError('Failed to load task details.');
        router.push(`/projects/${projectId}`);
@@ -163,7 +163,6 @@ export default function TaskDetailsPage() {
                           {isSubTask ? "Modify the details of this sub-task." : "Update the name or details of this main task."}
                       </DialogDescription>
                     </DialogHeader>
-                    {/* Supervisors can only edit status of assigned sub-tasks via TaskCard, not full form here unless expanded */}
                     {editingTask && user && (!isSupervisor || isOwner) && <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />}
                     {editingTask && user && isAssignedToCurrentUserSupervisor && (
                         <p className="p-4 text-sm text-muted-foreground">Supervisors can update task status via the task card or list view. For other edits, please contact the project owner.</p>
@@ -255,7 +254,6 @@ export default function TaskDetailsPage() {
               </Dialog>
             )}
           </div>
-          {/* SubTaskList is now aware of supervisor role via its own useAuth() and getSubTasks service modification */}
           {user && <SubTaskList mainTaskId={taskId} projectId={projectId} />}
         </div>
       )}
@@ -282,7 +280,6 @@ export default function TaskDetailsPage() {
             </Card>
           </TabsContent>
           <TabsContent value="issues" className="mt-6">
-             {/* IssueList needs to be aware if only issues for assigned tasks should be manageable by supervisor */}
             {user && <IssueList projectId={projectId} taskId={taskId} />}
           </TabsContent>
           <TabsContent value="timeline" className="mt-6">

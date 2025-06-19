@@ -10,8 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
-// This page can be used to edit both main tasks and sub-tasks.
-// TaskForm will adapt based on whether task.parentId exists.
 export default function EditTaskPage() {
   const params = useParams();
   const router = useRouter();
@@ -29,8 +27,7 @@ export default function EditTaskPage() {
     const fetchTask = async () => {
       try {
         setLoading(true);
-        // Pass user.uid to getTaskById
-        const fetchedTask = await getTaskById(taskId, user.uid);
+        const fetchedTask = await getTaskById(taskId, user.uid, user.role); 
         if (fetchedTask && fetchedTask.projectId === projectId) {
           setTask(fetchedTask);
         } else {
@@ -48,7 +45,6 @@ export default function EditTaskPage() {
   }, [taskId, projectId, user, authLoading]);
 
   const handleFormSuccess = () => {
-    // Navigate to the task's detail page after successful edit
     router.push(`/projects/${projectId}/tasks/${taskId}`);
     router.refresh();
   };
@@ -69,7 +65,6 @@ export default function EditTaskPage() {
     return <p className="text-center text-muted-foreground py-10">Task details could not be loaded.</p>;
   }
   
-  // Determine back path: if sub-task, back to main task; if main task, back to project.
   const backPath = task.parentId 
     ? `/projects/${projectId}/tasks/${task.parentId}` 
     : `/projects/${projectId}`;
