@@ -6,20 +6,18 @@ import type { User, UserRole } from '@/types';
 import { collection, query, where, getDocs, orderBy, doc, setDoc, getDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 const usersCollection = collection(db, 'users');
-// const ADMIN_EMAIL = 'joshi1bhanu@gmail.com'; // This check is done client-side based on user object
 
-// Helper to map Firestore document to our plain User type
 const mapDocumentToUser = (docSnap: any): User => {
   const data = docSnap.data();
   return {
-    uid: docSnap.id, // Assuming document ID is the UID
+    uid: docSnap.id,
     displayName: data.displayName || null,
     email: data.email || null,
     photoURL: data.photoURL || null,
-    emailVerified: data.emailVerified || false, // Ensure this field exists in your Firestore docs or handle default
+    emailVerified: data.emailVerified || false,
     role: data.role as UserRole,
-    createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
-    updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
+    createdAt: data.createdAt ? (data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)) : undefined,
+    updatedAt: data.updatedAt ? (data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(data.updatedAt)) : undefined,
   };
 };
 
@@ -29,13 +27,13 @@ export const getUserDisplayName = async (uid: string): Promise<string | null> =>
     const userDocRef = doc(db, 'users', uid);
     const docSnap = await getDoc(userDocRef);
     if (docSnap.exists()) {
-      return docSnap.data().displayName || uid; // Fallback to UID if no displayName
+      return docSnap.data().displayName || uid;
     }
     console.warn(`userService: User document not found for UID ${uid} when fetching display name. Returning UID.`);
-    return uid; // Fallback to UID if user doc not found
+    return uid;
   } catch (error) {
     console.error(`userService: Error fetching display name for UID ${uid}:`, error);
-    return uid; // Fallback to UID on error
+    return uid;
   }
 };
 
@@ -62,8 +60,6 @@ export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
 };
 
 export const getAllUsers = async (requestingUserUid: string): Promise<User[]> => {
-  // Admin check should ideally be more robust (e.g., checking requestingUserUid's role from Firestore)
-  // For now, relies on client-side gatekeeping for admin page access.
   console.log(`userService: getAllUsers called by user: ${requestingUserUid}`);
   const q = query(usersCollection, orderBy('displayName', 'asc'));
   try {
@@ -87,14 +83,13 @@ export interface UserDocumentData {
   displayName: string;
   role: UserRole;
   photoURL?: string | null;
-  emailVerified?: boolean; // Make sure this is part of the payload if managed
+  emailVerified?: boolean;
 }
 
 export const upsertUserDocument = async (
   requestingUserUid: string,
   userData: UserDocumentData
 ): Promise<void> => {
-  // Add proper admin check here based on requestingUserUid's role in Firestore
   console.log(`userService: upsertUserDocument called by ${requestingUserUid} for user UID: ${userData.uid}`);
   const userDocRef = doc(db, 'users', userData.uid);
 
@@ -106,7 +101,7 @@ export const upsertUserDocument = async (
       displayName: userData.displayName,
       role: userData.role,
       photoURL: userData.photoURL || null,
-      emailVerified: userData.emailVerified === undefined ? false : userData.emailVerified, // Default to false if not provided
+      emailVerified: userData.emailVerified === undefined ? false : userData.emailVerified,
     };
 
     if (userSnap.exists()) {
@@ -125,7 +120,6 @@ export const upsertUserDocument = async (
 };
 
 export const deleteUserDocument = async (requestingUserUid: string, targetUserUid: string): Promise<void> => {
-  // Add proper admin check here
   console.log(`userService: deleteUserDocument called by ${requestingUserUid} for target UID: ${targetUserUid}`);
   if (requestingUserUid === targetUserUid) {
     throw new Error("Admin cannot delete their own user document through this function.");
