@@ -300,11 +300,6 @@ export default function TaskDetailsPage() {
                   <h4 className="font-semibold">Created By:</h4>
                   <p>{isFetchingOwnerName ? 'Loading...' : (ownerDisplayName || task.ownerUid)}</p>
                 </div>
-                <div>
-                  <h4 className="font-semibold">Assigned By:</h4>
-                  <p>{isFetchingOwnerName ? 'Loading...' : (ownerDisplayName || task.ownerUid)}</p>
-                  <p className="text-xs text-muted-foreground">(Assuming creator also assigned the task)</p>
-                </div>
                 <div><h4 className="font-semibold">Created At:</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
                 {task.dueDate && (<div><h4 className="font-semibold">Due Date:</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}
               </CardContent>
@@ -324,6 +319,4 @@ export default function TaskDetailsPage() {
     </div>
   );
 }
-
-
     
