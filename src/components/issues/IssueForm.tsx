@@ -6,7 +6,7 @@ import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
-import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser } from '@/types';
+import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser, Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,12 +15,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarIcon, Save, Loader2, Users } from 'lucide-react';
+import { CalendarIcon, Save, Loader2, Users, AlertCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getUsersByRole } from '@/services/userService';
+import { getTaskById } from '@/services/taskService'; // Import getTaskById
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -31,14 +32,14 @@ const issueSchema = z.object({
   severity: z.enum(issueSeverities),
   status: z.enum(issueProgressStatuses),
   assignedToUids: z.array(z.string()).optional().default([]),
-  dueDate: z.date({ required_error: "Due date is required." }), // Changed from endDate and made mandatory
+  dueDate: z.date({ required_error: "Due date is required." }),
 });
 
 type IssueFormValues = z.infer<typeof issueSchema>;
 
 interface IssueFormProps {
   projectId: string;
-  taskId: string; 
+  taskId: string; // This is the parent SubTask ID
   issue?: Issue;
   onFormSuccess: () => void;
 }
@@ -46,8 +47,10 @@ interface IssueFormProps {
 export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth();
-  const [assignableUsers, setAssignableUsers] = useState<AppUser[]>([]);
+  const { user, loading: authLoading } = useAuth();
+  const [assignableUsersForIssue, setAssignableUsersForIssue] = useState<AppUser[]>([]);
+  const [parentSubTask, setParentSubTask] = useState<Task | null>(null);
+  const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
 
   const form = useForm<IssueFormValues>({
     resolver: zodResolver(issueSchema),
@@ -57,36 +60,69 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       severity: issue?.severity || 'Normal',
       status: issue?.status || 'Open',
       assignedToUids: issue?.assignedToUids || [],
-      dueDate: issue?.dueDate || undefined, // undefined for new to trigger validation
+      dueDate: issue?.dueDate || undefined,
     },
   });
 
   useEffect(() => {
-    const fetchAssignableUsers = async () => {
+    const fetchParentTaskAndAssignableUsers = async () => {
+      if (!user || !taskId) return;
+      setLoadingAssignableUsers(true);
       try {
-        const fetchedSupervisors = await getUsersByRole('supervisor');
-        const fetchedMembers = await getUsersByRole('member');
+        const fetchedParentTask = await getTaskById(taskId, user.uid, user.role);
+        if (!fetchedParentTask) {
+          toast({ title: "Error", description: "Parent sub-task not found.", variant: "destructive" });
+          setAssignableUsersForIssue([]);
+          setParentSubTask(null);
+          setLoadingAssignableUsers(false);
+          return;
+        }
+        setParentSubTask(fetchedParentTask);
+
+        const parentAssigneeUids = fetchedParentTask.assignedToUids || [];
+
+        if (parentAssigneeUids.length === 0) {
+          setAssignableUsersForIssue([]);
+          setLoadingAssignableUsers(false);
+          return;
+        }
+
+        // Fetch all potential assignees (supervisors and members)
+        const [supervisors, members] = await Promise.all([
+          getUsersByRole('supervisor'),
+          getUsersByRole('member')
+        ]);
         
-        const allUsersMap = new Map<string, AppUser>();
-        fetchedSupervisors.forEach(u => allUsersMap.set(u.uid, u));
-        fetchedMembers.forEach(u => allUsersMap.set(u.uid, u));
-        
-        const combinedUsers = Array.from(allUsersMap.values()).sort((a, b) => 
+        const allPotentialAssigneesMap = new Map<string, AppUser>();
+        [...supervisors, ...members].forEach(u => allPotentialAssigneesMap.set(u.uid, u));
+
+        // Filter these users to only those assigned to the parent sub-task
+        const filteredUsers = parentAssigneeUids
+          .map(uid => allPotentialAssigneesMap.get(uid))
+          .filter(Boolean) as AppUser[]; // Filter out undefined if a UID in parentTask doesn't match any fetched user
+
+        const sortedFilteredUsers = filteredUsers.sort((a, b) =>
           (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
         );
-        setAssignableUsers(combinedUsers);
+        setAssignableUsersForIssue(sortedFilteredUsers);
+
       } catch (error) {
-        console.error("Failed to fetch assignable users for IssueForm:", error);
+        console.error("Failed to fetch parent task or assignable users for IssueForm:", error);
         toast({
           title: "Error",
-          description: "Could not load list of users for assignment.",
+          description: "Could not load users for assignment. Ensure parent sub-task is accessible and has assignees.",
           variant: "destructive"
         });
-        setAssignableUsers([]);
+        setAssignableUsersForIssue([]);
+      } finally {
+        setLoadingAssignableUsers(false);
       }
     };
-    fetchAssignableUsers();
-  }, [toast]);
+
+    if (!authLoading && user) {
+      fetchParentTaskAndAssignableUsers();
+    }
+  }, [taskId, user, authLoading, toast]);
 
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
     if (!user) {
@@ -99,18 +135,19 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     }
 
     setLoading(true);
-    let assignedToNames: string[] | undefined = undefined;
+    let assignedToNamesForPayload: string[] | undefined = undefined;
     if (data.assignedToUids && data.assignedToUids.length > 0) {
-      assignedToNames = data.assignedToUids.map(uid => {
-        const assignedUser = assignableUsers.find(u => u.uid === uid);
+      assignedToNamesForPayload = data.assignedToUids.map(uid => {
+        const assignedUser = assignableUsersForIssue.find(u => u.uid === uid);
         return assignedUser?.displayName || uid;
       });
     }
 
     const issueDataPayload = {
       ...data,
-      assignedToNames: assignedToNames || [],
-      dueDate: data.dueDate, // Already a Date object from form
+      assignedToUids: data.assignedToUids || [],
+      assignedToNames: assignedToNamesForPayload || [],
+      dueDate: Timestamp.fromDate(data.dueDate),
     };
 
     try {
@@ -213,28 +250,39 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           name="assignedToUids"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
-              {assignableUsers.length === 0 && <p className="text-sm text-muted-foreground">Loading users...</p>}
-               <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                {assignableUsers.map(assignableUser => (
-                  <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value?.includes(assignableUser.uid)}
-                        onCheckedChange={(checked) => {
-                          const currentUids = field.value || [];
-                          return checked
-                            ? field.onChange([...currentUids, assignableUser.uid])
-                            : field.onChange(currentUids.filter((uid) => uid !== assignableUser.uid));
-                        }}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal">
-                      {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
-                    </FormLabel>
-                  </FormItem>
-                ))}
-              </div>
+              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To (from Sub-task Assignees)</FormLabel>
+              {loadingAssignableUsers && <p className="text-sm text-muted-foreground">Loading assignable users...</p>}
+              {!loadingAssignableUsers && assignableUsersForIssue.length === 0 && (
+                <div className="p-3 text-sm text-muted-foreground border rounded-md flex items-center gap-2">
+                   <AlertCircle className="h-5 w-5 text-amber-500" />
+                  {parentSubTask && (parentSubTask.assignedToUids || []).length === 0
+                    ? "Parent sub-task has no assigned users. Assign users to the sub-task first to enable issue assignment."
+                    : "No users from the parent sub-task are available for assignment, or parent task not loaded."
+                  }
+                </div>
+              )}
+              {!loadingAssignableUsers && assignableUsersForIssue.length > 0 && (
+                <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                  {assignableUsersForIssue.map(assignableUser => (
+                    <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value?.includes(assignableUser.uid)}
+                          onCheckedChange={(checked) => {
+                            const currentUids = field.value || [];
+                            return checked
+                              ? field.onChange([...currentUids, assignableUser.uid])
+                              : field.onChange(currentUids.filter((uid) => uid !== assignableUser.uid));
+                          }}
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal">
+                        {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
+                      </FormLabel>
+                    </FormItem>
+                  ))}
+                </div>
+              )}
               <FormMessage />
             </FormItem>
           )}
@@ -274,7 +322,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           )}
         />
         <div className="flex justify-end">
-          <Button type="submit" disabled={loading || !user}>
+          <Button type="submit" disabled={loading || !user || loadingAssignableUsers || assignableUsersForIssue.length === 0 && !issue?.id /* Allow editing existing even if assignees change */}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {issue ? 'Save Changes' : 'Create Issue'}
           </Button>
@@ -283,4 +331,3 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Form>
   );
 }
-
