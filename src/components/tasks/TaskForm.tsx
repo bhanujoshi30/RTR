@@ -38,7 +38,6 @@ const subTaskSchema = baseTaskSchema.extend({
 });
 
 const mainTaskSchema = baseTaskSchema.extend({
-  // Fields below are not user-editable for main tasks via this form directly or have fixed defaults
   description: z.string().max(1000).optional().nullable().default(null), 
   status: z.enum(taskStatuses).default('To Do'), 
   dueDate: z.date().optional().nullable().default(null),
@@ -46,12 +45,11 @@ const mainTaskSchema = baseTaskSchema.extend({
 });
 
 type SubTaskFormValues = z.infer<typeof subTaskSchema>;
-// type MainTaskFormValues = z.infer<typeof mainTaskSchema>; // Not directly used as data type for form if mixed
 
 interface TaskFormProps {
   projectId: string;
   task?: Task;
-  parentId?: string | null; // If present, this form is for a sub-task
+  parentId?: string | null; 
   onFormSuccess?: () => void;
 }
 
@@ -61,6 +59,8 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const [supervisors, setSupervisors] = useState<AppUser[]>([]);
+  const [members, setMembers] = useState<AppUser[]>([]);
+  const [assignableUsers, setAssignableUsers] = useState<AppUser[]>([]);
 
   const isSubTask = !!(parentId || task?.parentId);
   const currentSchema = isSubTask ? subTaskSchema : mainTaskSchema;
@@ -69,29 +69,43 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     resolver: zodResolver(currentSchema),
     defaultValues: {
       name: task?.name || '',
-      description: isSubTask ? (task?.description || '') : undefined, // Only for sub-tasks
-      status: isSubTask ? (task?.status || 'To Do') : 'To Do', // Editable for sub-tasks
-      dueDate: isSubTask ? (task?.dueDate || null) : null, // Only for sub-tasks
-      assignedToUids: isSubTask ? (task?.assignedToUids || []) : [], // Only for sub-tasks
+      description: isSubTask ? (task?.description || '') : undefined,
+      status: isSubTask ? (task?.status || 'To Do') : 'To Do',
+      dueDate: isSubTask ? (task?.dueDate || null) : null,
+      assignedToUids: isSubTask ? (task?.assignedToUids || []) : [],
     },
   });
 
   useEffect(() => {
-    if (isSubTask) { // Only fetch supervisors if it's a sub-task
-      const fetchSupervisors = async () => {
+    if (isSubTask) {
+      const fetchAssignableUsers = async () => {
         try {
           const fetchedSupervisors = await getUsersByRole('supervisor');
           setSupervisors(fetchedSupervisors);
+          const fetchedMembers = await getUsersByRole('member');
+          setMembers(fetchedMembers);
+          
+          // Combine and de-duplicate
+          const allUsersMap = new Map<string, AppUser>();
+          fetchedSupervisors.forEach(u => allUsersMap.set(u.uid, u));
+          fetchedMembers.forEach(u => allUsersMap.set(u.uid, u)); // Overwrites if supervisor also member, UID is key
+          
+          const combinedUsers = Array.from(allUsersMap.values()).sort((a, b) => 
+            (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
+          );
+          setAssignableUsers(combinedUsers);
+
         } catch (error) {
-          console.error("Failed to fetch supervisors for TaskForm:", error);
+          console.error("Failed to fetch assignable users for TaskForm:", error);
           toast({
             title: "Error",
-            description: "Could not load list of supervisors.",
+            description: "Could not load list of users for assignment.",
             variant: "destructive"
           });
+          setAssignableUsers([]); // Set to empty on error
         }
       };
-      fetchSupervisors();
+      fetchAssignableUsers();
     }
   }, [isSubTask, toast]);
 
@@ -105,52 +119,47 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     let assignedToNamesForPayload: string[] | undefined = undefined;
     if (isSubTask && data.assignedToUids && data.assignedToUids.length > 0) {
       assignedToNamesForPayload = data.assignedToUids.map(uid => {
-        const supervisor = supervisors.find(s => s.uid === uid);
-        return supervisor?.displayName || uid; // Fallback to UID if name not found
+        const assignedUser = assignableUsers.find(u => u.uid === uid);
+        return assignedUser?.displayName || uid; 
       });
     }
 
     const taskPayload: any = {
       name: data.name,
-      // Fields specific to sub-tasks or with different handling for main tasks
-      description: isSubTask ? (data as SubTaskFormValues).description || '' : '', // Only for sub-tasks
-      status: isSubTask ? (data as SubTaskFormValues).status : 'To Do', // Editable for sub-tasks
-      dueDate: (isSubTask && (data as SubTaskFormValues).dueDate) ? (data as SubTaskFormValues).dueDate : null, // Only for sub-tasks
+      description: isSubTask ? (data as SubTaskFormValues).description || '' : '',
+      status: isSubTask ? (data as SubTaskFormValues).status : 'To Do',
+      dueDate: (isSubTask && (data as SubTaskFormValues).dueDate) ? (data as SubTaskFormValues).dueDate : null,
       parentId: parentId || task?.parentId || null,
-      assignedToUids: isSubTask ? (data as SubTaskFormValues).assignedToUids || [] : [], // Only for sub-tasks
-      assignedToNames: isSubTask ? assignedToNamesForPayload || [] : [], // Only for sub-tasks
+      assignedToUids: isSubTask ? (data as SubTaskFormValues).assignedToUids || [] : [],
+      assignedToNames: isSubTask ? assignedToNamesForPayload || [] : [],
     };
     
-    // For main tasks, ensure certain fields are not sent or are default, as they are not editable here
     if (!isSubTask) {
       delete taskPayload.description;
       delete taskPayload.dueDate;
       delete taskPayload.assignedToUids;
       delete taskPayload.assignedToNames;
-      // Main task status is not set by this form, it's derived or fixed
-      // delete taskPayload.status; // Status 'To Do' is already set as default for mainTaskSchema
     }
 
-
     try {
-      if (task) { // Editing existing task
+      if (task) {
         await updateTask(task.id, user.uid, taskPayload, user.role);
         toast({ title: 'Task Updated', description: `"${data.name}" has been updated.` });
-      } else { // Creating new task
+      } else {
         await createTask(projectId, user.uid, taskPayload);
         toast({ title: 'Task Created', description: `"${data.name}" has been added.` });
       }
 
       if (onFormSuccess) {
         onFormSuccess();
-      } else { // Default navigation if no specific callback
-        if (taskPayload.parentId) { // Nav back to parent task (main task details page)
+      } else {
+        if (taskPayload.parentId) {
           router.push(`/projects/${projectId}/tasks/${taskPayload.parentId}`);
-        } else { // Nav back to project details page
+        } else {
           router.push(`/projects/${projectId}`);
         }
       }
-      router.refresh(); // Ensure data is fresh on the navigated page
+      router.refresh();
     } catch (error: any) {
       toast({
         title: task ? 'Update Failed' : 'Creation Failed',
@@ -187,7 +196,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 </FormItem>
               )}
             />
-            {isSubTask && ( // Fields specific to sub-tasks
+            {isSubTask && (
               <>
                 <FormField
                   control={form.control}
@@ -262,27 +271,27 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 </div>
                 <Controller
                   control={form.control}
-                  name="assignedToUids" // This is an array
+                  name="assignedToUids"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign to Supervisors</FormLabel>
-                      {supervisors.length === 0 && !loading && <p className="text-sm text-muted-foreground">No supervisors available or still loading...</p>}
+                      <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
+                      {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available or still loading...</p>}
                       <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                        {supervisors.map(supervisor => (
-                          <FormItem key={supervisor.uid} className="flex flex-row items-start space-x-3 space-y-0">
+                        {assignableUsers.map(assignableUser => (
+                          <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
                             <FormControl>
                                <Checkbox
-                                checked={field.value?.includes(supervisor.uid)}
+                                checked={field.value?.includes(assignableUser.uid)}
                                 onCheckedChange={(checked) => {
                                   const currentUids = field.value || [];
                                   return checked
-                                    ? field.onChange([...currentUids, supervisor.uid])
-                                    : field.onChange(currentUids.filter((uid) => uid !== supervisor.uid));
+                                    ? field.onChange([...currentUids, assignableUser.uid])
+                                    : field.onChange(currentUids.filter((uid) => uid !== assignableUser.uid));
                                 }}
                               />
                             </FormControl>
                             <FormLabel className="font-normal">
-                              {supervisor.displayName} ({supervisor.email})
+                              {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
                             </FormLabel>
                           </FormItem>
                         ))}
