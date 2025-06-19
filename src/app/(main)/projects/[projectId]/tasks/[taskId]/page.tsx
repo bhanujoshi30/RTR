@@ -276,14 +276,15 @@ export default function TaskDetailsPage() {
                 <div><h4 className="font-semibold">Status:</h4><p>{task.status}</p></div>
                 {task.assignedToName && (
                   <div>
-                    <h4 className="font-semibold flex items-center">
-                      <UserIcon className="mr-2 h-4 w-4 text-muted-foreground"/>
-                      Assigned To:
-                    </h4>
+                    <h4 className="font-semibold">Assigned To:</h4>
                     <p>{task.assignedToName}</p>
                   </div>
                 )}
-                <div><h4 className="font-semibold">Created:</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
+                <div>
+                  <h4 className="font-semibold">Created By (UID):</h4>
+                  <p className="text-xs text-muted-foreground">{task.ownerUid}</p>
+                </div>
+                <div><h4 className="font-semibold">Created At:</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
                 {task.dueDate && (<div><h4 className="font-semibold">Due Date:</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}
               </CardContent>
             </Card>
@@ -303,6 +304,8 @@ export default function TaskDetailsPage() {
   );
 }
     
+    
+
     
 
     
