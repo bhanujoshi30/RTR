@@ -7,9 +7,9 @@ import { FolderPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project, Issue as AppIssue } from '@/types'; // Renamed Issue to AppIssue
+import type { Project } from '@/types';
 import { getAllTasksAssignedToUser } from '@/services/taskService';
-import { getAllIssuesAssignedToUser } from '@/services/issueService'; // Import new service
+import { getAllIssuesAssignedToUser } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 
@@ -20,11 +20,11 @@ export default function DashboardPage() {
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
   const isSupervisor = user?.role === 'supervisor';
-  const isAdminOrOwner = !isSupervisor && user;
+  const isAdminOrOwner = !isSupervisor && user; // Simplified to "not supervisor and is a user"
 
   useEffect(() => {
     const fetchDashboardData = async () => {
-      console.log('DashboardPage: fetchDashboardData called. Auth Loading:', authLoading, 'User:', user ? `${user.displayName || user.email} (Role: ${user.role}, UID: ${user.uid})` : 'null (before full user object resolution or not logged in)');
+      console.log('DashboardPage: fetchDashboardData called. Auth Loading:', authLoading, 'User:', user ? `${user.displayName || user.email} (Role: ${user.role}, UID: ${user.uid})` : 'null');
       if (authLoading || !user) {
         if (!authLoading && !user) {
             console.log('DashboardPage: Auth done, no user. Stopping dashboard loading.');
@@ -39,10 +39,10 @@ export default function DashboardPage() {
       try {
         if (isSupervisor) {
           console.log(`DashboardPage: User is a supervisor (UID: ${user.uid}). Fetching assigned tasks and issues.`);
-          const assignedTasks = await getAllTasksAssignedToUser(user.uid);
+          const assignedTasks = await getAllTasksAssignedToUser(user.uid); // Expects tasks with assignedToUids array
           console.log('DashboardPage: Supervisor - Fetched assignedTasks:', assignedTasks);
           
-          const assignedIssues = await getAllIssuesAssignedToUser(user.uid);
+          const assignedIssues = await getAllIssuesAssignedToUser(user.uid); // Expects issues with assignedToUids array
           console.log('DashboardPage: Supervisor - Fetched assignedIssues:', assignedIssues);
 
           const projectIdsFromTasks = assignedTasks.map(task => task.projectId).filter(id => !!id);
@@ -88,7 +88,6 @@ export default function DashboardPage() {
     );
   }
 
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -107,4 +106,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-

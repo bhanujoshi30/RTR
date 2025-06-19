@@ -1,11 +1,11 @@
 
 "use client";
 
-import type { Issue, IssueProgressStatus, IssueSeverity } from '@/types';
+import type { Issue, IssueProgressStatus, IssueSeverity, UserRole } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Edit2, Trash2, User, CheckSquare, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle } from 'lucide-react'; // Changed User to Users
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateIssueStatus, deleteIssue } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
@@ -28,9 +28,8 @@ import { useAuth } from '@/hooks/useAuth';
 interface IssueCardProps {
   issue: Issue;
   projectId: string;
-  taskId: string;
+  taskId: string; // Parent SubTask ID
   onIssueUpdated: () => void;
-  canManageIssue?: boolean; 
 }
 
 export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCardProps) {
@@ -38,20 +37,14 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
   const [showEditModal, setShowEditModal] = useState(false);
   const { user } = useAuth();
 
-  let canEditOrDeleteThisIssue = false;
-  let canChangeStatusOfThisIssue = false;
+  // Edit/Delete: Only issue owner.
+  const canEditOrDeleteThisIssue = user && issue.ownerUid === user.uid;
 
-  if (user) {
-    const isOwnerOfIssue = issue.ownerUid === user.uid;
-    const isSupervisorAssignedToIssue = user.role === 'supervisor' && issue.assignedToUid === user.uid;
-
-    if (isOwnerOfIssue) {
-      canEditOrDeleteThisIssue = true;
-      canChangeStatusOfThisIssue = true;
-    } else if (isSupervisorAssignedToIssue) {
-      canChangeStatusOfThisIssue = true;
-    }
-  }
+  // Change Status: Issue owner OR any supervisor assigned to this specific issue.
+  const canChangeStatusOfThisIssue = user && (
+    issue.ownerUid === user.uid ||
+    (user.role === 'supervisor' && issue.assignedToUids?.includes(user.uid))
+  );
 
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
     if (!canChangeStatusOfThisIssue) {
@@ -63,7 +56,8 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
         return;
     }
     try {
-      await updateIssueStatus(issue.id, user.uid, newStatus, issue.assignedToUid, issue.assignedToName);
+      // updateIssueStatus doesn't take assignees as direct params anymore for this simple status change.
+      await updateIssueStatus(issue.id, user.uid, newStatus);
       toast({ title: 'Issue Updated', description: `Status of "${issue.title}" changed to ${newStatus}.` });
       onIssueUpdated();
     } catch (error) {
@@ -103,6 +97,10 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
     return 'bg-gray-500 hover:bg-gray-500 text-white'; // Closed
   };
 
+  const displayAssignedNames = issue.assignedToNames && issue.assignedToNames.length > 0 
+    ? issue.assignedToNames.join(', ') 
+    : 'N/A';
+
   return (
     <Card className="shadow-md transition-shadow hover:shadow-lg">
       <CardHeader className="pb-2">
@@ -135,10 +133,10 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
               </span>
             )}
           </div>
-          {issue.assignedToName && ( 
+          {issue.assignedToNames && issue.assignedToNames.length > 0 && ( 
             <div className="flex items-center">
-              <User className="mr-1.5 h-3.5 w-3.5" />
-              Assigned to: {issue.assignedToName}
+              <Users className="mr-1.5 h-3.5 w-3.5" />
+              Assigned to: {displayAssignedNames}
             </div>
           )}
         </div>

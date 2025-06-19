@@ -2,11 +2,11 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
-import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser } from '@/types'; // Renamed User to AppUser
+import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,6 +14,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from "@/components/ui/checkbox";
 import { CalendarIcon, Save, Loader2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -29,7 +30,7 @@ const issueSchema = z.object({
   description: z.string().max(1000).optional(),
   severity: z.enum(issueSeverities),
   status: z.enum(issueProgressStatuses),
-  assignedToUid: z.string({ required_error: "Assignee is required" }).min(1, "Assignee is required"),
+  assignedToUids: z.array(z.string()).optional().default([]),
   endDate: z.date().optional().nullable(),
 });
 
@@ -37,7 +38,7 @@ type IssueFormValues = z.infer<typeof issueSchema>;
 
 interface IssueFormProps {
   projectId: string;
-  taskId: string;
+  taskId: string; // This is the parent SubTask ID
   issue?: Issue;
   onFormSuccess: () => void;
 }
@@ -46,7 +47,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
-  const [supervisors, setSupervisors] = useState<AppUser[]>([]); // Renamed User to AppUser
+  const [supervisors, setSupervisors] = useState<AppUser[]>([]);
 
   const form = useForm<IssueFormValues>({
     resolver: zodResolver(issueSchema),
@@ -55,7 +56,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       description: issue?.description || '',
       severity: issue?.severity || 'Normal',
       status: issue?.status || 'Open',
-      assignedToUid: issue?.assignedToUid || '',
+      assignedToUids: issue?.assignedToUids || [],
       endDate: issue?.endDate || null,
     },
   });
@@ -69,7 +70,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         console.error("Failed to fetch supervisors for IssueForm:", error);
         toast({
           title: "Error",
-          description: "Could not load list of supervisors. Please ensure they are set up correctly.",
+          description: "Could not load list of supervisors.",
           variant: "destructive"
         });
       }
@@ -88,18 +89,23 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     }
 
     setLoading(true);
-    const selectedSupervisor = supervisors.find(s => s.uid === data.assignedToUid);
-    const assignedToName = selectedSupervisor?.displayName || undefined;
+    let assignedToNames: string[] | undefined = undefined;
+    if (data.assignedToUids && data.assignedToUids.length > 0) {
+      assignedToNames = data.assignedToUids.map(uid => {
+        const supervisor = supervisors.find(s => s.uid === uid);
+        return supervisor?.displayName || uid;
+      });
+    }
 
     const issueDataPayload = {
       ...data,
-      assignedToName: assignedToName, // Add name for display convenience
+      assignedToNames: assignedToNames || [],
       endDate: data.endDate ? data.endDate : null,
     };
 
     try {
       if (issue) {
-        await updateIssue(issue.id, user.uid, issueDataPayload);
+        await updateIssue(issue.id, user.uid, taskId, issueDataPayload);
         toast({ title: 'Issue Updated', description: `"${data.title}" has been updated.` });
       } else {
         await createIssue(projectId, taskId, user.uid, issueDataPayload);
@@ -192,25 +198,33 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             )}
           />
         </div>
-        <FormField
+        <Controller
           control={form.control}
-          name="assignedToUid"
+          name="assignedToUids"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assigned To</FormLabel>
-              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a supervisor" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {supervisors.length === 0 && <SelectItem value="loading" disabled>Loading supervisors...</SelectItem>}
-                  {supervisors.map(supervisor => (
-                    <SelectItem key={supervisor.uid} value={supervisor.uid}>{supervisor.displayName}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assigned To Supervisors</FormLabel>
+              {supervisors.length === 0 && <p className="text-sm text-muted-foreground">Loading supervisors...</p>}
+               <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                {supervisors.map(supervisor => (
+                  <FormItem key={supervisor.uid} className="flex flex-row items-start space-x-3 space-y-0">
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value?.includes(supervisor.uid)}
+                        onCheckedChange={(checked) => {
+                          const currentUids = field.value || [];
+                          return checked
+                            ? field.onChange([...currentUids, supervisor.uid])
+                            : field.onChange(currentUids.filter((uid) => uid !== supervisor.uid));
+                        }}
+                      />
+                    </FormControl>
+                    <FormLabel className="font-normal">
+                      {supervisor.displayName} ({supervisor.email})
+                    </FormLabel>
+                  </FormItem>
+                ))}
+              </div>
               <FormMessage />
             </FormItem>
           )}

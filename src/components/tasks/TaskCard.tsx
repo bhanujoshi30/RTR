@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User } from 'lucide-react'; 
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users } from 'lucide-react'; 
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateTaskStatus, deleteTask, getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
 import { useToast } from '@/hooks/use-toast';
@@ -28,8 +28,8 @@ import { useAuth } from '@/hooks/useAuth';
 interface TaskCardProps {
   task: Task;
   onTaskUpdated: () => void;
-  isMainTaskView?: boolean; // If true, this card represents a main task in a list of main tasks
-  isSubTaskView?: boolean; // If true, this card represents a sub-task in a list of sub-tasks
+  isMainTaskView?: boolean; 
+  isSubTaskView?: boolean; 
 }
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
@@ -41,14 +41,12 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   const [subTaskCountLabel, setSubTaskCountLabel] = useState("Sub-tasks");
   const { user } = useAuth(); 
 
-  const isActuallyMainTask = !task.parentId; // More reliable way to check if it's a main task
+  const isActuallyMainTask = !task.parentId; 
   const isSupervisor = user?.role === 'supervisor';
   
-  // Permissions for editing/deleting the task itself
   const canFullyEditOrDelete = user && task.ownerUid === user.uid; 
 
-  // Permissions for changing status of a sub-task
-  const isAssignedToThisSubTask = !isActuallyMainTask && task.assignedToUid === user?.uid;
+  const isAssignedToThisSubTask = !isActuallyMainTask && task.assignedToUids?.includes(user?.uid || '');
   const canChangeSubTaskStatus = user && (task.ownerUid === user.uid || (isSupervisor && isAssignedToThisSubTask));
 
   useEffect(() => {
@@ -56,12 +54,10 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
       const fetchCount = async () => {
         try {
           if (isSupervisor && task.ownerUid !== user.uid) {
-            // Supervisor viewing a main task they don't own: count sub-tasks *assigned to them*
             const assignedSubtasks = await getAssignedSubTasksForUser(task.id, user.uid);
             setSubTaskCount(assignedSubtasks.length);
             setSubTaskCountLabel(`Sub-task${assignedSubtasks.length !== 1 ? 's' : ''} (assigned to you)`);
           } else {
-            // Owner or admin viewing a main task: count all sub-tasks
             const allSubtasks = await getSubTasks(task.id);
             setSubTaskCount(allSubtasks.length);
             setSubTaskCountLabel(`${allSubtasks.length} Sub-task${allSubtasks.length !== 1 ? 's' : ''}`);
@@ -82,7 +78,7 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
 
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
-    if (isActuallyMainTask || !user) { // Main task status is not directly mutable here
+    if (isActuallyMainTask || !user) { 
       toast({ title: 'Info', description: 'Main task status is derived and not directly set here.'});
       return;
     }
@@ -91,6 +87,7 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
       return;
     }
     try {
+      // For updateTaskStatus, we're updating a sub-task. The service function needs to know the user's role.
       await updateTaskStatus(task.id, user.uid, newStatus, user.role);
       toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
       onTaskUpdated();
@@ -131,13 +128,12 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   };
   
   const handleEditTask = () => {
-    // Owner can edit anything. Supervisor can only edit assigned sub-tasks (and only certain fields, handled by TaskForm/updateTask)
-    if (isActuallyMainTask) { // Editing a Main Task
-        if (!canFullyEditOrDelete) { // Only owner can edit main task details
+    if (isActuallyMainTask) { 
+        if (!canFullyEditOrDelete) { 
              toast({ title: 'Permission Denied', description: 'Only the task owner can edit main task details.', variant: 'destructive'});
             return;
         }
-    } else { // Editing a Sub-Task
+    } else { 
         if (!canFullyEditOrDelete && !(isSupervisor && isAssignedToThisSubTask)) {
             toast({ title: 'Permission Denied', description: 'You do not have permission to edit this sub-task.', variant: 'destructive'});
             return;
@@ -147,9 +143,8 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
   };
 
   const cardIcon = isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />;
-  // Determine if edit button should be shown at all
   const showEditButton = canFullyEditOrDelete || (isSupervisor && isAssignedToThisSubTask && !isActuallyMainTask);
-
+  const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
 
   return (
     <Card className="shadow-md transition-shadow hover:shadow-lg">
@@ -185,10 +180,10 @@ export function TaskCard({ task, onTaskUpdated, isMainTaskView = false, isSubTas
               </span>
             )}
           </div>
-          {!isActuallyMainTask && task.assignedToName && (
+          {!isActuallyMainTask && task.assignedToNames && task.assignedToNames.length > 0 && (
             <div className="flex items-center text-xs text-muted-foreground">
-              <User className="mr-1.5 h-3.5 w-3.5" />
-              Assigned to: {task.assignedToName}
+              <Users className="mr-1.5 h-3.5 w-3.5" />
+              Assigned to: {displayAssignedNames}
             </div>
           )}
         </div>

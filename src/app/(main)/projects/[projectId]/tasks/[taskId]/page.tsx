@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getTaskById, deleteTask } from '@/services/taskService';
 import { getUserDisplayName } from '@/services/userService'; 
-import type { Task } from '@/types';
+import type { Task, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +15,7 @@ import { SubTaskList } from '@/components/tasks/SubTaskList';
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, User } from 'lucide-react';
+import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, Users } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -25,26 +25,28 @@ export default function TaskDetailsPage() {
   const router = useRouter();
   const { toast } = useToast();
   const projectId = params.projectId as string;
-  const taskId = params.taskId as string;
+  const taskId = params.taskId as string; // Can be Main Task ID or Sub-task ID
 
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const [showAddEditTaskModal, setShowAddEditTaskModal] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | undefined | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); // For editing the current task (main or sub)
   const [ownerDisplayName, setOwnerDisplayName] = useState<string | null>(null);
   const [isFetchingOwnerName, setIsFetchingOwnerName] = useState(false);
 
   const isSupervisor = user?.role === 'supervisor';
   const isMainTask = task && !task.parentId;
   const isSubTask = task && !!task.parentId;
-  const isAssignedToCurrentUserSupervisor = isSubTask && isSupervisor && task?.assignedToUid === user?.uid;
+  
   const isOwner = user && task?.ownerUid === user.uid;
+  const isAssignedToCurrentUserSupervisor = isSubTask && isSupervisor && task?.assignedToUids?.includes(user?.uid || '');
 
-  const canEditCurrentTask = isOwner || (isAssignedToCurrentUserSupervisor && !isMainTask);
-  const canDeleteCurrentTask = isOwner;
-  const canAddSubTask = isOwner && isMainTask;
+  // Permissions for the current task being viewed (which could be a main task or a sub-task)
+  const canEditCurrentTask = isOwner || (isAssignedToCurrentUserSupervisor && !isMainTask); // Supervisor can edit assigned sub-tasks
+  const canDeleteCurrentTask = isOwner; // Only owner can delete any task
+  const canAddSubTask = isOwner && isMainTask; // Only owner can add sub-tasks to a main task
 
   const fetchTaskDetails = async () => {
     if (authLoading || !user || !taskId) return;
@@ -53,7 +55,7 @@ export default function TaskDetailsPage() {
       setIsFetchingOwnerName(false);
       setOwnerDisplayName(null);
 
-      const fetchedTask = await getTaskById(taskId, user.uid, user.role);
+      const fetchedTask = await getTaskById(taskId, user.uid, user.role as UserRole);
       if (fetchedTask && fetchedTask.projectId === projectId) {
         setTask(fetchedTask);
         if (fetchedTask.ownerUid) {
@@ -62,7 +64,7 @@ export default function TaskDetailsPage() {
             .then(name => setOwnerDisplayName(name))
             .catch(err => {
               console.error("Failed to fetch owner display name:", err);
-              setOwnerDisplayName(fetchedTask.ownerUid); // Fallback to UID
+              setOwnerDisplayName(fetchedTask.ownerUid); 
             })
             .finally(() => setIsFetchingOwnerName(false));
         }
@@ -143,6 +145,10 @@ export default function TaskDetailsPage() {
 
   const backButtonPath = isSubTask ? `/projects/${projectId}/tasks/${task.parentId}` : `/projects/${projectId}`;
   const backButtonText = isSubTask ? "Back to Main Task" : "Back to Project";
+  const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 
+    ? task.assignedToNames.join(', ') 
+    : 'N/A';
+
 
   return (
     <div className="space-y-8">
@@ -179,9 +185,13 @@ export default function TaskDetailsPage() {
                           {isSubTask ? "Modify the details of this sub-task." : "Update the name or details of this main task."}
                       </DialogDescription>
                     </DialogHeader>
-                    {editingTask && user && (!isSupervisor || isOwner) && <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />}
-                    {editingTask && user && isAssignedToCurrentUserSupervisor && (
-                        <p className="p-4 text-sm text-muted-foreground">Supervisors can update task status via the task card or list view. For other edits, please contact the project owner.</p>
+                    {/* For main task, supervisor cannot edit (unless owner). For subtask, supervisor can edit if assigned. */}
+                    {editingTask && user && (isOwner || (isSubTask && isAssignedToCurrentUserSupervisor)) && (
+                        <TaskForm projectId={projectId} task={editingTask} parentId={editingTask.parentId} onFormSuccess={handleTaskFormSuccess} />
+                    )}
+                    {/* Message for supervisor trying to edit main task they don't own */}
+                    {editingTask && user && isSupervisor && isMainTask && !isOwner && (
+                        <p className="p-4 text-sm text-muted-foreground">Supervisors cannot edit main task details unless they are the owner. Contact the project owner for changes.</p>
                     )}
                   </DialogContent>
                 </Dialog>
@@ -213,7 +223,7 @@ export default function TaskDetailsPage() {
             <CardDescription className="mt-2 text-lg">{task.description}</CardDescription>
           )}
            {isMainTask && (
-             <CardDescription className="mt-2 text-lg">This is a main task. Manage its sub-tasks below. {isSupervisor && "You will see sub-tasks assigned to you."}</CardDescription>
+             <CardDescription className="mt-2 text-lg">This is a main task. Manage its sub-tasks below. {isSupervisor && "You will see sub-tasks assigned to you if applicable."}</CardDescription>
            )}
         </CardHeader>
         <CardContent>
@@ -251,7 +261,7 @@ export default function TaskDetailsPage() {
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center rounded-lg border bg-card p-6 shadow-sm">
             <h2 className="font-headline text-2xl font-semibold flex items-center">
               <ListChecks className="mr-3 h-7 w-7 text-primary" />
-              Sub-tasks {isSupervisor && "(Assigned to you)"}
+              Sub-tasks {isSupervisor && !isOwner && "(Filtered by assignment where applicable)"}
             </h2>
             {canAddSubTask && (
               <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
@@ -290,10 +300,10 @@ export default function TaskDetailsPage() {
                 <div><h4 className="font-semibold">Name:</h4><p>{task.name}</p></div>
                 {task.description && (<div><h4 className="font-semibold">Description:</h4><p className="whitespace-pre-wrap">{task.description}</p></div>)}
                 <div><h4 className="font-semibold">Status:</h4><p>{task.status}</p></div>
-                {task.assignedToName && (
+                {task.assignedToNames && task.assignedToNames.length > 0 && (
                   <div>
                     <h4 className="font-semibold">Assigned To:</h4>
-                    <p>{task.assignedToName}</p>
+                    <p>{displayAssignedNames}</p>
                   </div>
                 )}
                 <div>
@@ -319,4 +329,3 @@ export default function TaskDetailsPage() {
     </div>
   );
 }
-    
