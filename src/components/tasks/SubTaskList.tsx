@@ -22,9 +22,9 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   const isSupervisor = user?.role === 'supervisor';
 
   const fetchSubTasksData = async () => {
-    console.log('SubTaskList: fetchSubTasksData called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null');
+    console.log('[SubTaskList Debug] fetchSubTasksData called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null');
     if (authLoading || !user || !mainTaskId) {
-      console.log('SubTaskList: Skipping fetch, auth loading, no user, or no mainTaskId.');
+      console.log('[SubTaskList Debug] Skipping fetch, auth loading, no user, or no mainTaskId.');
       if(!authLoading && !user && mainTaskId) setLoading(false); 
       return;
     }
@@ -34,27 +34,33 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
     try {
       // getSubTasks now always fetches ALL sub-tasks for the mainTaskId
       const fetchedSubTasks = await getSubTasks(mainTaskId);
-      console.log('SubTaskList: Fetched sub-tasks:', fetchedSubTasks);
+      console.log('[SubTaskList Debug] Fetched sub-tasks for mainTaskId', mainTaskId, ':', fetchedSubTasks);
       setSubTasks(fetchedSubTasks);
     } catch (err: any) {
-      console.error('SubTaskList: Error fetching sub-tasks:', err);
-      setError(`Failed to load sub-tasks. ${err.message?.includes("index") ? "A database index might be required for sub-tasks (parentId ASC, createdAt ASC). Check console." : (err.message || "Unknown error")}`);
+      console.error('[SubTaskList Debug] Error fetching sub-tasks for mainTaskId', mainTaskId, ':', err);
+      let displayError = `Failed to load sub-tasks. ${err.message || "Unknown error"}`;
+      if (err.message?.toLowerCase().includes("index")) {
+        displayError = `Failed to load sub-tasks. A Firestore query error occurred, likely due to a missing database index. Please check the browser console for detailed error messages from 'taskService' which may include a link to create the required index. Ensure an index on 'tasks' for 'parentId' (ASC) and 'createdAt' (ASC) exists.`;
+      }
+      setError(displayError);
     } finally {
       setLoading(false);
-      console.log('SubTaskList: fetchSubTasksData finished. Loading set to false.');
+      console.log('[SubTaskList Debug] fetchSubTasksData finished for mainTaskId', mainTaskId, '. Loading set to false.');
     }
   };
 
   useEffect(() => {
-    console.log('SubTaskList: useEffect triggered. mainTaskId:', mainTaskId, 'User available:', !!user, 'Auth loading:', authLoading);
-    if (mainTaskId && user && !authLoading) {
-        fetchSubTasksData();
-    } else if (!mainTaskId) {
-        console.warn('SubTaskList: mainTaskId is undefined or null, skipping fetch.');
+    console.log('[SubTaskList Debug] useEffect triggered. mainTaskId:', mainTaskId, 'User available:', !!user, 'Auth loading:', authLoading);
+    if (!mainTaskId) {
+        console.warn('[SubTaskList Debug] mainTaskId is undefined or null, skipping fetch.');
         setLoading(false);
         setError('Cannot load sub-tasks: Main task ID is missing.');
+        return;
+    }
+    if (user && !authLoading) {
+        fetchSubTasksData();
     } else if (!user && !authLoading) {
-        console.warn('SubTaskList: User not available, skipping fetch.');
+        console.warn('[SubTaskList Debug] User not available, skipping fetch.');
         setLoading(false);
         setError('Cannot load sub-tasks: User not authenticated.');
     }
@@ -62,12 +68,12 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   }, [mainTaskId, user, authLoading]);
 
   const onSubTaskUpdated = () => {
-    console.log('SubTaskList: onSubTaskUpdated called, re-fetching sub-tasks.');
+    console.log('[SubTaskList Debug] onSubTaskUpdated called, re-fetching sub-tasks for mainTaskId:', mainTaskId);
     fetchSubTasksData(); 
   };
 
   if (loading) {
-    console.log('SubTaskList: Render - Loading state true.');
+    console.log('[SubTaskList Debug] Render - Loading state true for mainTaskId:', mainTaskId);
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -77,7 +83,7 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   }
 
   if (error) {
-    console.log('SubTaskList: Render - Error state:', error);
+    console.log('[SubTaskList Debug] Render - Error state for mainTaskId:', mainTaskId, 'Error:', error);
     return <p className="text-center text-destructive py-4">{error}</p>;
   }
 
@@ -85,7 +91,7 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
     // The message can be generic as supervisors will see all sub-tasks anyway.
     // Specific assigned work is visible when they drill down into a sub-task's issues.
     const message = "No sub-tasks yet for this main task. Add sub-tasks to get started.";
-    console.log('SubTaskList: Render - No sub-tasks found.');
+    console.log('[SubTaskList Debug] Render - No sub-tasks found for mainTaskId:', mainTaskId);
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <ListChecks className="mx-auto h-12 w-12 text-muted-foreground/50" />
@@ -96,7 +102,7 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
       </div>
     );
   }
-  console.log('SubTaskList: Render - Displaying sub-tasks:', subTasks);
+  console.log('[SubTaskList Debug] Render - Displaying sub-tasks for mainTaskId:', mainTaskId, 'SubTasks:', subTasks);
   return (
     <div className="space-y-4">
       {subTasks.map((subTask) => (
@@ -110,3 +116,4 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
     </div>
   );
 }
+
