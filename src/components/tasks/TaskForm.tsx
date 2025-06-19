@@ -1,13 +1,13 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createTask, updateTask } from '@/services/taskService';
-import type { Task, TaskStatus } from '@/types';
+import type { Task, TaskStatus, User as AppUser } from '@/types'; // Renamed User to AppUser
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,11 +16,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Save, Loader2 } from 'lucide-react';
+import { CalendarIcon, Save, Loader2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { getUsersByRole } from '@/services/userService';
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 
@@ -29,21 +30,24 @@ const subTaskSchema = z.object({
   description: z.string().max(1000).optional(),
   status: z.enum(taskStatuses),
   dueDate: z.date().optional().nullable(),
+  assignedToUid: z.string({ required_error: "Assignee is required" }).min(1, "Assignee is required"),
 });
 
 const mainTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
-  description: z.string().max(1000).optional().nullable().default(null), 
-  status: z.enum(taskStatuses).default('To Do'), 
+  // Fields not applicable to main tasks are omitted or given defaults that won't be user-editable
+  description: z.string().max(1000).optional().nullable().default(null),
+  status: z.enum(taskStatuses).default('To Do'),
   dueDate: z.date().optional().nullable().default(null),
+  assignedToUid: z.string().optional().nullable(), // Not assigned for main tasks
 });
 
 
 interface TaskFormProps {
   projectId: string;
-  task?: Task; 
-  parentId?: string | null; 
-  onFormSuccess?: () => void; 
+  task?: Task;
+  parentId?: string | null;
+  onFormSuccess?: () => void;
 }
 
 export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormProps) {
@@ -51,6 +55,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  const [supervisors, setSupervisors] = useState<AppUser[]>([]); // Renamed User to AppUser
 
   const isSubTask = !!(parentId || task?.parentId);
   const currentSchema = isSubTask ? subTaskSchema : mainTaskSchema;
@@ -61,9 +66,29 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       name: task?.name || '',
       description: isSubTask ? (task?.description || '') : undefined,
       status: isSubTask ? (task?.status || 'To Do') : 'To Do',
-      dueDate: task?.dueDate || null, // task.dueDate is now a JS Date or null
+      dueDate: task?.dueDate || null,
+      assignedToUid: isSubTask ? (task?.assignedToUid || '') : undefined,
     },
   });
+
+  useEffect(() => {
+    if (isSubTask) {
+      const fetchSupervisors = async () => {
+        try {
+          const fetchedSupervisors = await getUsersByRole('supervisor');
+          setSupervisors(fetchedSupervisors);
+        } catch (error) {
+          console.error("Failed to fetch supervisors for TaskForm:", error);
+          toast({
+            title: "Error",
+            description: "Could not load list of supervisors. Please ensure they are set up in the 'users' collection with role 'supervisor'.",
+            variant: "destructive"
+          });
+        }
+      };
+      fetchSupervisors();
+    }
+  }, [isSubTask, toast]);
 
   const onSubmit: SubmitHandler<z.infer<typeof currentSchema>> = async (data) => {
     if (!user) {
@@ -71,31 +96,40 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       return;
     }
     setLoading(true);
-    
+
+    let assignedToName: string | undefined = undefined;
+    if (isSubTask && data.assignedToUid) {
+      const selectedSupervisor = supervisors.find(s => s.uid === data.assignedToUid);
+      assignedToName = selectedSupervisor?.displayName || undefined;
+    }
+
     const taskPayload: any = {
       name: data.name,
-      description: isSubTask ? data.description || '' : '',
-      status: isSubTask ? data.status : 'To Do', 
-      dueDate: (isSubTask && data.dueDate) ? data.dueDate : null, // Pass Date object directly, service will handle conversion
+      description: isSubTask ? data.description || '' : '', // Main tasks don't have user-set descriptions here
+      status: isSubTask ? data.status : 'To Do', // Main tasks default status
+      dueDate: (isSubTask && data.dueDate) ? data.dueDate : null,
       parentId: parentId || task?.parentId || null,
+      assignedToUid: isSubTask ? data.assignedToUid : null,
+      assignedToName: isSubTask ? assignedToName : null,
     };
-    
+
     try {
-      if (task) { 
+      if (task) {
         await updateTask(task.id, user.uid, taskPayload);
         toast({ title: 'Task Updated', description: `"${data.name}" has been updated.` });
-      } else { 
+      } else {
         await createTask(projectId, user.uid, taskPayload);
         toast({ title: 'Task Created', description: `"${data.name}" has been added.` });
       }
-      
+
       if (onFormSuccess) {
         onFormSuccess();
       } else {
-        if (parentId || task?.parentId) { 
-             router.push(`/projects/${projectId}/tasks/${parentId || task?.parentId}`);
-        } else { 
-            router.push(`/projects/${projectId}`);
+        // Default navigation if onFormSuccess is not provided
+        if (parentId || task?.parentId) { // Navigating back to main task after sub-task operation
+          router.push(`/projects/${projectId}/tasks/${parentId || task?.parentId}`);
+        } else { // Navigating back to project after main task operation
+          router.push(`/projects/${projectId}`);
         }
       }
       router.refresh();
@@ -109,9 +143,9 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       setLoading(false);
     }
   };
-  
-  const formTitle = task 
-    ? (isSubTask ? "Edit Sub-task" : "Edit Main Task") 
+
+  const formTitle = task
+    ? (isSubTask ? "Edit Sub-task" : "Edit Main Task")
     : (isSubTask ? "Add New Sub-task" : "New Main Task");
 
   return (
@@ -208,6 +242,29 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                     )}
                   />
                 </div>
+                <FormField
+                  control={form.control}
+                  name="assignedToUid"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assigned To</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a supervisor" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {supervisors.length === 0 && <SelectItem value="loading" disabled>Loading supervisors...</SelectItem>}
+                          {supervisors.map(supervisor => (
+                            <SelectItem key={supervisor.uid} value={supervisor.uid}>{supervisor.displayName}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </>
             )}
           </CardContent>

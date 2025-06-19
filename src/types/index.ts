@@ -1,9 +1,11 @@
 
 import type { User as FirebaseUser } from 'firebase/auth';
-// Remove Timestamp import from here if not used elsewhere, or keep if other raw Timestamps are needed.
+
 // For client-facing types, we'll use JavaScript Date objects.
 
-export interface User extends FirebaseUser {}
+export interface User extends FirebaseUser {
+  role?: 'supervisor' | 'admin' | 'member'; // Added role
+}
 
 export type ProjectStatus = 'Not Started' | 'In Progress' | 'Completed';
 export type TaskStatus = 'To Do' | 'In Progress' | 'Completed';
@@ -16,7 +18,7 @@ export interface Project {
   name: string;
   description?: string;
   ownerUid: string;
-  createdAt: Date; // Changed from Timestamp
+  createdAt: Date;
   status: ProjectStatus;
   progress: number; // 0-100
 }
@@ -24,26 +26,29 @@ export interface Project {
 export interface Task {
   id: string;
   projectId: string;
-  parentId?: string | null; 
+  parentId?: string | null;
   name: string;
   description?: string;
-  status: TaskStatus; 
-  createdAt: Date; // Changed from Timestamp
-  dueDate?: Date | null; // Changed from Timestamp
+  status: TaskStatus;
+  createdAt: Date;
+  dueDate?: Date | null;
   ownerUid: string;
+  assignedToUid?: string; // Added for sub-tasks
+  assignedToName?: string; // Added for sub-tasks
 }
 
 export interface Issue {
   id: string;
   projectId: string;
-  taskId: string; 
+  taskId: string;
   ownerUid: string;
   title: string;
   description?: string;
   severity: IssueSeverity;
   status: IssueProgressStatus;
-  assignedToName?: string;
-  endDate?: Date | null; // Changed from Timestamp
-  createdAt: Date; // Changed from Timestamp
-  updatedAt?: Date; // Changed from Timestamp
+  assignedToUid?: string; // Changed from assignedToName to assignedToUid
+  assignedToName?: string; // Added for consistency
+  endDate?: Date | null;
+  createdAt: Date;
+  updatedAt?: Date;
 }

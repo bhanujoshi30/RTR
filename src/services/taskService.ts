@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/firebase'; 
+import { db } from '@/lib/firebase';
 import type { Task, TaskStatus } from '@/types';
 import {
   collection,
@@ -18,16 +18,18 @@ import {
   getDoc,
   writeBatch,
 } from 'firebase/firestore';
-import { deleteIssuesForTask } from './issueService'; 
+import { deleteIssuesForTask } from './issueService';
 
 const tasksCollection = collection(db, 'tasks');
 
 interface CreateTaskData {
   name: string;
-  description?: string; 
-  status?: TaskStatus;    
-  dueDate?: Date | null; // Changed from Timestamp | Date | null
+  description?: string;
+  status?: TaskStatus;
+  dueDate?: Date | null;
   parentId?: string | null;
+  assignedToUid?: string | null; // Added
+  assignedToName?: string | null; // Added
 }
 
 const mapDocumentToTask = (docSnapshot: any): Task => {
@@ -42,7 +44,7 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
 
 export const createTask = async (
   projectId: string,
-  userUid: string, 
+  userUid: string,
   taskData: CreateTaskData
 ): Promise<string> => {
   if (!userUid) throw new Error('User not authenticated for creating task');
@@ -57,7 +59,7 @@ export const createTask = async (
   if (!projectSnap.exists() || projectSnap.data()?.ownerUid !== userUid) {
     throw new Error('Project not found or access denied for creating task.');
   }
-  
+
   const newTaskPayload: any = {
     projectId,
     ownerUid: userUid,
@@ -65,19 +67,24 @@ export const createTask = async (
     parentId: taskData.parentId || null,
     createdAt: serverTimestamp() as Timestamp,
     description: taskData.description || '',
-    status: taskData.status || 'To Do', 
+    status: taskData.status || 'To Do',
+    assignedToUid: taskData.assignedToUid || null,
+    assignedToName: taskData.assignedToName || null,
   };
 
   if (taskData.dueDate) {
-    newTaskPayload.dueDate = Timestamp.fromDate(taskData.dueDate); // Convert Date to Timestamp for saving
+    newTaskPayload.dueDate = Timestamp.fromDate(taskData.dueDate);
   } else {
     newTaskPayload.dueDate = null;
   }
-  
+
+  // Main tasks specifics (no parentId)
   if (!taskData.parentId) {
-    newTaskPayload.status = 'To Do'; 
-    delete newTaskPayload.description; 
-    delete newTaskPayload.dueDate;   
+    newTaskPayload.status = 'To Do'; // Default, not user-editable for main task on creation form
+    delete newTaskPayload.description; // Main tasks don't have description from this form
+    delete newTaskPayload.dueDate;     // Main tasks don't have due date from this form
+    delete newTaskPayload.assignedToUid; // Main tasks are not assigned
+    delete newTaskPayload.assignedToName;
   }
 
   try {
@@ -155,12 +162,14 @@ interface UpdateTaskData {
     name?: string;
     description?: string;
     status?: TaskStatus;
-    dueDate?: Date | null; // Changed from Timestamp | Date | null
+    dueDate?: Date | null;
+    assignedToUid?: string | null; // Added
+    assignedToName?: string | null; // Added
 }
 
 export const updateTask = async (
   taskId: string,
-  userUid: string, 
+  userUid: string,
   updates: UpdateTaskData
 ): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated for updating task');
@@ -171,34 +180,37 @@ export const updateTask = async (
     throw new Error('Task not found or access denied for update.');
   }
 
-  const taskData = taskSnap.data() as Task; // Task type now has Date
-  const updatePayload: any = { ...updates };
+  const taskDataFromSnap = taskSnap.data();
+  const updatePayload: any = { ...updates, updatedAt: serverTimestamp() as Timestamp };
+
+  if (updates.dueDate !== undefined) { // Allow explicitly setting to null
+    updatePayload.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
+  }
   
-  if (updates.dueDate) {
-    updatePayload.dueDate = Timestamp.fromDate(updates.dueDate); // Convert Date to Timestamp for saving
-  } else if (updates.dueDate === null) {
-     updatePayload.dueDate = null;
+  if (updates.assignedToUid !== undefined) {
+    updatePayload.assignedToUid = updates.assignedToUid || null;
+    updatePayload.assignedToName = updates.assignedToName || null;
   }
 
 
-  // For main tasks (no parentId), only name updates are typically allowed through this specific flow.
-  // The check for taskData.parentId (which should now be on the original Firestore data before mapping)
-  // or rather on the taskSnap.data().parentId is more accurate here.
-  if (!taskSnap.data().parentId) { 
-    const { name, ...otherUpdates } = updates; 
-    const restrictedUpdates: Partial<Pick<Task, 'name'>> = {};
-    if (name !== undefined) restrictedUpdates.name = name;
-    
-    if (Object.keys(otherUpdates).filter(k => k !== 'name' && (otherUpdates as any)[k] !== undefined && k !== 'dueDate').length > 0) { // Allow dueDate to be nullified for main task if logic changes
-       console.warn("Attempting to update restricted fields for a main task. Only 'name' is allowed for main tasks via this specific update path.");
+  // For main tasks (no parentId), only allow name update.
+  if (!taskDataFromSnap.parentId) {
+    const { name, ...otherUpdates } = updates; // Destructure to check if other fields are being sent
+    const mainTaskUpdate: Partial<Pick<Task, 'name'>> & {updatedAt: Timestamp} = {updatedAt: serverTimestamp() as Timestamp};
+    if (name !== undefined) mainTaskUpdate.name = name;
+
+    const allowedKeys: (keyof UpdateTaskData)[] = ['name'];
+    const attemptedUpdates = Object.keys(otherUpdates) as (keyof UpdateTaskData)[];
+    const disallowedUpdates = attemptedUpdates.filter(key => !allowedKeys.includes(key) && (otherUpdates as any)[key] !== undefined);
+
+    if (disallowedUpdates.length > 0) {
+       console.warn(`Attempting to update restricted fields (${disallowedUpdates.join(', ')}) for a main task ${taskId}. Only 'name' is allowed.`);
     }
-    if (Object.keys(restrictedUpdates).length > 0) {
-        await updateDoc(taskDocRef, { ...restrictedUpdates, updatedAt: serverTimestamp() as Timestamp });
-    }
+    await updateDoc(taskDocRef, mainTaskUpdate);
     return;
   }
-  
-  await updateDoc(taskDocRef, { ...updatePayload, updatedAt: serverTimestamp() as Timestamp });
+
+  await updateDoc(taskDocRef, updatePayload);
 };
 
 export const updateTaskStatus = async (taskId: string, userUid: string, status: TaskStatus): Promise<void> => {
@@ -209,7 +221,7 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
   if (!taskSnap.exists() || taskSnap.data().ownerUid !== userUid) {
     throw new Error('Task not found or access denied for status update.');
   }
-  if (taskSnap.data().parentId) { 
+  if (taskSnap.data().parentId) { // Only sub-tasks have user-managed status
     await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
   } else {
     console.warn(`Attempted to update status for main task ${taskId}, which is not directly applicable.`);
@@ -225,18 +237,20 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
     throw new Error('Task not found or access denied for deletion.');
   }
 
-  const taskDataFromSnap = taskSnap.data(); // Get raw data for parentId check
+  const taskDataFromSnap = taskSnap.data();
   const batch = writeBatch(db);
 
   batch.delete(taskDocRef);
-  await deleteIssuesForTask(taskId, userUid); 
+  // Always delete issues associated with this task (whether main or sub)
+  await deleteIssuesForTask(taskId, userUid); // This service handles batching internally if needed, or can be added to this batch
 
-  if (!taskDataFromSnap.parentId) { 
-    const subTasks = await getSubTasks(taskId, userUid); // getSubTasks will return Tasks with Date objects
+  // If it's a main task, also delete its sub-tasks and their issues
+  if (!taskDataFromSnap.parentId) {
+    const subTasks = await getSubTasks(taskId, userUid);
     for (const subTask of subTasks) {
       const subTaskDocRef = doc(db, 'tasks', subTask.id);
       batch.delete(subTaskDocRef);
-      await deleteIssuesForTask(subTask.id, userUid); 
+      await deleteIssuesForTask(subTask.id, userUid); // Ensure issues of sub-tasks are also deleted
     }
   }
 
@@ -257,11 +271,12 @@ export const deleteAllTasksForProject = async (projectId: string, userUid: strin
     where("ownerUid", "==", userUid),
     where("parentId", "==", null)
   );
-  
+
   try {
     const mainTasksSnapshot = await getDocs(mainTasksQuery);
+    // Deleting main tasks will trigger deletion of their sub-tasks and all issues via the modified deleteTask function.
     for (const mainTaskDoc of mainTasksSnapshot.docs) {
-      await deleteTask(mainTaskDoc.id, userUid); 
+      await deleteTask(mainTaskDoc.id, userUid);
     }
   } catch (error) {
     console.error(`Error in deleteAllTasksForProject for projectId ${projectId} and userUid ${userUid}:`, error);

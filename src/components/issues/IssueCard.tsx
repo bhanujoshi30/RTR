@@ -5,7 +5,7 @@ import type { Issue, IssueProgressStatus, IssueSeverity } from '@/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Edit2, Trash2, User, CheckSquare, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Edit2, Trash2, User, CheckSquare, AlertTriangle } from 'lucide-react'; // User icon for assignee
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateIssueStatus, deleteIssue } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
@@ -23,7 +23,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { IssueForm } from './IssueForm';
 import { useState } from 'react';
-import { useAuth } from '@/hooks/useAuth'; 
+import { useAuth } from '@/hooks/useAuth';
 
 interface IssueCardProps {
   issue: Issue;
@@ -35,7 +35,7 @@ interface IssueCardProps {
 export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCardProps) {
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
-  const { user } = useAuth(); 
+  const { user } = useAuth();
 
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
     if (!user) {
@@ -43,6 +43,10 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
       return;
     }
     try {
+      // Pass assignedToUid and assignedToName if they are part of the update,
+      // though updateIssueStatus typically only handles status.
+      // For a simple status update, these aren't needed unless your updateIssueStatus service function expects them.
+      // Assuming updateIssueStatus only needs status:
       await updateIssueStatus(issue.id, user.uid, newStatus);
       toast({ title: 'Issue Updated', description: `Status of "${issue.title}" changed to ${newStatus}.` });
       onIssueUpdated();
@@ -50,7 +54,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
       toast({ title: 'Update Failed', description: 'Could not update issue status.', variant: 'destructive' });
     }
   };
-  
+
   const handleDeleteIssue = async () => {
     if (!user) {
       toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
@@ -111,7 +115,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCar
               </span>
             )}
           </div>
-          {issue.assignedToName && (
+          {issue.assignedToName && ( // Display assignedToName
             <div className="flex items-center">
               <User className="mr-1.5 h-3.5 w-3.5" />
               Assigned to: {issue.assignedToName}

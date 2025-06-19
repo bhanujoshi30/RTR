@@ -1,12 +1,12 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
-import type { Issue, IssueSeverity, IssueProgressStatus } from '@/types';
+import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser } from '@/types'; // Renamed User to AppUser
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,11 +14,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Save, Loader2 } from 'lucide-react';
+import { CalendarIcon, Save, Loader2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth'; 
+import { useAuth } from '@/hooks/useAuth';
+import { getUsersByRole } from '@/services/userService';
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -28,7 +29,7 @@ const issueSchema = z.object({
   description: z.string().max(1000).optional(),
   severity: z.enum(issueSeverities),
   status: z.enum(issueProgressStatuses),
-  assignedToName: z.string().max(100).optional(),
+  assignedToUid: z.string({ required_error: "Assignee is required" }).min(1, "Assignee is required"),
   endDate: z.date().optional().nullable(),
 });
 
@@ -44,7 +45,8 @@ interface IssueFormProps {
 export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const { user } = useAuth(); 
+  const { user } = useAuth();
+  const [supervisors, setSupervisors] = useState<AppUser[]>([]); // Renamed User to AppUser
 
   const form = useForm<IssueFormValues>({
     resolver: zodResolver(issueSchema),
@@ -53,10 +55,27 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       description: issue?.description || '',
       severity: issue?.severity || 'Normal',
       status: issue?.status || 'Open',
-      assignedToName: issue?.assignedToName || '',
-      endDate: issue?.endDate || null, // issue.endDate is now a JS Date or null
+      assignedToUid: issue?.assignedToUid || '',
+      endDate: issue?.endDate || null,
     },
   });
+
+  useEffect(() => {
+    const fetchSupervisors = async () => {
+      try {
+        const fetchedSupervisors = await getUsersByRole('supervisor');
+        setSupervisors(fetchedSupervisors);
+      } catch (error) {
+        console.error("Failed to fetch supervisors for IssueForm:", error);
+        toast({
+          title: "Error",
+          description: "Could not load list of supervisors. Please ensure they are set up correctly.",
+          variant: "destructive"
+        });
+      }
+    };
+    fetchSupervisors();
+  }, [toast]);
 
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
     if (!user) {
@@ -69,9 +88,13 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     }
 
     setLoading(true);
+    const selectedSupervisor = supervisors.find(s => s.uid === data.assignedToUid);
+    const assignedToName = selectedSupervisor?.displayName || undefined;
+
     const issueDataPayload = {
       ...data,
-      endDate: data.endDate ? data.endDate : null, 
+      assignedToName: assignedToName, // Add name for display convenience
+      endDate: data.endDate ? data.endDate : null,
     };
 
     try {
@@ -171,13 +194,23 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         </div>
         <FormField
           control={form.control}
-          name="assignedToName"
+          name="assignedToUid"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Assigned To (Optional)</FormLabel>
-              <FormControl>
-                <Input placeholder="Name of person assigned" {...field} value={field.value ?? ''}/>
-              </FormControl>
+              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assigned To</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a supervisor" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {supervisors.length === 0 && <SelectItem value="loading" disabled>Loading supervisors...</SelectItem>}
+                  {supervisors.map(supervisor => (
+                    <SelectItem key={supervisor.uid} value={supervisor.uid}>{supervisor.displayName}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}

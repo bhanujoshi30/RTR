@@ -26,8 +26,9 @@ interface CreateIssueData {
   description?: string;
   severity: IssueSeverity;
   status: IssueProgressStatus;
-  assignedToName?: string;
-  endDate?: Date | null; // Changed from Date | null
+  assignedToUid?: string; // Added
+  assignedToName?: string; // Added
+  endDate?: Date | null;
 }
 
 const mapDocumentToIssue = (docSnapshot: any): Issue => {
@@ -48,15 +49,19 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
   const taskDocRef = doc(db, 'tasks', taskId);
   const taskSnap = await getDoc(taskDocRef);
   if (!taskSnap.exists() || taskSnap.data()?.projectId !== projectId || taskSnap.data()?.ownerUid !== userUid) {
-    throw new Error('Task not found or access denied.');
+    throw new Error('Task not found or access denied for creating an issue against it.');
   }
+  // Ensure task is a sub-task (has a parentId) if that's a strict rule, or allow issues on main tasks too
+  // For now, allowing issues on any task type that passes ownership check.
 
   const newIssuePayload = {
     ...issueData,
     projectId,
     taskId,
     ownerUid: userUid,
-    endDate: issueData.endDate ? Timestamp.fromDate(issueData.endDate) : null, // Convert Date to Timestamp
+    assignedToUid: issueData.assignedToUid || null,
+    assignedToName: issueData.assignedToName || null,
+    endDate: issueData.endDate ? Timestamp.fromDate(issueData.endDate) : null,
     createdAt: serverTimestamp() as Timestamp,
     updatedAt: serverTimestamp() as Timestamp,
   };
@@ -75,11 +80,11 @@ export const getTaskIssues = async (taskId: string, userUid: string): Promise<Is
     console.warn('issueService: getTaskIssues called without authenticated user UID.');
     return [];
   }
-  
+
   const q = query(
     issuesCollection,
     where('taskId', '==', taskId),
-    where('ownerUid', '==', userUid),
+    where('ownerUid', '==', userUid), // Ensure user owns the issues they are fetching
     orderBy('createdAt', 'desc')
   );
 
@@ -90,7 +95,7 @@ export const getTaskIssues = async (taskId: string, userUid: string): Promise<Is
   } catch (error: any) {
     console.error('issueService: Error fetching task issues for taskId:', taskId, 'uid:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error("Firestore query for issues requires a composite index. Please create it in the Firebase console. The error message should provide a direct link or details. Fields to index are likely 'taskId' (ASC), 'ownerUid' (ASC), and 'createdAt' (DESC).");
+        console.error("Firestore query for issues requires a composite index. Please create it in the Firebase console. Fields: 'taskId' (ASC), 'ownerUid' (ASC), 'createdAt' (DESC).");
     }
     throw error;
   }
@@ -113,20 +118,21 @@ interface UpdateIssueData {
   description?: string;
   severity?: IssueSeverity;
   status?: IssueProgressStatus;
-  assignedToName?: string;
-  endDate?: Date | null | undefined; // Changed from Date | null | undefined
+  assignedToUid?: string | null; // Added
+  assignedToName?: string | null; // Added
+  endDate?: Date | null | undefined;
 }
 
 export const updateIssue = async (issueId: string, userUid: string, updates: UpdateIssueData): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated');
-  
+
   const issueDocRef = doc(db, 'issues', issueId);
   const issueSnap = await getDoc(issueDocRef);
   if (!issueSnap.exists() || issueSnap.data().ownerUid !== userUid) {
     throw new Error('Issue not found or access denied.');
   }
 
-  const updatePayload: Partial<Omit<Issue, 'id' | 'projectId' | 'taskId' | 'ownerUid' | 'createdAt'>> & { updatedAt: Timestamp } = { // Omit non-updatable fields
+  const updatePayload: Partial<Omit<Issue, 'id' | 'projectId' | 'taskId' | 'ownerUid' | 'createdAt'>> & { updatedAt: Timestamp } = {
     updatedAt: serverTimestamp() as Timestamp,
   };
 
@@ -134,13 +140,18 @@ export const updateIssue = async (issueId: string, userUid: string, updates: Upd
   if (updates.description !== undefined) updatePayload.description = updates.description;
   if (updates.severity !== undefined) updatePayload.severity = updates.severity;
   if (updates.status !== undefined) updatePayload.status = updates.status;
-  if (updates.assignedToName !== undefined) updatePayload.assignedToName = updates.assignedToName;
-  if (updates.endDate !== undefined) { 
-    updatePayload.endDate = updates.endDate ? Timestamp.fromDate(updates.endDate) : null; // Convert Date to Timestamp
-  }
   
+  if (updates.assignedToUid !== undefined) { // Check for undefined to allow setting to null
+    updatePayload.assignedToUid = updates.assignedToUid || null;
+    updatePayload.assignedToName = updates.assignedToName || null;
+  }
+
+  if (updates.endDate !== undefined) {
+    updatePayload.endDate = updates.endDate ? Timestamp.fromDate(updates.endDate) : null;
+  }
+
   try {
-    await updateDoc(issueDocRef, updatePayload as any); // Cast to any to avoid type conflict with Omit
+    await updateDoc(issueDocRef, updatePayload as any);
   } catch (error: any) {
     console.error('issueService: Error updating issue ID:', issueId, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;
@@ -149,7 +160,7 @@ export const updateIssue = async (issueId: string, userUid: string, updates: Upd
 
 export const updateIssueStatus = async (issueId: string, userUid: string, status: IssueProgressStatus): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated');
-  
+
   const issueDocRef = doc(db, 'issues', issueId);
   const issueSnap = await getDoc(issueDocRef);
   if (!issueSnap.exists() || issueSnap.data().ownerUid !== userUid) {
@@ -166,7 +177,7 @@ export const updateIssueStatus = async (issueId: string, userUid: string, status
 
 export const deleteIssue = async (issueId: string, userUid: string): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated');
-  
+
   const issueDocRef = doc(db, 'issues', issueId);
   const issueSnap = await getDoc(issueDocRef);
   if (!issueSnap.exists() || issueSnap.data().ownerUid !== userUid) {
@@ -181,20 +192,25 @@ export const deleteIssue = async (issueId: string, userUid: string): Promise<voi
   }
 };
 
+// This function is used when deleting a task, to clean up its associated issues.
 export const deleteIssuesForTask = async (taskId: string, userUid: string): Promise<void> => {
-  if (!userUid) throw new Error('User not authenticated');
+  if (!userUid) throw new Error('User not authenticated for deleting issues for task');
 
+  // Query issues associated with the task AND owned by the user to ensure permissions.
   const q = query(issuesCollection, where('taskId', '==', taskId), where('ownerUid', '==', userUid));
   const batch = writeBatch(db);
-  
+
   try {
     const querySnapshot = await getDocs(q);
     querySnapshot.forEach(doc => {
       batch.delete(doc.ref);
     });
     await batch.commit();
+    console.log(`issueService: Deleted issues for task ID: ${taskId}`);
   } catch (error: any) {
     console.error('issueService: Error deleting issues for task ID:', taskId, error.message, error.code ? `(${error.code})` : '', error.stack);
-    throw error;
+    // Don't re-throw here if this is part of a larger delete operation like deleting a task,
+    // unless you want the parent operation to fail. For now, log and continue.
+    // throw error; // Optional: re-throw if the calling function should handle it
   }
 };
