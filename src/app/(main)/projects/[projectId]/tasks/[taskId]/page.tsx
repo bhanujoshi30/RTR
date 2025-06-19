@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getTaskById, deleteTask } from '@/services/taskService';
+import { getUserDisplayName } from '@/services/userService'; // Import new function
 import type { Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,7 @@ import { SubTaskList } from '@/components/tasks/SubTaskList';
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, User as UserIcon } from 'lucide-react';
+import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -31,28 +32,43 @@ export default function TaskDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const [showAddEditTaskModal, setShowAddEditTaskModal] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); 
-  
+  const [editingTask, setEditingTask] = useState<Task | undefined | null>(null);
+  const [ownerDisplayName, setOwnerDisplayName] = useState<string | null>(null);
+  const [isFetchingOwnerName, setIsFetchingOwnerName] = useState(false);
+
   const isSupervisor = user?.role === 'supervisor';
   const isMainTask = task && !task.parentId;
   const isSubTask = task && !!task.parentId;
   const isAssignedToCurrentUserSupervisor = isSubTask && isSupervisor && task?.assignedToUid === user?.uid;
   const isOwner = user && task?.ownerUid === user.uid;
 
-  const canEditCurrentTask = isOwner || (isAssignedToCurrentUserSupervisor && !isMainTask); 
-  const canDeleteCurrentTask = isOwner; 
-  const canAddSubTask = isOwner && isMainTask; 
+  const canEditCurrentTask = isOwner || (isAssignedToCurrentUserSupervisor && !isMainTask);
+  const canDeleteCurrentTask = isOwner;
+  const canAddSubTask = isOwner && isMainTask;
 
   const fetchTaskDetails = async () => {
     if (authLoading || !user || !taskId) return;
     try {
       setLoading(true);
-      const fetchedTask = await getTaskById(taskId, user.uid, user.role); 
+      setIsFetchingOwnerName(false);
+      setOwnerDisplayName(null);
+
+      const fetchedTask = await getTaskById(taskId, user.uid, user.role);
       if (fetchedTask && fetchedTask.projectId === projectId) {
         setTask(fetchedTask);
+        if (fetchedTask.ownerUid) {
+          setIsFetchingOwnerName(true);
+          getUserDisplayName(fetchedTask.ownerUid)
+            .then(name => setOwnerDisplayName(name))
+            .catch(err => {
+              console.error("Failed to fetch owner display name:", err);
+              setOwnerDisplayName(fetchedTask.ownerUid); // Fallback to UID
+            })
+            .finally(() => setIsFetchingOwnerName(false));
+        }
       } else {
         setError('Task not found or does not belong to this project.');
-        router.push(`/projects/${projectId}`); 
+        router.push(`/projects/${projectId}`);
       }
     } catch (err: any) {
       console.error('Error fetching task:', err);
@@ -73,10 +89,10 @@ export default function TaskDetailsPage() {
   const handleTaskFormSuccess = () => {
     setShowAddEditTaskModal(false);
     setEditingTask(null);
-    fetchTaskDetails(); 
-    router.refresh(); 
+    fetchTaskDetails();
+    router.refresh();
   };
-  
+
   const handleDeleteCurrentTask = async () => {
     if (!task || !user || !canDeleteCurrentTask) {
         toast({ title: 'Permission Denied', description: 'You do not have permission to delete this task.', variant: 'destructive' });
@@ -85,9 +101,9 @@ export default function TaskDetailsPage() {
     try {
       await deleteTask(task.id, user.uid);
       toast({ title: 'Task Deleted', description: `"${task.name}" has been deleted.` });
-      if (task.parentId) { 
+      if (task.parentId) {
         router.push(`/projects/${projectId}/tasks/${task.parentId}`);
-      } else { 
+      } else {
         router.push(`/projects/${projectId}`);
       }
       router.refresh();
@@ -281,8 +297,13 @@ export default function TaskDetailsPage() {
                   </div>
                 )}
                 <div>
-                  <h4 className="font-semibold">Created By (UID):</h4>
-                  <p className="text-xs text-muted-foreground">{task.ownerUid}</p>
+                  <h4 className="font-semibold">Created By:</h4>
+                  <p>{isFetchingOwnerName ? 'Loading...' : (ownerDisplayName || task.ownerUid)}</p>
+                </div>
+                <div>
+                  <h4 className="font-semibold">Assigned By:</h4>
+                  <p>{isFetchingOwnerName ? 'Loading...' : (ownerDisplayName || task.ownerUid)}</p>
+                  <p className="text-xs text-muted-foreground">(Assuming creator also assigned the task)</p>
                 </div>
                 <div><h4 className="font-semibold">Created At:</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
                 {task.dueDate && (<div><h4 className="font-semibold">Due Date:</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}
@@ -303,9 +324,3 @@ export default function TaskDetailsPage() {
     </div>
   );
 }
-    
-    
-
-    
-
-    

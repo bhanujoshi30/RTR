@@ -23,6 +23,22 @@ const mapDocumentToUser = (docSnap: any): User => {
   };
 };
 
+export const getUserDisplayName = async (uid: string): Promise<string | null> => {
+  if (!uid) return null;
+  try {
+    const userDocRef = doc(db, 'users', uid);
+    const docSnap = await getDoc(userDocRef);
+    if (docSnap.exists()) {
+      return docSnap.data().displayName || uid; // Fallback to UID if no displayName
+    }
+    console.warn(`userService: User document not found for UID ${uid} when fetching display name. Returning UID.`);
+    return uid; // Fallback to UID if user doc not found
+  } catch (error) {
+    console.error(`userService: Error fetching display name for UID ${uid}:`, error);
+    return uid; // Fallback to UID on error
+  }
+};
+
 export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
   console.log(`userService: getUsersByRole called for role: ${role}`);
   const q = query(
@@ -41,7 +57,7 @@ export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
         console.error(`Firestore query for users by role ('${role}') and ordered by 'displayName' requires a composite index. Please create it in the Firebase console. The typical fields would be 'role' (ASC) and 'displayName' (ASC). The error message from Firebase usually provides a direct link to create it.`);
     }
-    throw error; 
+    throw error;
   }
 };
 
@@ -66,7 +82,7 @@ export const getAllUsers = async (requestingUserUid: string): Promise<User[]> =>
 };
 
 export interface UserDocumentData {
-  uid: string; 
+  uid: string;
   email: string;
   displayName: string;
   role: UserRole;
@@ -75,17 +91,17 @@ export interface UserDocumentData {
 }
 
 export const upsertUserDocument = async (
-  requestingUserUid: string, 
+  requestingUserUid: string,
   userData: UserDocumentData
 ): Promise<void> => {
   // Add proper admin check here based on requestingUserUid's role in Firestore
   console.log(`userService: upsertUserDocument called by ${requestingUserUid} for user UID: ${userData.uid}`);
-  const userDocRef = doc(db, 'users', userData.uid); 
+  const userDocRef = doc(db, 'users', userData.uid);
 
   try {
     const userSnap = await getDoc(userDocRef);
     const payload: any = {
-      uid: userData.uid, 
+      uid: userData.uid,
       email: userData.email,
       displayName: userData.displayName,
       role: userData.role,
@@ -99,8 +115,8 @@ export const upsertUserDocument = async (
       payload.createdAt = serverTimestamp() as Timestamp;
       payload.updatedAt = serverTimestamp() as Timestamp;
     }
-    
-    await setDoc(userDocRef, payload, { merge: true }); 
+
+    await setDoc(userDocRef, payload, { merge: true });
     console.log(`userService: User document for UID ${userData.uid} ${userSnap.exists() ? 'updated' : 'created'}.`);
   } catch (error: any) {
     console.error(`userService: Error upserting user document for UID ${userData.uid}:`, error.message, error.code ? `(${error.code})` : '', error.stack);
