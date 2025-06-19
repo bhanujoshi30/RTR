@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getProjectIssues } from '@/services/issueService';
+import { getTaskIssues } from '@/services/issueService'; // Changed from getProjectIssues
 import type { Issue } from '@/types';
 import { IssueCard } from './IssueCard';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { IssueForm } from './IssueForm';
 
 interface IssueListProps {
-  projectId: string;
+  projectId: string; // Keep for context if needed by IssueForm/Card
+  taskId: string;    // New: to fetch issues for a specific task
 }
 
-export function IssueList({ projectId }: IssueListProps) {
+export function IssueList({ projectId, taskId }: IssueListProps) {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -23,14 +24,14 @@ export function IssueList({ projectId }: IssueListProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const fetchIssues = async () => {
-    if (authLoading || !user) return;
+    if (authLoading || !user || !taskId) return; // Ensure taskId is present
     try {
       setLoading(true);
-      const projectIssues = await getProjectIssues(projectId);
-      setIssues(projectIssues);
+      const taskIssues = await getTaskIssues(taskId); // Use getTaskIssues
+      setIssues(taskIssues);
       setError(null);
     } catch (err: any) {
-      console.error('Error fetching issues:', err);
+      console.error('Error fetching issues for task:', taskId, err);
       setError(`Failed to load issues. ${err.message?.includes("index") ? "A database index might be required. Check console for details." : ""}`);
     } finally {
       setLoading(false);
@@ -40,7 +41,7 @@ export function IssueList({ projectId }: IssueListProps) {
   useEffect(() => {
     fetchIssues();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, user, authLoading]);
+  }, [taskId, user, authLoading]); // Depend on taskId
 
   const handleFormSuccess = () => {
     setShowCreateModal(false);
@@ -63,13 +64,13 @@ export function IssueList({ projectId }: IssueListProps) {
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <h2 className="font-headline text-2xl font-semibold flex items-center">
-          <Bug className="mr-3 h-7 w-7 text-primary" />
-          Project Issues
-        </h2>
+        <h3 className="font-headline text-xl font-semibold flex items-center"> {/* Adjusted heading level */}
+          <Bug className="mr-3 h-6 w-6 text-primary" />
+          Task Issues
+        </h3>
         <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
           <DialogTrigger asChild>
-            <Button>
+            <Button size="sm">
               <PlusCircle className="mr-2 h-4 w-4" />
               Add New Issue
             </Button>
@@ -78,7 +79,8 @@ export function IssueList({ projectId }: IssueListProps) {
             <DialogHeader>
               <DialogTitle className="font-headline text-xl">Add New Issue</DialogTitle>
             </DialogHeader>
-            <IssueForm projectId={projectId} onFormSuccess={handleFormSuccess} />
+            {/* Pass taskId to IssueForm */}
+            <IssueForm projectId={projectId} taskId={taskId} onFormSuccess={handleFormSuccess} /> 
           </DialogContent>
         </Dialog>
       </div>
@@ -86,15 +88,15 @@ export function IssueList({ projectId }: IssueListProps) {
       {issues.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
           <Bug className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-3 font-headline text-lg font-semibold">No issues yet</h3>
+          <h3 className="mt-3 font-headline text-lg font-semibold">No issues for this task yet</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add issues to this project to start tracking them.
+            Add issues to this task to start tracking them.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
           {issues.map((issue) => (
-            <IssueCard key={issue.id} issue={issue} projectId={projectId} onIssueUpdated={fetchIssues} />
+            <IssueCard key={issue.id} issue={issue} projectId={projectId} taskId={taskId} onIssueUpdated={fetchIssues} />
           ))}
         </div>
       )}

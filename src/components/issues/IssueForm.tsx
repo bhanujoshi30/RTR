@@ -18,7 +18,7 @@ import { CalendarIcon, Save, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
-import { Timestamp } from 'firebase/firestore';
+// import { Timestamp } from 'firebase/firestore'; // Not needed directly here for form values
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -35,12 +35,13 @@ const issueSchema = z.object({
 type IssueFormValues = z.infer<typeof issueSchema>;
 
 interface IssueFormProps {
-  projectId: string;
+  projectId: string; // Still needed to associate issue with project context
+  taskId: string; // New: to associate issue with a task
   issue?: Issue;
   onFormSuccess: () => void;
 }
 
-export function IssueForm({ projectId, issue, onFormSuccess }: IssueFormProps) {
+export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
 
@@ -60,7 +61,7 @@ export function IssueForm({ projectId, issue, onFormSuccess }: IssueFormProps) {
     setLoading(true);
     const issueDataPayload = {
       ...data,
-      endDate: data.endDate ? data.endDate : null, // Keep as Date or null for service layer
+      endDate: data.endDate ? data.endDate : null, 
     };
 
     try {
@@ -68,7 +69,7 @@ export function IssueForm({ projectId, issue, onFormSuccess }: IssueFormProps) {
         await updateIssue(issue.id, issueDataPayload);
         toast({ title: 'Issue Updated', description: `"${data.title}" has been updated.` });
       } else {
-        await createIssue(projectId, issueDataPayload);
+        await createIssue(projectId, taskId, issueDataPayload); // Pass taskId here
         toast({ title: 'Issue Created', description: `"${data.title}" has been added.` });
       }
       onFormSuccess();

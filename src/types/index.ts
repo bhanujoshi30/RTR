@@ -28,18 +28,19 @@ export interface Task {
   status: TaskStatus;
   createdAt: Timestamp;
   dueDate?: Timestamp;
-  ownerUid: string; // To ensure only project owner can create tasks under their project
+  ownerUid: string; 
 }
 
 export interface Issue {
   id: string;
-  projectId: string;
+  projectId: string; // Keep projectId for potential project-wide issue queries if needed later
+  taskId: string; // New: Issues are now directly linked to a task
   ownerUid: string;
   title: string;
   description?: string;
   severity: IssueSeverity;
   status: IssueProgressStatus;
-  assignedToName?: string; // For simplicity, just a name string for now
+  assignedToName?: string; 
   endDate?: Timestamp | null;
   createdAt: Timestamp;
   updatedAt?: Timestamp;

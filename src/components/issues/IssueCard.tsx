@@ -26,11 +26,12 @@ import { useState } from 'react';
 
 interface IssueCardProps {
   issue: Issue;
-  projectId: string;
+  projectId: string; // Keep for context if IssueForm needs it
+  taskId: string; // For editing context
   onIssueUpdated: () => void;
 }
 
-export function IssueCard({ issue, projectId, onIssueUpdated }: IssueCardProps) {
+export function IssueCard({ issue, projectId, taskId, onIssueUpdated }: IssueCardProps) {
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
 
@@ -123,7 +124,7 @@ export function IssueCard({ issue, projectId, onIssueUpdated }: IssueCardProps) 
               <DialogHeader>
                 <DialogTitle className="font-headline text-xl">Edit Issue</DialogTitle>
               </DialogHeader>
-              <IssueForm projectId={projectId} issue={issue} onFormSuccess={() => { setShowEditModal(false); onIssueUpdated(); }} />
+              <IssueForm projectId={projectId} taskId={taskId} issue={issue} onFormSuccess={() => { setShowEditModal(false); onIssueUpdated(); }} />
             </DialogContent>
           </Dialog>
           <AlertDialog>

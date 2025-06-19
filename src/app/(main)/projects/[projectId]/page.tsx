@@ -11,8 +11,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList';
-import { IssueList } from '@/components/issues/IssueList';
-import { Loader2, ArrowLeft, Edit, ListChecks, PlusCircle, CalendarDays, LayoutDashboard, Bug } from 'lucide-react';
+// import { IssueList } from '@/components/issues/IssueList'; // Removed, issues are per task now
+import { Loader2, ArrowLeft, Edit, ListChecks, PlusCircle, CalendarDays, LayoutDashboard } from 'lucide-react'; // Removed Bug icon
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -30,7 +30,7 @@ import { deleteProject } from '@/services/projectService';
 import { useToast } from '@/hooks/use-toast';
 import { ProjectForm } from '@/components/projects/ProjectForm'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+// import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs" // Tabs removed for now from this page
 
 
 export default function ProjectDetailsPage() {
@@ -95,7 +95,6 @@ export default function ProjectDetailsPage() {
     const fetchProject = async () => {
       if (!projectId) return;
       try {
-        // Optimistically update UI or simply refetch
         const fetchedProject = await getProjectById(projectId);
         if (fetchedProject) {
           setProject(fetchedProject);
@@ -107,7 +106,6 @@ export default function ProjectDetailsPage() {
       }
     };
     fetchProject();
-    // router.refresh(); // Might not be needed if state updates rerender
   };
 
 
@@ -210,38 +208,22 @@ export default function ProjectDetailsPage() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:inline-flex">
-          <TabsTrigger value="overview" className="text-sm">
-            <LayoutDashboard className="mr-2 h-4 w-4" /> Overview & Tasks
-          </TabsTrigger>
-          <TabsTrigger value="issues" className="text-sm">
-            <Bug className="mr-2 h-4 w-4" /> Issues
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="overview" className="mt-6">
-           <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
-            <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-              <h2 className="font-headline text-2xl font-semibold flex items-center">
-                <ListChecks className="mr-3 h-7 w-7 text-primary" />
-                Tasks
-              </h2>
-              <Button asChild>
-                <Link href={`/projects/${projectId}/tasks/create`}>
-                  <PlusCircle className="mr-2 h-4 w-4" />
-                  Add New Task
-                </Link>
-              </Button>
-            </div>
-            <TaskList projectId={projectId} />
-          </div>
-        </TabsContent>
-        <TabsContent value="issues" className="mt-6">
-          <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
-            <IssueList projectId={projectId} />
-          </div>
-        </TabsContent>
-      </Tabs>
+      {/* Removed Tabs for Issues, issues are now per task */}
+      <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <h2 className="font-headline text-2xl font-semibold flex items-center">
+            <ListChecks className="mr-3 h-7 w-7 text-primary" />
+            Tasks
+          </h2>
+          <Button asChild>
+            <Link href={`/projects/${projectId}/tasks/create`}>
+              <PlusCircle className="mr-2 h-4 w-4" />
+              Add New Task
+            </Link>
+          </Button>
+        </div>
+        <TaskList projectId={projectId} />
+      </div>
     </div>
   );
 }

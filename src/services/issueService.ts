@@ -16,6 +16,7 @@ import {
   Timestamp,
   orderBy,
   getDoc,
+  writeBatch,
 } from 'firebase/firestore';
 
 const issuesCollection = collection(db, 'issues');
@@ -29,20 +30,21 @@ interface CreateIssueData {
   endDate?: Date | null;
 }
 
-export const createIssue = async (projectId: string, issueData: CreateIssueData): Promise<string> => {
+export const createIssue = async (projectId: string, taskId: string, issueData: CreateIssueData): Promise<string> => {
   const user = auth.currentUser;
   if (!user) throw new Error('User not authenticated');
 
-  // Verify project ownership
-  const projectDocRef = doc(db, 'projects', projectId);
-  const projectSnap = await getDoc(projectDocRef);
-  if (!projectSnap.exists() || projectSnap.data().ownerUid !== user.uid) {
-    throw new Error('Project not found or access denied.');
+  // Verify task ownership indirectly via project
+  const taskDocRef = doc(db, 'tasks', taskId);
+  const taskSnap = await getDoc(taskDocRef);
+  if (!taskSnap.exists() || taskSnap.data().projectId !== projectId || taskSnap.data().ownerUid !== user.uid) {
+    throw new Error('Task not found or access denied.');
   }
 
   const newIssuePayload = {
     ...issueData,
     projectId,
+    taskId,
     ownerUid: user.uid,
     endDate: issueData.endDate ? Timestamp.fromDate(issueData.endDate) : null,
     createdAt: serverTimestamp() as Timestamp,
@@ -58,17 +60,18 @@ export const createIssue = async (projectId: string, issueData: CreateIssueData)
   }
 };
 
-export const getProjectIssues = async (projectId: string): Promise<Issue[]> => {
+// Renamed from getProjectIssues to getTaskIssues
+export const getTaskIssues = async (taskId: string): Promise<Issue[]> => {
   const user = auth.currentUser;
   if (!user) {
-    console.warn('issueService: getProjectIssues called without authenticated user.');
+    console.warn('issueService: getTaskIssues called without authenticated user.');
     return [];
   }
   
-  // Consider adding an index for this query in Firestore: projectId (ASC), ownerUid (ASC), createdAt (DESC)
+  // Firestore index required: taskId (ASC), ownerUid (ASC), createdAt (DESC)
   const q = query(
     issuesCollection,
-    where('projectId', '==', projectId),
+    where('taskId', '==', taskId),
     where('ownerUid', '==', user.uid),
     orderBy('createdAt', 'desc')
   );
@@ -78,9 +81,9 @@ export const getProjectIssues = async (projectId: string): Promise<Issue[]> => {
     const issues = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Issue));
     return issues;
   } catch (error: any) {
-    console.error('issueService: Error fetching project issues for projectId:', projectId, 'uid:', user.uid, error.message, error.code ? `(${error.code})` : '', error.stack);
+    console.error('issueService: Error fetching task issues for taskId:', taskId, 'uid:', user.uid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error("Firestore query for issues requires a composite index. Please create it in the Firebase console. The error message should provide a direct link or details for manual creation. Fields to index are likely 'projectId' (ASC), 'ownerUid' (ASC), and 'createdAt' (DESC).");
+        console.error("Firestore query for issues requires a composite index. Please create it in the Firebase console. The error message should provide a direct link or details. Fields to index are likely 'taskId' (ASC), 'ownerUid' (ASC), and 'createdAt' (DESC).");
     }
     throw error;
   }
@@ -105,7 +108,7 @@ interface UpdateIssueData {
   severity?: IssueSeverity;
   status?: IssueProgressStatus;
   assignedToName?: string;
-  endDate?: Date | null | undefined; // Allow undefined to not change, null to clear
+  endDate?: Date | null | undefined; 
 }
 
 export const updateIssue = async (issueId: string, updates: UpdateIssueData): Promise<void> => {
@@ -113,7 +116,6 @@ export const updateIssue = async (issueId: string, updates: UpdateIssueData): Pr
   if (!user) throw new Error('User not authenticated');
   
   const issueDocRef = doc(db, 'issues', issueId);
-  // Add ownership check if necessary before update
   const issueSnap = await getDoc(issueDocRef);
   if (!issueSnap.exists() || issueSnap.data().ownerUid !== user.uid) {
     throw new Error('Issue not found or access denied.');
@@ -128,7 +130,7 @@ export const updateIssue = async (issueId: string, updates: UpdateIssueData): Pr
   if (updates.severity !== undefined) updatePayload.severity = updates.severity;
   if (updates.status !== undefined) updatePayload.status = updates.status;
   if (updates.assignedToName !== undefined) updatePayload.assignedToName = updates.assignedToName;
-  if (updates.endDate !== undefined) { // Check for undefined specifically to allow null
+  if (updates.endDate !== undefined) { 
     updatePayload.endDate = updates.endDate ? Timestamp.fromDate(updates.endDate) : null;
   }
   
@@ -145,7 +147,6 @@ export const updateIssueStatus = async (issueId: string, status: IssueProgressSt
   if (!user) throw new Error('User not authenticated');
   
   const issueDocRef = doc(db, 'issues', issueId);
-  // Add ownership check if necessary before update
   const issueSnap = await getDoc(issueDocRef);
   if (!issueSnap.exists() || issueSnap.data().ownerUid !== user.uid) {
     throw new Error('Issue not found or access denied.');
@@ -164,7 +165,6 @@ export const deleteIssue = async (issueId: string): Promise<void> => {
   if (!user) throw new Error('User not authenticated');
   
   const issueDocRef = doc(db, 'issues', issueId);
-  // Add ownership check if necessary before delete
   const issueSnap = await getDoc(issueDocRef);
   if (!issueSnap.exists() || issueSnap.data().ownerUid !== user.uid) {
     throw new Error('Issue not found or access denied.');
@@ -174,6 +174,26 @@ export const deleteIssue = async (issueId: string): Promise<void> => {
     await deleteDoc(issueDocRef);
   } catch (error: any) {
     console.error('issueService: Error deleting issue ID:', issueId, error.message, error.code ? `(${error.code})` : '', error.stack);
+    throw error;
+  }
+};
+
+// New function to delete all issues for a specific task
+export const deleteIssuesForTask = async (taskId: string): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('User not authenticated');
+
+  const q = query(issuesCollection, where('taskId', '==', taskId), where('ownerUid', '==', user.uid));
+  const batch = writeBatch(db);
+  
+  try {
+    const querySnapshot = await getDocs(q);
+    querySnapshot.forEach(doc => {
+      batch.delete(doc.ref);
+    });
+    await batch.commit();
+  } catch (error: any) {
+    console.error('issueService: Error deleting issues for task ID:', taskId, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;
   }
 };

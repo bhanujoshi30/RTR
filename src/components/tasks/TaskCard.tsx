@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Task, TaskStatus } from '@/types';
@@ -5,11 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarDays, Edit2, Trash2, ListChecks } from 'lucide-react';
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye } from 'lucide-react'; // Added Eye icon
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateTaskStatus, deleteTask } from '@/services/taskService';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,12 +33,13 @@ const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 
 export function TaskCard({ task, onTaskUpdated }: TaskCardProps) {
   const { toast } = useToast();
+  const router = useRouter(); // Initialize router
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
     try {
       await updateTaskStatus(task.id, newStatus);
       toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
-      onTaskUpdated(); // Notify parent to refetch tasks
+      onTaskUpdated(); 
     } catch (error) {
       toast({ title: 'Update Failed', description: 'Could not update task status.', variant: 'destructive' });
     }
@@ -65,9 +68,14 @@ export function TaskCard({ task, onTaskUpdated }: TaskCardProps) {
     }
   };
 
+  // Navigate to task details page
+  const handleViewTask = () => {
+    router.push(`/projects/${task.projectId}/tasks/${task.id}`);
+  };
+
   return (
     <Card className="shadow-md transition-shadow hover:shadow-lg">
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={handleViewTask}>
         <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
             <ListChecks className="h-6 w-6 text-primary" />
@@ -105,7 +113,11 @@ export function TaskCard({ task, onTaskUpdated }: TaskCardProps) {
                 ))}
               </SelectContent>
             </Select>
-            <Button variant="outline" size="icon" className="h-9 w-9" asChild>
+            <Button variant="outline" size="icon" className="h-9 w-9" title="View Task Details" onClick={handleViewTask}>
+                <Eye className="h-4 w-4" />
+                <span className="sr-only">View Task Details</span>
+            </Button>
+            <Button variant="outline" size="icon" className="h-9 w-9" asChild title="Edit Task">
               <Link href={`/projects/${task.projectId}/tasks/${task.id}/edit`}>
                 <Edit2 className="h-4 w-4" />
                 <span className="sr-only">Edit Task</span>
@@ -113,7 +125,7 @@ export function TaskCard({ task, onTaskUpdated }: TaskCardProps) {
             </Button>
              <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground">
+                  <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title="Delete Task">
                     <Trash2 className="h-4 w-4" />
                     <span className="sr-only">Delete Task</span>
                   </Button>
@@ -122,7 +134,7 @@ export function TaskCard({ task, onTaskUpdated }: TaskCardProps) {
                   <AlertDialogHeader>
                     <AlertDialogTitle>Delete Task "{task.name}"?</AlertDialogTitle>
                     <AlertDialogDescription>
-                      This action cannot be undone. This will permanently delete the task.
+                      This action cannot be undone. This will permanently delete the task and all its associated issues.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
