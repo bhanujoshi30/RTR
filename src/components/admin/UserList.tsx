@@ -87,8 +87,8 @@ export function UserList({ users, onEditUser, currentAdminUid, onUsersChanged }:
           </TableRow>
         </TableHeader>
         <TableBody>
-          {users.map((user) => (
-            <TableRow key={user.uid}>
+          {users.map((user, index) => (
+            <TableRow key={user.uid ?? `user-row-${index}`}>
               <TableCell className="font-medium">{user.displayName || 'N/A'}</TableCell>
               <TableCell>{user.email || 'N/A'}</TableCell>
               <TableCell className="text-xs text-muted-foreground">{user.uid}</TableCell>
