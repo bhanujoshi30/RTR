@@ -39,10 +39,11 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
   const { user } = useAuth();
 
   const isIssueOwner = user && issue.ownerUid === user.uid;
-  const isSupervisorAssignedToIssue = user?.role === 'supervisor' && issue.assignedToUids?.includes(user.uid);
-
+  
+  // An issue's status can be changed by its owner OR any user assigned to it.
+  const canChangeStatusOfThisIssue = isIssueOwner || (user && issue.assignedToUids?.includes(user.uid));
+  // Only the issue owner can perform full edit or delete operations.
   const canEditOrDeleteThisIssue = isIssueOwner;
-  const canChangeStatusOfThisIssue = isIssueOwner || isSupervisorAssignedToIssue;
 
 
   const handleStatusChange = async (newStatus: IssueProgressStatus) => {
@@ -125,7 +126,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
           <div className="flex items-center">
             <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
             Created {issue.createdAt ? formatDistanceToNow(issue.createdAt, { addSuffix: true }) : 'N/A'}
-            {issue.dueDate && ( // Changed from endDate
+            {issue.dueDate && ( 
               <span className="ml-2 border-l pl-2">
                 Due: {format(issue.dueDate, 'PP')}
               </span>
