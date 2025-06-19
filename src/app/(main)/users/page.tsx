@@ -13,7 +13,7 @@ import type { User as AppUser, UserRole } from '@/types';
 import { upsertUserDocument, getAllUsers } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
 
-const ADMIN_EMAIL = 'joshi11bhanu@gmail.com';
+const ADMIN_EMAIL = 'joshi1bhanu@gmail.com';
 
 export default function UsersPage() {
   const { user, loading: authLoading } = useAuth();

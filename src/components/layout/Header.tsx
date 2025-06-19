@@ -20,7 +20,7 @@ import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users 
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 
-const ADMIN_EMAIL = 'joshi11bhanu@gmail.com';
+const ADMIN_EMAIL = 'joshi1bhanu@gmail.com';
 
 export function Header() {
   const { user } = useAuth();
