@@ -29,7 +29,8 @@ export default function EditTaskPage() {
     const fetchTask = async () => {
       try {
         setLoading(true);
-        const fetchedTask = await getTaskById(taskId);
+        // Pass user.uid to getTaskById
+        const fetchedTask = await getTaskById(taskId, user.uid);
         if (fetchedTask && fetchedTask.projectId === projectId) {
           setTask(fetchedTask);
         } else {
