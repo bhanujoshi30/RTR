@@ -6,10 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Progress } from '@/components/ui/progress'; // Import Progress
-import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users } from 'lucide-react';
+import { Progress } from '@/components/ui/progress'; 
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
-import { updateTaskStatus, deleteTask, getSubTasks, getAssignedSubTasksForUser, calculateMainTaskProgress } from '@/services/taskService';
+import { updateTaskStatus, deleteTask, getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import {
@@ -39,8 +39,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const { toast } = useToast();
   const router = useRouter();
   const [task, setTask] = useState<Task>(initialTask);
-  const [subTaskCount, setSubTaskCount] = useState(0);
   const [subTaskCountLabel, setSubTaskCountLabel] = useState("Sub-tasks");
+  const [loadingSubTaskCount, setLoadingSubTaskCount] = useState(false); // New state
   const { user } = useAuth();
 
   const isActuallyMainTask = !task.parentId;
@@ -53,7 +53,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const canChangeSubTaskStatus = user && (isOwnerOfThisTask || isAssignedToThisSubTask);
 
   useEffect(() => {
-    setTask(initialTask); // Update task state if prop changes
+    setTask(initialTask); 
   }, [initialTask]);
   
 
@@ -62,20 +62,17 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
     if (isActuallyMainTask && user && task.id) {
       const fetchCountAndProgress = async () => {
         console.log(`[TaskCard Debug] fetchCountAndProgress called for main task '${task.name}' (ID: ${task.id}). Supervisor: ${isSupervisor}, Member: ${isMember}, Owner: ${isOwnerOfThisTask}`);
+        setLoadingSubTaskCount(true); // Set loading true before fetch
         try {
-          // Calculate progress (already done in service and passed via task.progress)
-          // Fetch sub-task count for display label
           const isNonOwnerSupervisorOrMember = !isOwnerOfThisTask && (isSupervisor || isMember);
 
           if (isNonOwnerSupervisorOrMember) {
             const assignedSubtasks = await getAssignedSubTasksForUser(task.id, user.uid);
-            setSubTaskCount(assignedSubtasks.length);
             const count = assignedSubtasks.length;
             const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
             setSubTaskCountLabel(`${count} ${taskWord} (assigned to you)`);
           } else {
             const allSubtasks = await getSubTasks(task.id);
-            setSubTaskCount(allSubtasks.length);
             const count = allSubtasks.length;
             const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
             setSubTaskCountLabel(`${count} ${taskWord}`);
@@ -86,10 +83,11 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
             } else {
                 console.error("[TaskCard Debug] Failed to fetch sub-task count for main task:", task.id, error);
             }
-            setSubTaskCount(0);
             const isPotentiallyAssignedViewer = !isOwnerOfThisTask && (isSupervisor || isMember);
             const errorLabel = isPotentiallyAssignedViewer ? "0 Sub-tasks (assigned to you)" : "0 Sub-tasks";
             setSubTaskCountLabel(errorLabel);
+        } finally {
+          setLoadingSubTaskCount(false); // Set loading false after fetch
         }
       };
       fetchCountAndProgress();
@@ -110,7 +108,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
     try {
       await updateTaskStatus(task.id, user.uid, newStatus, user.role);
       toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
-      onTaskUpdated(); // This should trigger a re-fetch and update progress
+      onTaskUpdated(); 
     } catch (error: any) {
       toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
     }
@@ -173,9 +171,13 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
             </Badge>
           )}
           {isActuallyMainTask && (
-             <Badge variant="outline">
-              {subTaskCountLabel}
-            </Badge>
+            loadingSubTaskCount ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : (
+              <Badge variant="outline">
+                {subTaskCountLabel}
+              </Badge>
+            )
           )}
         </div>
         {(!isActuallyMainTask && task.description) && (
@@ -192,7 +194,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                 Due: {format(task.dueDate, 'PP')}
               </span>
             )}
-             {(isActuallyMainTask && task.dueDate) && ( // Also show due date for main task if available
+             {(isActuallyMainTask && task.dueDate) && ( 
               <span className="ml-2 border-l pl-2">
                 Due: {format(task.dueDate, 'PP')}
               </span>
