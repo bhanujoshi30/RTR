@@ -8,6 +8,8 @@ import { ArrowLeft, Loader2 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect } from 'react';
 
+export const runtime = 'edge';
+
 export default function CreateTaskPage() {
   const params = useParams();
   const router = useRouter();

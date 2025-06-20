@@ -10,6 +10,8 @@ import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
+export const runtime = 'edge';
+
 export default function EditTaskPage() {
   const params = useParams();
   const router = useRouter();

@@ -20,6 +20,8 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 
+export const runtime = 'edge';
+
 export default function TaskDetailsPage() {
   const params = useParams();
   const router = useRouter();
