@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
-import { Toaster } from '@/components/ui/toaster';
+import { AuthContentWrapper } from '@/components/layout/AuthContentWrapper';
 
 export const metadata: Metadata = {
   title: 'TaskFlow',
@@ -23,8 +23,7 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-          {children}
-          <Toaster />
+          <AuthContentWrapper>{children}</AuthContentWrapper>
         </AuthProvider>
       </body>
     </html>
