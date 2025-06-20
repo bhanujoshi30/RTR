@@ -463,7 +463,9 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   }
 };
 
+// DEBUG MODE: Using getDocs to see what documents are actually being matched
 export const countProjectSubTasks = async (projectId: string): Promise<number> => {
+  console.log(`taskService: countProjectSubTasks (DEBUG MODE) called for projectId: ${projectId}`);
   if (!projectId) {
     console.warn('taskService: countProjectSubTasks (DEBUG MODE) called with no projectId.');
     return 0;
@@ -473,13 +475,12 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
-    where('parentId', '!=', null) // Ensures we only count documents that HAVE a parentId
+    where('parentId', '!=', null)
   );
 
   try {
-    // DEBUG: Use getDocs instead of getCountFromServer to see what documents are being matched
     const querySnapshot = await getDocs(q);
-    const count = querySnapshot.size; // Get count from the snapshot size
+    const count = querySnapshot.size;
     const docsFound = querySnapshot.docs.map(doc => ({ id: doc.id, parentId: doc.data().parentId, projectId: doc.data().projectId, name: doc.data().name }));
 
     if (count === 0) {
@@ -503,7 +504,7 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
       `OTHER CHECKS: Ensure 'parentId' fields are correctly set to a string ID for sub-tasks and 'null' for main tasks. Also, verify that 'projectId' on these sub-tasks matches the project ID being queried.\n` +
       `Original error message: ${e.message}\n` +
       `Error code: ${e.code || 'N/A'}\n\n`, error);
-    return 0; // Return 0 on error
+    return 0; 
   }
 };
 
@@ -550,3 +551,4 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     
     
     
+  
