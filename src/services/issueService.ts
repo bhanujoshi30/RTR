@@ -104,7 +104,7 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
 
   const taskDocRef = doc(db, 'tasks', taskId); 
   const taskSnap = await getDoc(taskDocRef);
-  const taskData = taskSnap.data() as Task | undefined;
+  const taskData = taskSnap.data() as Task | undefined; // State of task *before* issue creation
 
   if (!taskSnap.exists() || taskData?.projectId !== projectId) {
     throw new Error('Parent sub-task not found or does not belong to the project.');
@@ -137,6 +137,17 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
       const performingUserRole = userDoc.exists() ? userDoc.data()?.role as UserRole : undefined;
       await ensureAssigneesInParentTask(taskId, newIssuePayload.assignedToUids, newIssuePayload.assignedToNames, userUid, performingUserRole);
     }
+
+    // If the parent sub-task was 'Completed', change its status to 'In Progress'
+    if (taskData && taskData.status === 'Completed') {
+      const userDoc = await getDoc(doc(db, 'users', userUid));
+      const userRoleForUpdate = userDoc.exists() ? userDoc.data()?.role as UserRole : undefined;
+      
+      console.log(`issueService: New issue ${newIssueRef.id} created for sub-task ${taskId} which was 'Completed'. Attempting to change sub-task status to 'In Progress'.`);
+      await updateParentTaskStatus(taskId, userUid, 'In Progress', userRoleForUpdate);
+      console.log(`issueService: Parent sub-task ${taskId} status automatically changed to 'In Progress' due to new issue ${newIssueRef.id}.`);
+    }
+
     return newIssueRef.id;
   } catch (error: any) {
     console.error('issueService: Error creating issue:', error.message, error.code ? `(${error.code})` : '', error.stack);
@@ -206,9 +217,12 @@ export const getIssueById = async (issueId: string, userUid: string): Promise<Is
 
   if (issueSnap.exists()) {
     const issueData = mapDocumentToIssue(issueSnap);
+    // Admin can view any issue if needed, or expand this logic
+    // For now, only owner or assigned users
     if (issueData.ownerUid === userUid || issueData.assignedToUids?.includes(userUid)) {
         return issueData;
     }
+    // Add more sophisticated role-based access if needed, e.g. project owner or supervisor
   }
   return null;
 };
@@ -234,6 +248,11 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
 
   const issueData = mapDocumentToIssue(issueSnap); 
   if (issueData.ownerUid !== userUid) {
+    // Allow assigned users to update certain fields if needed, for now only owner can edit.
+    // if (!issueData.assignedToUids?.includes(userUid)) {
+    //   throw new Error('Access denied. You do not own this issue nor are you assigned to it.');
+    // }
+    // // If assigned, what can they update? status typically.
     throw new Error('Access denied. Only the issue creator can edit it.');
   }
 
@@ -248,7 +267,7 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
 
   if (updates.assignedToUids !== undefined) {
     updatePayload.assignedToUids = updates.assignedToUids || [];
-    updatePayload.assignedToNames = updates.assignedToNames || [];
+    updatePayload.assignedToNames = updates.assignedToNames || []; // Ensure names are also updated/cleared
   }
 
   if (updates.dueDate !== undefined) {
@@ -256,15 +275,28 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
   }
 
   try {
-    await updateDoc(issueDocRef, updatePayload as any);
+    await updateDoc(issueDocRef, updatePayload as any); // Using 'as any' to bypass strict type checking for partial update
 
+    // If assignedToUids were part of the update, ensure they are also on the parent sub-task
     const finalAssignedUids = updatePayload.assignedToUids || issueData.assignedToUids || [];
     const finalAssignedNames = updatePayload.assignedToNames || issueData.assignedToNames || [];
 
-    if (finalAssignedUids.length > 0) {
+    if (finalAssignedUids.length > 0 && updates.assignedToUids !== undefined) { // Only run if assignedToUids was explicitly part of the update
       const userDoc = await getDoc(doc(db, 'users', userUid));
       const performingUserRole = userDoc.exists() ? userDoc.data()?.role as UserRole : undefined;
       await ensureAssigneesInParentTask(parentSubTaskId, finalAssignedUids, finalAssignedNames, userUid, performingUserRole);
+    }
+
+    // If the issue status changed, check if parent task status needs update
+    if (updates.status && updates.status !== issueData.status) {
+        if (updates.status === 'Open' && issueData.status === 'Closed') {
+            const parentTask = await getTaskById(issueData.taskId, userUid, undefined); // Assuming user role is not critical here, or fetch it
+            if (parentTask && parentTask.status === 'Completed') {
+                const userDoc = await getDoc(doc(db, 'users', userUid));
+                const userRoleForUpdate = userDoc.exists() ? userDoc.data()?.role as UserRole : undefined;
+                await updateParentTaskStatus(parentTask.id, userUid, 'In Progress', userRoleForUpdate);
+            }
+        }
     }
 
   } catch (error: any) {
@@ -289,6 +321,7 @@ export const updateIssueStatus = async (
   const issueData = mapDocumentToIssue(issueSnap);
   const oldStatus = issueData.status;
 
+  // Permission check: Owner or assigned user can change status.
   if (issueData.ownerUid !== userUid && !(issueData.assignedToUids?.includes(userUid))) {
     throw new Error('Access denied. You did not create this issue nor are you assigned to it.');
   }
@@ -298,7 +331,7 @@ export const updateIssueStatus = async (
 
     // If issue is reopened, and parent task was completed, set parent task to In Progress
     if (newStatus === 'Open' && oldStatus === 'Closed') {
-      if (issueData.taskId) { // Ensure taskId exists
+      if (issueData.taskId) { 
         const parentTask = await getTaskById(issueData.taskId, userUid, userRole);
         if (parentTask && parentTask.status === 'Completed') {
           await updateParentTaskStatus(parentTask.id, userUid, 'In Progress', userRole);
@@ -322,6 +355,7 @@ export const deleteIssue = async (issueId: string, userUid: string): Promise<voi
   if (!issueSnap.exists()){
       throw new Error('Issue not found.');
   }
+  // Permission: Only owner can delete.
   if ((mapDocumentToIssue(issueSnap)).ownerUid !== userUid) {
     throw new Error('Access denied. Only the issue creator can delete it.');
   }
@@ -334,9 +368,13 @@ export const deleteIssue = async (issueId: string, userUid: string): Promise<voi
   }
 };
 
+// This function is called when a task (main or sub-task) is deleted.
+// It needs to delete all issues associated with that task.
 export const deleteIssuesForTask = async (taskId: string, userUid: string): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated for deleting issues for task');
 
+  // No ownership check here as this is an internal function called during task deletion
+  // by an authorized user (task owner).
   const q = query(issuesCollection, where('taskId', '==', taskId));
   const batch = writeBatch(db);
 
@@ -348,10 +386,14 @@ export const deleteIssuesForTask = async (taskId: string, userUid: string): Prom
     await batch.commit();
     console.log(`issueService: Deleted issues for task ID (sub-task ID): ${taskId}`);
   } catch (error: any) {
+    // It's possible the index for this query doesn't exist if issues are rarely queried this way directly.
+    // However, it's crucial for cleanup.
     console.error('issueService: Error deleting issues for task ID (sub-task ID):', taskId, error.message, error.code ? `(${error.code})` : '', error.stack);
+    // If index 'issues.taskId' is missing, this will fail.
   }
 };
 
+// Checks if a specific sub-task has any open issues.
 export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
   const q = query(
     issuesCollection,
@@ -360,7 +402,7 @@ export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
   );
 
   try {
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await getDocs(q); // Use getDocs and check empty, getCountFromServer might need specific index too
     if (querySnapshot.empty) {
       console.log(`issueService: No open issues found for task ${taskId}.`);
     } else {
@@ -372,10 +414,13 @@ export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
         console.error("Firestore query for checking open issues requires a composite index. Please create it in the Firebase console. Collection: 'issues', Fields: 'taskId' (ASC), 'status' (ASC).");
     }
+    // Instead of throwing, which might break task completion flow, return true (safer default) or handle specific error
+    // For now, re-throw to make it visible that an index might be needed.
     throw new Error(`Failed to check for open issues for task ${taskId}. ${error.message}`);
   }
 };
 
+// Counts open issues for a whole project.
 export const countProjectOpenIssues = async (projectId: string): Promise<number> => {
   if (!projectId) return 0;
   console.log(`issueService: countProjectOpenIssues for projectId: ${projectId}`);
@@ -396,6 +441,7 @@ export const countProjectOpenIssues = async (projectId: string): Promise<number>
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
       console.error(`Firestore query for counting open issues (projectId: ${projectId}) requires a composite index. Please create it in the Firebase console. Expected fields: 'projectId' (ASC), 'status' (ASC). The error message from Firebase often provides a direct link to create it.`);
     }
-    return 0; 
+    return 0; // Return 0 on error to prevent breaking dashboard, but log the error.
   }
 };
+
