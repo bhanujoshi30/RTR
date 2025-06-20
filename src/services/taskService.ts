@@ -196,6 +196,13 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
   }
 
   const taskData = mapDocumentToTask(taskSnap);
+
+  // Admin Override: If the user is an admin, grant access if the task exists.
+  if (userRole === 'admin') {
+    console.log(`[taskService.getTaskById] Access GRANTED to task ${taskId} (User is admin).`);
+    return taskData;
+  }
+  
   const isOwner = taskData.ownerUid === userUid;
 
   console.log(`[taskService.getTaskById] Task data fetched for ${taskId}: OwnerUID=${taskData.ownerUid}, ParentID=${taskData.parentId}, AssignedToUids=[${taskData.assignedToUids?.join(',')}]`);
@@ -304,29 +311,24 @@ export const updateTask = async (
       if(hasAllowedUpdate) {
         Object.assign(updatePayload, allowedUpdates);
       } else {
-        // If only updatedAt is in payload and no actual field changed, no need to update
         if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt) return;
       }
     }
-  } else { // This is a Main Task
+  } else { 
     if (!isOwner) {
       throw new Error('Access denied. Only the project owner can edit main task details.');
     }
     if (updates.name !== undefined) updatePayload.name = updates.name;
 
-    // For main tasks, only allow 'name' and 'updatedAt' to be changed through this general update function.
-    // Other fields like description, status, dueDate, assignees are not typically managed for main tasks here.
     const allowedMainTaskKeys = ['name', 'updatedAt'];
     Object.keys(updatePayload).forEach(key => {
         if (!allowedMainTaskKeys.includes(key as string)) {
             delete updatePayload[key];
         }
     });
-    // If only updatedAt is in payload (e.g. no name change was provided), no need to update.
     if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt && updates.name === undefined) return;
   }
 
-  // Only proceed with update if there are actual changes beyond just 'updatedAt'
   if (Object.keys(updatePayload).length > 1) {
     await updateDoc(taskDocRef, updatePayload);
   }
@@ -345,7 +347,7 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
   const isOwner = taskData.ownerUid === userUid;
   const isAssignedUser = !!taskData.parentId && (taskData.assignedToUids?.includes(userUid) ?? false);
 
-  if (taskData.parentId) { // It's a sub-task
+  if (taskData.parentId) { 
     if (isOwner || isAssignedUser) { 
       if (status === 'Completed') {
         const openIssuesExist = await hasOpenIssues(taskId);
@@ -358,7 +360,6 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
       throw new Error('Access denied for status update. Task not owned by you, or you are not assigned to it.');
     }
   } else {
-    // Status updates for main tasks are not directly handled here; they might be derived or not user-editable.
     console.warn(`taskService: Attempted to update status for main task ${taskId} via updateTaskStatus, which is not directly applicable. Main task status is derived or not set this way.`);
   }
 };
@@ -375,27 +376,23 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
   }
   const taskToDelete = mapDocumentToTask(taskSnap);
 
-  // Only the owner of the task (main or sub) can delete it.
   if (taskToDelete.ownerUid !== userUid) {
     throw new Error('Access denied. Only the task owner can delete it.');
   }
 
   const batch = writeBatch(db);
 
-  // Delete the task itself
   batch.delete(taskDocRef);
 
-  // Delete all issues associated with this task (whether it's main or sub)
-  await deleteIssuesForTask(taskId, userUid); // This function handles batching internally or can be adapted
+  await deleteIssuesForTask(taskId, userUid); 
 
-  // If it's a main task, also delete all its sub-tasks and their issues
-  if (!taskToDelete.parentId) { // It's a main task
+  if (!taskToDelete.parentId) { 
     const subTasksQuery = query(tasksCollection, where('parentId', '==', taskId));
     const subTasksSnapshot = await getDocs(subTasksQuery);
 
     for (const subTaskDoc of subTasksSnapshot.docs) {
-      batch.delete(subTaskDoc.ref); // Delete the sub-task
-      await deleteIssuesForTask(subTaskDoc.id, userUid); // Delete issues of this sub-task
+      batch.delete(subTaskDoc.ref); 
+      await deleteIssuesForTask(subTaskDoc.id, userUid); 
     }
   }
 
@@ -411,7 +408,6 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
 export const deleteAllTasksForProject = async (projectId: string, projectOwnerUid: string): Promise<void> => {
   if (!projectOwnerUid) throw new Error("User not authenticated for deleting all project tasks");
 
-  // Query for all tasks (both main and sub-tasks) belonging to the project
   const projectTasksQuery = query(
     tasksCollection,
     where("projectId", "==", projectId)
@@ -422,29 +418,24 @@ export const deleteAllTasksForProject = async (projectId: string, projectOwnerUi
     const tasksSnapshot = await getDocs(projectTasksQuery);
     if (tasksSnapshot.empty) {
         console.log(`taskService: No tasks found for project ${projectId} to delete.`);
-        return; // No tasks to delete
+        return; 
     }
 
-    // Collect all task IDs to delete their issues
     const taskIdsToDeleteIssuesFor: string[] = [];
     tasksSnapshot.forEach(taskDoc => {
         taskIdsToDeleteIssuesFor.push(taskDoc.id);
-        batch.delete(taskDoc.ref); // Add task deletion to batch
+        batch.delete(taskDoc.ref); 
     });
 
-    // Delete issues for all collected task IDs
-    // This needs to be done carefully, perhaps in smaller batches if many tasks
     for (const taskId of taskIdsToDeleteIssuesFor) {
-        await deleteIssuesForTask(taskId, projectOwnerUid); // Assuming deleteIssuesForTask handles its own batching or is efficient
+        await deleteIssuesForTask(taskId, projectOwnerUid); 
     }
 
-    await batch.commit(); // Commit all task deletions
+    await batch.commit(); 
     console.log(`taskService: Successfully deleted all tasks and their issues for project ${projectId}.`);
 
   } catch (error: any) {
     console.error(`taskService: Error in deleteAllTasksForProject for projectId ${projectId} by user ${projectOwnerUid}:`, error.message, error.code ? `(${error.code})` : '', error.stack);
-    // Consider how to handle partial failures if issue deletion fails but task deletion is in the batch.
-    // For simplicity here, we throw the error.
     throw error;
   }
 };
@@ -453,12 +444,11 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   if (!userUid) return [];
   console.log(`taskService: getAllTasksAssignedToUser (sub-tasks) for userUid: ${userUid}`);
 
-  // This query specifically targets sub-tasks (parentId != null) assigned to the user.
   const q = query(
     tasksCollection,
     where('assignedToUids', 'array-contains', userUid),
-    where('parentId', '!=', null), // Ensure it's a sub-task
-    orderBy('parentId'), // Order by main task ID
+    where('parentId', '!=', null), 
+    orderBy('parentId'), 
     orderBy('createdAt', 'desc')
   );
 
@@ -480,7 +470,6 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   }
 };
 
-// Reverted from DEBUG MODE to use getCountFromServer for efficiency
 export const countProjectSubTasks = async (projectId: string): Promise<number> => {
   console.log(`taskService: countProjectSubTasks called for projectId: ${projectId}`);
   if (!projectId) {
@@ -491,7 +480,7 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
-    where('parentId', '!=', null) // Key condition for sub-tasks
+    where('parentId', '!=', null) 
   );
 
   try {
@@ -558,7 +547,7 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     } else {
       console.error(`An unexpected error occurred while counting main tasks for project ${projectId}.`);
     }
-    return 0; // Return 0 in case of an error to prevent breaking the dashboard further
+    return 0; 
   }
 };
     
@@ -567,3 +556,4 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     
     
   
+
