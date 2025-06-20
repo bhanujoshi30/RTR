@@ -7,11 +7,13 @@ import { FolderPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project, Task as AppTask } from '@/types'; 
+import type { Project, Task as AppTask } from '@/types';
 import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
+import { db } from '@/lib/firebase'; // Correctly import db
+import { collection, query, where, getDocs } from 'firebase/firestore'; // Correctly import Firestore functions
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -31,7 +33,7 @@ export default function DashboardPage() {
       
       const isSupervisor = user?.role === 'supervisor';
       const isMember = user?.role === 'member';
-      const isAdminOrOwner = !isSupervisor && !isMember; // True if role is 'admin' or undefined/other (general owner)
+      const isAdminOrOwner = !isSupervisor && !isMember; 
 
       console.log(`DashboardPage: fetchDashboardData called. Auth Loading: ${authLoading}, User: ${user ? `${user.displayName || user.email} (Role: ${user.role || 'owner/admin'}, UID: ${user.uid})` : 'null'}`);
       console.log(`DashboardPage: Determined roles - isSupervisor: ${isSupervisor}, isMember: ${isMember}, isAdminOrOwner: ${isAdminOrOwner}`);
@@ -47,14 +49,14 @@ export default function DashboardPage() {
           const userRoleForLog = isSupervisor ? 'supervisor' : 'member';
           console.log(`DashboardPage: User is ${userRoleForLog} (UID: ${user.uid}). Fetching user-specific work details.`);
           
-          const userAssignedSubTasks = await getAllTasksAssignedToUser(user.uid);
-          const userAssignedIssues = await getAllIssuesAssignedToUser(user.uid);
+          const assignedSubTasks = await getAllTasksAssignedToUser(user.uid);
+          const assignedIssues = await getAllIssuesAssignedToUser(user.uid);
           
-          console.log(`DashboardPage: ${userRoleForLog} - Fetched ${userAssignedSubTasks.length} assignedSubTasks.`);
-          console.log(`DashboardPage: ${userRoleForLog} - Fetched ${userAssignedIssues.length} assignedIssues.`);
+          console.log(`DashboardPage: ${userRoleForLog} - Fetched ${assignedSubTasks.length} assignedSubTasks.`);
+          console.log(`DashboardPage: ${userRoleForLog} - Fetched ${assignedIssues.length} assignedIssues.`);
 
-          const projectIdsFromTasks = userAssignedSubTasks.map(task => task.projectId).filter(id => !!id);
-          const projectIdsFromIssues = userAssignedIssues.map(issue => issue.projectId).filter(id => !!id);
+          const projectIdsFromTasks = assignedSubTasks.map(task => task.projectId).filter(id => !!id);
+          const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId).filter(id => !!id);
           const allRelevantProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
           console.log(`DashboardPage: ${userRoleForLog} - Combined ${allRelevantProjectIds.length} unique projectIds from user's work:`, allRelevantProjectIds);
 
@@ -65,15 +67,14 @@ export default function DashboardPage() {
             finalProjectsToDisplay = baseProjectsForUser.map(project => {
               console.log(`DashboardPage: [${userRoleForLog} View] Processing project ${project.id} (${project.name}) for user-specific counts.`);
 
-              const assignedSubTasksInThisProject = userAssignedSubTasks.filter(st => st.projectId === project.id);
-              const countSubTasksForUser = assignedSubTasksInThisProject.length;
+              const countSubTasksForUser = assignedSubTasks.filter(st => st.projectId === project.id).length;
               console.log(`DashboardPage: [${userRoleForLog} View][Project: ${project.id}] User-assigned sub-task count: ${countSubTasksForUser}`);
 
-              const countOpenIssuesForUser = userAssignedIssues.filter(i => i.projectId === project.id && i.status === 'Open').length;
+              const countOpenIssuesForUser = assignedIssues.filter(i => i.projectId === project.id && i.status === 'Open').length;
               console.log(`DashboardPage: [${userRoleForLog} View][Project: ${project.id}] User-assigned open issue count: ${countOpenIssuesForUser}`);
               
               const mainTaskIdsUserInvolvedWith = new Set(
-                assignedSubTasksInThisProject.map(st => st.parentId).filter(Boolean) as string[]
+                assignedSubTasks.filter(st => st.projectId === project.id).map(st => st.parentId).filter(Boolean) as string[]
               );
               const countMainTasksForUser = mainTaskIdsUserInvolvedWith.size;
               console.log(`DashboardPage: [${userRoleForLog} View][Project: ${project.id}] User-involved main task count (via assigned sub-tasks): ${countMainTasksForUser}`);
@@ -101,8 +102,25 @@ export default function DashboardPage() {
                 console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectMainTasks.`);
                 const mainTaskCountPromise = countProjectMainTasks(project.id);
                 
-                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks.`);
-                const subTaskCountPromise = countProjectSubTasks(project.id);
+                let subTaskCountPromise;
+                // DEBUGGING: Direct query for sub-tasks for project 1gNABTaAUWYvIBd6niDW
+                if (project.id === '1gNABTaAUWYvIBd6niDW') {
+                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] DEBUG: Initiating DIRECT sub-task query.`);
+                  const tasksCollectionRef = collection(db, 'tasks');
+                  const q = query(tasksCollectionRef, where('projectId', '==', project.id), where('parentId', '!=', null));
+                  subTaskCountPromise = getDocs(q).then(snapshot => {
+                    console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] DEBUG: Direct sub-task query snapshot size: ${snapshot.size}`);
+                    const foundDocs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
+                    console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] DEBUG: Direct sub-task query found docs:`, JSON.stringify(foundDocs, null, 2));
+                    return snapshot.size;
+                  }).catch(err => {
+                    console.error(`DashboardPage: [Admin/Owner View][Project: ${project.id}] DEBUG: Direct sub-task query FAILED:`, err);
+                    return 0; // Fallback on error
+                  });
+                } else {
+                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks (service).`);
+                  subTaskCountPromise = countProjectSubTasks(project.id);
+                }
                 
                 console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectOpenIssues.`);
                 const openIssueCountPromise = countProjectOpenIssues(project.id);
@@ -143,6 +161,7 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading]);
 
   const isSupervisor = user?.role === 'supervisor';
@@ -177,4 +196,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
