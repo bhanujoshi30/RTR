@@ -27,7 +27,12 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
   const [parentTask, setParentTask] = useState<Task | null>(null);
 
   const isSupervisor = user?.role === 'supervisor';
-  const canManageIssuesForThisTask = user && (parentTask?.ownerUid === user.uid || (isSupervisor && parentTask?.assignedToUids?.includes(user.uid)));
+  const isMember = user?.role === 'member';
+  
+  const isUserAssignedToParentTask = user && parentTask?.assignedToUids?.includes(user.uid);
+  const isUserOwnerOfParentTask = user && parentTask?.ownerUid === user.uid;
+
+  const canManageIssuesForThisTask = isUserOwnerOfParentTask || ((isSupervisor || isMember) && isUserAssignedToParentTask);
 
 
   const fetchParentTaskAndIssues = async () => {
@@ -37,7 +42,7 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
       const fetchedTask = await getTaskById(taskId, user.uid, user.role); 
       setParentTask(fetchedTask);
 
-      const taskIssues = await getTaskIssues(taskId, user.uid, isSupervisor && fetchedTask?.assignedToUids?.includes(user.uid));
+      const taskIssues = await getTaskIssues(taskId, user.uid, (isSupervisor || isMember) && fetchedTask?.assignedToUids?.includes(user.uid));
       setIssues(taskIssues);
       setError(null);
     } catch (err: any) {
@@ -45,7 +50,6 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
       setError(`Failed to load issues. ${err.message?.includes("index") ? "A database index might be required. Check console for details." : ""}`);
     } finally {
       setLoading(false);
-      // Do NOT call onIssueListChange here automatically. It will be called by specific actions.
     }
   };
 
@@ -65,9 +69,9 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
   };
 
   const handleIssueCardUpdate = async () => {
-    await fetchParentTaskAndIssues(); // Refreshes IssueList's own data
+    await fetchParentTaskAndIssues(); 
     if (onIssueListChange) {
-      onIssueListChange(); // Tell parent TaskDetailsPage to refresh if an issue was updated
+      onIssueListChange(); 
     }
   };
 
@@ -128,7 +132,7 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
                 projectId={projectId} 
                 taskId={taskId} 
                 onIssueUpdated={handleIssueCardUpdate}
-                canManageIssue={canManageIssuesForThisTask || (isSupervisor && issue.assignedToUids?.includes(user?.uid || ''))}
+                canManageIssue={isUserOwnerOfParentTask || ((isSupervisor || isMember) && issue.assignedToUids?.includes(user?.uid || ''))}
             />
           ))}
         </div>
@@ -136,5 +140,3 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
     </div>
   );
 }
-
-        
