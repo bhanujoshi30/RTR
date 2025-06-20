@@ -7,8 +7,8 @@ import { FolderPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project, Task as AppTask } from '@/types'; // Renamed Task to AppTask to avoid conflict
-import { getAllTasksAssignedToUser, countProjectMainTasks } from '@/services/taskService';
+import type { Project, Task as AppTask } from '@/types'; 
+import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
@@ -19,12 +19,13 @@ export default function DashboardPage() {
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
 
-  const isSupervisor = user?.role === 'supervisor';
-  const isMember = user?.role === 'member';
-  const isAdminOrOwner = user && !isSupervisor && !isMember; 
-
   useEffect(() => {
     const fetchDashboardData = async () => {
+      // Determine roles here as user object might change
+      const isSupervisor = user?.role === 'supervisor';
+      const isMember = user?.role === 'member';
+      const isAdminOrOwner = user && !isSupervisor && !isMember;
+
       console.log('DashboardPage: fetchDashboardData called. Auth Loading:', authLoading, 'User:', user ? `${user.displayName || user.email} (Role: ${user.role}, UID: ${user.uid})` : 'null');
       if (authLoading || !user) {
         if (!authLoading && !user) {
@@ -38,149 +39,87 @@ export default function DashboardPage() {
       setDashboardError(null);
 
       try {
-        let baseProjects: Project[] = [];
-        let userAssignedSubTasks: AppTask[] = []; // Store assigned sub-tasks for supervisor/member
+        let finalProjectsToDisplay: Project[] = [];
 
         if (isSupervisor || isMember) {
-          console.log(`DashboardPage: User is a ${user.role} (UID: ${user.uid}). Fetching assigned tasks and issues.`);
-          // Fetch all sub-tasks assigned to the user across all projects
-          userAssignedSubTasks = await getAllTasksAssignedToUser(user.uid); 
-          console.log(`DashboardPage: ${user.role} - Fetched assignedTasks (sub-tasks):`, userAssignedSubTasks);
-          
-          const assignedIssues = await getAllIssuesAssignedToUser(user.uid); 
-          console.log(`DashboardPage: ${user.role} - Fetched assignedIssues:`, assignedIssues);
+          console.log(`DashboardPage: User is ${user.role} (UID: ${user.uid}). Fetching user-specific work details.`);
+          const userAssignedSubTasks = await getAllTasksAssignedToUser(user.uid);
+          const userAssignedIssues = await getAllIssuesAssignedToUser(user.uid);
+          console.log(`DashboardPage: ${user.role} - Fetched ${userAssignedSubTasks.length} assignedSubTasks.`);
+          console.log(`DashboardPage: ${user.role} - Fetched ${userAssignedIssues.length} assignedIssues.`);
 
           const projectIdsFromTasks = userAssignedSubTasks.map(task => task.projectId).filter(id => !!id);
-          const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId).filter(id => !!id);
-          
-          const allProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
-          console.log(`DashboardPage: ${user.role} - Combined unique projectIds from tasks and issues:`, allProjectIds);
+          const projectIdsFromIssues = userAssignedIssues.map(issue => issue.projectId).filter(id => !!id);
+          const allRelevantProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
+          console.log(`DashboardPage: ${user.role} - Combined ${allRelevantProjectIds.length} unique projectIds from user's work:`, allRelevantProjectIds);
 
-          if (allProjectIds.length > 0) {
-            baseProjects = await getProjectsByIds(allProjectIds);
-            console.log(`DashboardPage: ${user.role} - Fetched baseProjects from combined IDs:`, baseProjects);
-          } else {
-            console.log(`DashboardPage: ${user.role} - No unique project IDs found from tasks or issues.`);
-            baseProjects = [];
-          }
-        } else if (isAdminOrOwner) { 
-          console.log(`DashboardPage: User is admin/owner (UID: ${user.uid}). Fetching owned projects.`);
-          baseProjects = await getUserProjects(user.uid);
-          console.log('DashboardPage: Admin/Owner - Fetched baseProjects:', baseProjects);
-        } else {
-          baseProjects = [];
-        }
+          if (allRelevantProjectIds.length > 0) {
+            const baseProjectsForUser = await getProjectsByIds(allRelevantProjectIds);
+            console.log(`DashboardPage: ${user.role} - Fetched ${baseProjectsForUser.length} base projects for user-specific counts.`);
 
-        if (baseProjects.length > 0) {
-          console.log('DashboardPage: Base projects found, proceeding to fetch counts for:', baseProjects.map(p => p.id));
-          const projectsWithCounts = await Promise.all(
-            baseProjects.map(async (project) => {
-              console.log(`DashboardPage: Processing project ${project.id} (${project.name}) for counts.`);
+            finalProjectsToDisplay = baseProjectsForUser.map(project => {
+              console.log(`DashboardPage: [${user.role} View] Processing project ${project.id} (${project.name}) for user-specific counts.`);
 
-              const mainTaskCountPromise = countProjectMainTasks(project.id);
+              const assignedSubTasksInThisProject = userAssignedSubTasks.filter(st => st.projectId === project.id);
+              const countSubTasksForUser = assignedSubTasksInThisProject.length;
+              console.log(`DashboardPage: [${user.role} View][Project: ${project.id}] User-assigned sub-task count: ${countSubTasksForUser}`);
+
+              const countOpenIssuesForUser = userAssignedIssues.filter(i => i.projectId === project.id && i.status === 'Open').length;
+              console.log(`DashboardPage: [${user.role} View][Project: ${project.id}] User-assigned open issue count: ${countOpenIssuesForUser}`);
               
-              let subTaskCountForProject: number;
-              if (isSupervisor || isMember) {
-                // For supervisor/member, count sub-tasks assigned to them in *this specific project*
-                subTaskCountForProject = userAssignedSubTasks.filter(task => task.projectId === project.id).length;
-                console.log(`DashboardPage: [Project: ${project.id}] User is ${user.role}. Assigned sub-task count for this project: ${subTaskCountForProject}`);
-              } else {
-                // For admin/owner, count all sub-tasks in the project (this was the previous behavior, kept for consistency if ever needed, though not displayed by default)
-                // For simplicity, we can default to 0 if not supervisor/member, or fetch project-wide if needed.
-                // Current request implies we only care about user-specific sub-task count for sup/member on this view.
-                // The ProjectCard.tsx will show project.totalSubTasks if available. Let's assume for admin/owner they want the total.
-                // However, the original issue was about supervisor/member. So let's ensure the display logic for the card is consistent.
-                // For this iteration, `totalSubTasks` on the project object will mean "assigned to me" for sup/mem.
-                // If an admin/owner views this, `totalSubTasks` might be undefined or could fetch project-wide count.
-                // The current setup uses `countProjectSubTasks` from `projectService` for admin/owner implicitly as `userAssignedSubTasks` is empty.
-                // Let's stick to the user story: for supervisor/member, it's *their* assigned subtasks.
-                // Admin/owner still see project-wide counts if those fields were populated by some other means,
-                // but the `getAllTasksAssignedToUser` won't be used for them for sub-task count.
-                // Let's ensure they get the global count if they are not sup/mem
-                // The dashboard was already fetching `countProjectSubTasks` from `taskService`.
-                // To be clear: the request is "number of sub tasks assigned to the current user"
-                // So if not supervisor/member, this specific count is not relevant.
-                // The `ProjectCard` can show total if that's what `countProjectSubTasks` returns.
-                // For this specific view for sup/mem, totalSubTasks property WILL hold their assigned count.
-                subTaskCountForProject = 0; // Fallback for admin/owner if we don't re-implement project-wide sub-task count here
-                                            // which is fine because the request is specifically for sup/mem view.
-                                            // Admin/owners still see project-wide stats via other calls IF ProjectCard is designed to take them.
-                                            // The previous change added project-wide main, sub, issues.
-                                            // Let's keep it simple: `totalSubTasks` on project will be the assigned count for sup/mem.
-                                            // For admin/owner, it uses a different path entirely for `baseProjects` so this count won't be set here.
-                                            // The ProjectCard receives a Project object. If `totalSubTasks` is set, it displays it.
-                                            // The `DashboardPage` for admin/owner was ALREADY fetching total counts including total sub-tasks.
-                                            // So, this change specifically addresses the sup/mem case.
-              }
-              
-              const openIssueCountPromise = countProjectOpenIssues(project.id);
-              
-              console.log(`DashboardPage: [Project: ${project.id}] Initiating countProjectMainTasks.`);
-              console.log(`DashboardPage: [Project: ${project.id}] Sub-task count (for ${user?.role}): ${subTaskCountForProject}`);
-              console.log(`DashboardPage: [Project: ${project.id}] Initiating countProjectOpenIssues.`);
-
-              const [mainTaskCount, openIssueCount] = await Promise.all([
-                mainTaskCountPromise,
-                openIssueCountPromise // subTaskCount is now determined before Promise.all for sup/mem
-              ]);
-              
-              console.log(`DashboardPage: [Project: ${project.id}] Resolved mainTaskCount: ${mainTaskCount}`);
-              // subTaskCountForProject is already resolved for sup/mem. For admin/owner, countProjectSubTasks is still used
-              // let's re-add project-wide subtask count for admin/owner for completeness, as it was there before
-              let finalSubTaskCount = subTaskCountForProject; // for sup/mem
-              if (isAdminOrOwner) {
-                // The services/taskService has countProjectSubTasks - this was part of the previous request
-                // const projectWideSubTasks = await countProjectSubTasks(project.id); // This was removed in last prompt. Re-add if needed.
-                // For now, the focus is on sup/mem. If admin/owner needs this, their ProjectList will get projects from getUserProjects path
-                // which might already have these from a different calculation or might need them added.
-                // The issue is about supervisor/member view.
-                // Let's assume the other view (admin/owner) for ProjectList is already populating its `totalSubTasks` if needed.
-                // This component (DashboardPage) prepares `projectsToDisplay`.
-                // The existing `if (isAdminOrOwner)` path fetches `baseProjects = await getUserProjects(user.uid);`
-                // and then it proceeds to the `Promise.all` block. In that block, we need to ensure `subTaskCount` is also calculated.
-                // Let's re-introduce the taskService.countProjectSubTasks call for admin/owner.
-
-                // This block is for ALL users now.
-                // if (isSupervisor || isMember) -> subTaskCountForProject is from filter
-                // else (isAdminOrOwner) -> subTaskCountForProject should be from taskService.countProjectSubTasks
-                // This requires taskService.countProjectSubTasks again.
-                // To avoid re-adding it to imports if not needed, let's simplify.
-                // The request is specific to "My Assigned Work Overview" (sup/mem).
-                // The ProjectCard will display `totalSubTasks` if it exists.
-                // This `DashboardPage` is responsible for setting that field.
-                // So for sup/mem, `totalSubTasks` = their_assigned_subtasks_in_project.
-                // For admin/owner, their `baseProjects` might not have this count set by `getUserProjects`
-                // so the map block should set it. The previous version had `taskService.countProjectSubTasks` for this.
-                // Let's add it back for consistency.
-                // No, the user story is very specific "in the my assigned work overview page".
-                // So we only need to ensure this is correct for sup/mem.
-                // The generic ProjectCard will show `totalSubTasks`.
-                // If an admin/owner sees a project on their dashboard, their `totalSubTasks` should be project-wide.
-                // Let's modify the `subTaskCountPromise` to reflect this.
-              }
-              
-              const subTaskCountToUse = (isSupervisor || isMember) 
-                ? subTaskCountForProject 
-                : (await import('@/services/taskService')).countProjectSubTasks(project.id); // Fetch project-wide for admin/owner
-
-
-              console.log(`DashboardPage: [Project: ${project.id}] Resolved subTaskCount (final for display): ${await subTaskCountToUse}`);
-              console.log(`DashboardPage: [Project: ${project.id}] Resolved openIssueCount: ${openIssueCount}`);
+              const mainTaskIdsUserInvolvedWith = new Set(
+                assignedSubTasksInThisProject.map(st => st.parentId).filter(Boolean) as string[]
+              );
+              const countMainTasksForUser = mainTaskIdsUserInvolvedWith.size;
+              console.log(`DashboardPage: [${user.role} View][Project: ${project.id}] User-involved main task count (via assigned sub-tasks): ${countMainTasksForUser}`);
 
               return {
                 ...project,
-                totalMainTasks: mainTaskCount,
-                totalSubTasks: await subTaskCountToUse,
-                totalOpenIssues: openIssueCount,
+                totalMainTasks: countMainTasksForUser,
+                totalSubTasks: countSubTasksForUser,
+                totalOpenIssues: countOpenIssuesForUser,
               };
-            })
-          );
-          console.log('DashboardPage: Projects with counts:', projectsWithCounts);
-          setProjectsToDisplay(projectsWithCounts);
-        } else {
-          console.log('DashboardPage: No base projects to display or fetch counts for.');
-          setProjectsToDisplay([]);
+            });
+          } else {
+            console.log(`DashboardPage: ${user.role} - No project IDs found from user's tasks or issues. No projects to display.`);
+          }
+        } else if (isAdminOrOwner) {
+          console.log(`DashboardPage: User is admin/owner (UID: ${user.uid}). Fetching owned projects and project-wide counts.`);
+          const baseProjectsAdmin = await getUserProjects(user.uid);
+          console.log(`DashboardPage: Admin/Owner - Fetched ${baseProjectsAdmin.length} base projects.`);
+
+          if (baseProjectsAdmin.length > 0) {
+            finalProjectsToDisplay = await Promise.all(
+              baseProjectsAdmin.map(async (project) => {
+                console.log(`DashboardPage: [Admin/Owner View] Processing project ${project.id} (${project.name}) for project-wide counts.`);
+                
+                const mainTaskCountPromise = countProjectMainTasks(project.id);
+                const subTaskCountPromise = countProjectSubTasks(project.id);
+                const openIssueCountPromise = countProjectOpenIssues(project.id);
+
+                const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
+                  mainTaskCountPromise,
+                  subTaskCountPromise,
+                  openIssueCountPromise,
+                ]);
+                
+                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved mainTaskCount: ${mainTaskCount}`);
+                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved subTaskCount: ${subTaskCount}`);
+                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved openIssueCount: ${openIssueCount}`);
+                
+                return {
+                  ...project,
+                  totalMainTasks: mainTaskCount,
+                  totalSubTasks: subTaskCount,
+                  totalOpenIssues: openIssueCount,
+                };
+              })
+            );
+          }
         }
+
+        console.log('DashboardPage: Final projectsToDisplay with counts:', finalProjectsToDisplay.length > 0 ? finalProjectsToDisplay : 'None');
+        setProjectsToDisplay(finalProjectsToDisplay);
 
       } catch (err: any) {
         console.error("DashboardPage: Error fetching dashboard data:", err);
@@ -192,9 +131,11 @@ export default function DashboardPage() {
     };
 
     fetchDashboardData();
-  }, [user, authLoading, isSupervisor, isAdminOrOwner, isMember]);
+  }, [user, authLoading]);
 
-  const pageTitle = isSupervisor ? "My Assigned Work Overview" : (isMember ? "My Assigned Work Overview" : "My Projects");
+  const isSupervisor = user?.role === 'supervisor';
+  const isMember = user?.role === 'member';
+  const pageTitle = (isSupervisor || isMember) ? "My Assigned Work Overview" : "My Projects";
   const canCreateProject = user && !isSupervisor && !isMember;
 
   if (authLoading || dashboardLoading) {
@@ -224,3 +165,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
