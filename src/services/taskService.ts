@@ -465,7 +465,7 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
 
 export const countProjectSubTasks = async (projectId: string): Promise<number> => {
   if (!projectId) {
-    console.warn('taskService: countProjectSubTasks called with no projectId.');
+    console.warn('taskService: countProjectSubTasks (DEBUG MODE) called with no projectId.');
     return 0;
   }
   console.log(`taskService: countProjectSubTasks (DEBUG MODE) - Querying 'tasks' collection with: projectId == '${projectId}', parentId != null`);
@@ -473,15 +473,14 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
-    where('parentId', '!=', null)
+    where('parentId', '!=', null) // Ensures we only count documents that HAVE a parentId
   );
 
   try {
-    // DEBUG: Use getDocs instead of getCountFromServer
+    // DEBUG: Use getDocs instead of getCountFromServer to see what documents are being matched
     const querySnapshot = await getDocs(q);
     const count = querySnapshot.size; // Get count from the snapshot size
     const docsFound = querySnapshot.docs.map(doc => ({ id: doc.id, parentId: doc.data().parentId, projectId: doc.data().projectId, name: doc.data().name }));
-
 
     if (count === 0) {
       console.warn(`taskService: countProjectSubTasks (DEBUG MODE) - Query for projectId '${projectId}' (parentId != null) executed successfully using getDocs but returned 0 sub-tasks. Docs found by query: ${JSON.stringify(docsFound)}. Please verify data. Ensure tasks intended as sub-tasks have a non-null 'parentId' and the correct 'projectId'.`);
@@ -504,7 +503,7 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
       `OTHER CHECKS: Ensure 'parentId' fields are correctly set to a string ID for sub-tasks and 'null' for main tasks. Also, verify that 'projectId' on these sub-tasks matches the project ID being queried.\n` +
       `Original error message: ${e.message}\n` +
       `Error code: ${e.code || 'N/A'}\n\n`, error);
-    return 0;
+    return 0; // Return 0 on error
   }
 };
 
