@@ -11,18 +11,19 @@ import { useAuth } from '@/hooks/useAuth';
 interface SubTaskListProps {
   mainTaskId: string;
   projectId: string; 
+  mainTaskOwnerUid: string; // UID of the owner of the main task
 }
 
-export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
+export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTaskListProps) {
   const [subTasks, setSubTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   
-  const isSupervisor = user?.role === 'supervisor';
+  const isViewerMainTaskOwner = user?.uid === mainTaskOwnerUid;
 
   const fetchSubTasksData = async () => {
-    console.log('[SubTaskList Debug] fetchSubTasksData called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null');
+    console.log('[SubTaskList Debug] fetchSubTasksData called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null', 'MainTaskOwnerUid:', mainTaskOwnerUid);
     if (authLoading || !user || !mainTaskId) {
       console.log('[SubTaskList Debug] Skipping fetch, auth loading, no user, or no mainTaskId.');
       if(!authLoading && !user && mainTaskId) setLoading(false); 
@@ -32,10 +33,21 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
     setLoading(true);
     setError(null);
     try {
-      // getSubTasks now always fetches ALL sub-tasks for the mainTaskId
       const fetchedSubTasks = await getSubTasks(mainTaskId);
-      console.log('[SubTaskList Debug] Fetched sub-tasks for mainTaskId', mainTaskId, ':', fetchedSubTasks);
-      setSubTasks(fetchedSubTasks);
+      console.log('[SubTaskList Debug] Fetched all sub-tasks for mainTaskId', mainTaskId, ':', fetchedSubTasks.length > 0 ? fetchedSubTasks : 'None');
+
+      let finalSubTasks = fetchedSubTasks;
+      if (!isViewerMainTaskOwner) {
+        console.log(`[SubTaskList Debug] User ${user.uid} is NOT the main task owner (${mainTaskOwnerUid}). Filtering sub-tasks by assignment.`);
+        finalSubTasks = fetchedSubTasks.filter(st => 
+          st.assignedToUids?.includes(user.uid)
+        );
+        console.log(`[SubTaskList Debug] Original sub-task count: ${fetchedSubTasks.length}, Filtered sub-task count for user ${user.uid}: ${finalSubTasks.length}`);
+      } else {
+        console.log(`[SubTaskList Debug] User ${user.uid} IS the main task owner. Displaying all ${fetchedSubTasks.length} sub-tasks.`);
+      }
+      setSubTasks(finalSubTasks);
+
     } catch (err: any) {
       console.error('[SubTaskList Debug] Error fetching sub-tasks for mainTaskId', mainTaskId, ':', err);
       let displayError = `Failed to load sub-tasks. ${err.message || "Unknown error"}`;
@@ -50,12 +62,15 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   };
 
   useEffect(() => {
-    console.log('[SubTaskList Debug] useEffect triggered. mainTaskId:', mainTaskId, 'User available:', !!user, 'Auth loading:', authLoading);
+    console.log('[SubTaskList Debug] useEffect triggered. mainTaskId:', mainTaskId, 'User available:', !!user, 'Auth loading:', authLoading, 'MainTaskOwnerUid:', mainTaskOwnerUid);
     if (!mainTaskId) {
         console.warn('[SubTaskList Debug] mainTaskId is undefined or null, skipping fetch.');
         setLoading(false);
         setError('Cannot load sub-tasks: Main task ID is missing.');
         return;
+    }
+    if (!mainTaskOwnerUid && user && !authLoading) {
+        console.warn('[SubTaskList Debug] mainTaskOwnerUid is undefined or null, but user is available. Filtering behavior might be unexpected or default to showing all. Ensure mainTaskOwnerUid is passed.');
     }
     if (user && !authLoading) {
         fetchSubTasksData();
@@ -65,7 +80,7 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
         setError('Cannot load sub-tasks: User not authenticated.');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mainTaskId, user, authLoading]);
+  }, [mainTaskId, user, authLoading, mainTaskOwnerUid]); // Added mainTaskOwnerUid as dependency
 
   const onSubTaskUpdated = () => {
     console.log('[SubTaskList Debug] onSubTaskUpdated called, re-fetching sub-tasks for mainTaskId:', mainTaskId);
@@ -88,21 +103,22 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
   }
 
   if (subTasks.length === 0) {
-    // The message can be generic as supervisors will see all sub-tasks anyway.
-    // Specific assigned work is visible when they drill down into a sub-task's issues.
-    const message = "No sub-tasks yet for this main task. Add sub-tasks to get started.";
-    console.log('[SubTaskList Debug] Render - No sub-tasks found for mainTaskId:', mainTaskId);
+    let noSubTasksMessage = "No sub-tasks yet for this main task. Add sub-tasks to get started.";
+    if (user && mainTaskOwnerUid && user.uid !== mainTaskOwnerUid) {
+      noSubTasksMessage = "No sub-tasks assigned to you under this main task.";
+    }
+    console.log('[SubTaskList Debug] Render - No sub-tasks to display for mainTaskId:', mainTaskId, 'Message:', noSubTasksMessage);
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <ListChecks className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-3 font-headline text-lg font-semibold">No Sub-tasks Yet</h3>
+        <h3 className="mt-3 font-headline text-lg font-semibold">{isViewerMainTaskOwner ? "No Sub-tasks Yet" : "No Assigned Sub-tasks"}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          {message}
+          {noSubTasksMessage}
         </p>
       </div>
     );
   }
-  console.log('[SubTaskList Debug] Render - Displaying sub-tasks for mainTaskId:', mainTaskId, 'SubTasks:', subTasks);
+  console.log('[SubTaskList Debug] Render - Displaying sub-tasks for mainTaskId:', mainTaskId, 'Count:', subTasks.length, 'SubTasks:', subTasks);
   return (
     <div className="space-y-4">
       {subTasks.map((subTask) => (
@@ -110,10 +126,9 @@ export function SubTaskList({ mainTaskId, projectId }: SubTaskListProps) {
             key={subTask.id} 
             task={subTask} 
             onTaskUpdated={onSubTaskUpdated}
-            isSubTaskView={true} // Indicates this card represents a sub-task in this list
+            isSubTaskView={true} 
         />
       ))}
     </div>
   );
 }
-

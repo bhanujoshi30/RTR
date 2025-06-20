@@ -254,12 +254,12 @@ export default function TaskDetailsPage() {
         </CardContent>
       </Card>
 
-      {isMainTask && (
+      {isMainTask && task && task.ownerUid && (
         <div className="space-y-6">
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center rounded-lg border bg-card p-6 shadow-sm">
             <h2 className="font-headline text-2xl font-semibold flex items-center">
               <ListChecks className="mr-3 h-7 w-7 text-primary" />
-              Sub-tasks {isSupervisor && !isOwner && "(Filtered by assignment where applicable)"}
+              Sub-tasks
             </h2>
             {canAddSubTask && (
               <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
@@ -278,7 +278,7 @@ export default function TaskDetailsPage() {
               </Dialog>
             )}
           </div>
-          {user && <SubTaskList mainTaskId={taskId} projectId={projectId} />}
+          {user && task && task.ownerUid && <SubTaskList mainTaskId={taskId} projectId={projectId} mainTaskOwnerUid={task.ownerUid} />}
         </div>
       )}
 
@@ -327,6 +327,3 @@ export default function TaskDetailsPage() {
     </div>
   );
 }
-
-    
-        
