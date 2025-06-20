@@ -12,8 +12,8 @@ import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks 
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
-import { db } from '@/lib/firebase'; // Correctly import db
-import { collection, query, where, getDocs } from 'firebase/firestore'; // Correctly import Firestore functions
+// Firestore functions like collection, query, where, getDocs are NOT needed here anymore
+// as we revert to using service functions.
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -102,25 +102,9 @@ export default function DashboardPage() {
                 console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectMainTasks.`);
                 const mainTaskCountPromise = countProjectMainTasks(project.id);
                 
-                let subTaskCountPromise;
-                // DEBUGGING: Direct query for sub-tasks for project 1gNABTaAUWYvIBd6niDW
-                if (project.id === '1gNABTaAUWYvIBd6niDW') {
-                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] DEBUG: Initiating DIRECT sub-task query.`);
-                  const tasksCollectionRef = collection(db, 'tasks');
-                  const q = query(tasksCollectionRef, where('projectId', '==', project.id), where('parentId', '!=', null));
-                  subTaskCountPromise = getDocs(q).then(snapshot => {
-                    console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] DEBUG: Direct sub-task query snapshot size: ${snapshot.size}`);
-                    const foundDocs = snapshot.docs.map(doc => ({id: doc.id, ...doc.data()}));
-                    console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] DEBUG: Direct sub-task query found docs:`, JSON.stringify(foundDocs, null, 2));
-                    return snapshot.size;
-                  }).catch(err => {
-                    console.error(`DashboardPage: [Admin/Owner View][Project: ${project.id}] DEBUG: Direct sub-task query FAILED:`, err);
-                    return 0; // Fallback on error
-                  });
-                } else {
-                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks (service).`);
-                  subTaskCountPromise = countProjectSubTasks(project.id);
-                }
+                // Revert to using the service function for sub-task count
+                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks (service).`);
+                const subTaskCountPromise = countProjectSubTasks(project.id);
                 
                 console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectOpenIssues.`);
                 const openIssueCountPromise = countProjectOpenIssues(project.id);
