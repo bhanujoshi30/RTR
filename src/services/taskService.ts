@@ -38,7 +38,7 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
   return {
     id: docSnapshot.id,
     projectId: data.projectId,
-    parentId: data.parentId || null,
+    parentId: data.parentId || null, // Ensure parentId is null if not present or falsy
     name: data.name,
     description: data.description || '',
     status: data.status as TaskStatus,
@@ -101,7 +101,7 @@ export const createTask = async (
 };
 
 export const getProjectMainTasks = async (projectId: string): Promise<Task[]> => {
-  console.log('TaskList: getProjectMainTasks for projectId:', projectId);
+  console.log('taskService: getProjectMainTasks for projectId:', projectId);
 
   const q = query(
     tasksCollection,
@@ -114,11 +114,11 @@ export const getProjectMainTasks = async (projectId: string): Promise<Task[]> =>
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
      if (tasks.length === 0) {
-      console.log(`TaskList: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks. Index needed: projectId (ASC), parentId (ASC), createdAt (DESC)`);
+      console.log(`taskService: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks. Index needed: projectId (ASC), parentId (ASC), createdAt (DESC)`);
     }
     return tasks;
   } catch (error: any) {
-    console.error('TaskList: Error fetching main project tasks for projectId:', projectId, error.message, error.code ? `(${error.code})` : '', error.stack);
+    console.error('taskService: Error fetching main project tasks for projectId:', projectId, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
       console.error("Firestore query for main tasks requires an index. Fields: projectId (ASC), parentId (ASC), createdAt (DESC). Check Firebase console for link.");
     }
@@ -173,7 +173,7 @@ export const getAssignedSubTasksForUser = async (mainTaskId: string, userUid: st
   } catch (error: any) {
     console.error(`taskService: Error in getAssignedSubTasksForUser for mainTaskId: ${mainTaskId}, userUid: ${userUid}`, error.message, error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error("Firestore query for getAssignedSubTasksForUser requires an index. Fields (in order): assignedToUids (ARRAY_CONTAINS), parentId (ASC), createdAt (ASC). Check Firebase console. The error message from Firebase often provides a direct link to create the index.");
+      console.error("Firestore query for getAssignedSubTasksForUser requires an index. Fields (in order): parentId (ASC), assignedToUids (ARRAY_CONTAINS), createdAt (ASC). Check Firebase console. The error message from Firebase often provides a direct link to create the index.");
     }
     throw error;
   }
@@ -304,24 +304,29 @@ export const updateTask = async (
       if(hasAllowedUpdate) {
         Object.assign(updatePayload, allowedUpdates);
       } else {
+        // If only updatedAt is in payload and no actual field changed, no need to update
         if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt) return;
       }
     }
-  } else { 
+  } else { // This is a Main Task
     if (!isOwner) {
       throw new Error('Access denied. Only the project owner can edit main task details.');
     }
     if (updates.name !== undefined) updatePayload.name = updates.name;
 
+    // For main tasks, only allow 'name' and 'updatedAt' to be changed through this general update function.
+    // Other fields like description, status, dueDate, assignees are not typically managed for main tasks here.
     const allowedMainTaskKeys = ['name', 'updatedAt'];
     Object.keys(updatePayload).forEach(key => {
         if (!allowedMainTaskKeys.includes(key as string)) {
             delete updatePayload[key];
         }
     });
+    // If only updatedAt is in payload (e.g. no name change was provided), no need to update.
     if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt && updates.name === undefined) return;
   }
 
+  // Only proceed with update if there are actual changes beyond just 'updatedAt'
   if (Object.keys(updatePayload).length > 1) {
     await updateDoc(taskDocRef, updatePayload);
   }
@@ -340,7 +345,7 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
   const isOwner = taskData.ownerUid === userUid;
   const isAssignedUser = !!taskData.parentId && (taskData.assignedToUids?.includes(userUid) ?? false);
 
-  if (taskData.parentId) { 
+  if (taskData.parentId) { // It's a sub-task
     if (isOwner || isAssignedUser) { 
       if (status === 'Completed') {
         const openIssuesExist = await hasOpenIssues(taskId);
@@ -353,6 +358,7 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
       throw new Error('Access denied for status update. Task not owned by you, or you are not assigned to it.');
     }
   } else {
+    // Status updates for main tasks are not directly handled here; they might be derived or not user-editable.
     console.warn(`taskService: Attempted to update status for main task ${taskId} via updateTaskStatus, which is not directly applicable. Main task status is derived or not set this way.`);
   }
 };
@@ -369,29 +375,33 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
   }
   const taskToDelete = mapDocumentToTask(taskSnap);
 
+  // Only the owner of the task (main or sub) can delete it.
   if (taskToDelete.ownerUid !== userUid) {
     throw new Error('Access denied. Only the task owner can delete it.');
   }
 
   const batch = writeBatch(db);
 
+  // Delete the task itself
   batch.delete(taskDocRef);
 
-  await deleteIssuesForTask(taskId, userUid); 
+  // Delete all issues associated with this task (whether it's main or sub)
+  await deleteIssuesForTask(taskId, userUid); // This function handles batching internally or can be adapted
 
-  if (!taskToDelete.parentId) { 
+  // If it's a main task, also delete all its sub-tasks and their issues
+  if (!taskToDelete.parentId) { // It's a main task
     const subTasksQuery = query(tasksCollection, where('parentId', '==', taskId));
     const subTasksSnapshot = await getDocs(subTasksQuery);
 
     for (const subTaskDoc of subTasksSnapshot.docs) {
-      batch.delete(subTaskDoc.ref);
-      await deleteIssuesForTask(subTaskDoc.id, userUid); 
+      batch.delete(subTaskDoc.ref); // Delete the sub-task
+      await deleteIssuesForTask(subTaskDoc.id, userUid); // Delete issues of this sub-task
     }
   }
 
   try {
     await batch.commit();
-    console.log(`taskService: Task ${taskId} and its associated data (issues, sub-tasks) deleted by user ${userUid}.`);
+    console.log(`taskService: Task ${taskId} and its associated data (issues, sub-tasks if main task) deleted by user ${userUid}.`);
   } catch (error: any) {
     console.error(`taskService: Error deleting task ${taskId} and/or its related data:`, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;
@@ -401,6 +411,7 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
 export const deleteAllTasksForProject = async (projectId: string, projectOwnerUid: string): Promise<void> => {
   if (!projectOwnerUid) throw new Error("User not authenticated for deleting all project tasks");
 
+  // Query for all tasks (both main and sub-tasks) belonging to the project
   const projectTasksQuery = query(
     tasksCollection,
     where("projectId", "==", projectId)
@@ -411,24 +422,29 @@ export const deleteAllTasksForProject = async (projectId: string, projectOwnerUi
     const tasksSnapshot = await getDocs(projectTasksQuery);
     if (tasksSnapshot.empty) {
         console.log(`taskService: No tasks found for project ${projectId} to delete.`);
-        return;
+        return; // No tasks to delete
     }
 
+    // Collect all task IDs to delete their issues
     const taskIdsToDeleteIssuesFor: string[] = [];
     tasksSnapshot.forEach(taskDoc => {
         taskIdsToDeleteIssuesFor.push(taskDoc.id);
-        batch.delete(taskDoc.ref);
+        batch.delete(taskDoc.ref); // Add task deletion to batch
     });
 
+    // Delete issues for all collected task IDs
+    // This needs to be done carefully, perhaps in smaller batches if many tasks
     for (const taskId of taskIdsToDeleteIssuesFor) {
-        await deleteIssuesForTask(taskId, projectOwnerUid); 
+        await deleteIssuesForTask(taskId, projectOwnerUid); // Assuming deleteIssuesForTask handles its own batching or is efficient
     }
 
-    await batch.commit(); 
+    await batch.commit(); // Commit all task deletions
     console.log(`taskService: Successfully deleted all tasks and their issues for project ${projectId}.`);
 
   } catch (error: any) {
     console.error(`taskService: Error in deleteAllTasksForProject for projectId ${projectId} by user ${projectOwnerUid}:`, error.message, error.code ? `(${error.code})` : '', error.stack);
+    // Consider how to handle partial failures if issue deletion fails but task deletion is in the batch.
+    // For simplicity here, we throw the error.
     throw error;
   }
 };
@@ -437,11 +453,12 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   if (!userUid) return [];
   console.log(`taskService: getAllTasksAssignedToUser (sub-tasks) for userUid: ${userUid}`);
 
+  // This query specifically targets sub-tasks (parentId != null) assigned to the user.
   const q = query(
     tasksCollection,
     where('assignedToUids', 'array-contains', userUid),
-    where('parentId', '!=', null), 
-    orderBy('parentId'), 
+    where('parentId', '!=', null), // Ensure it's a sub-task
+    orderBy('parentId'), // Order by main task ID
     orderBy('createdAt', 'desc')
   );
 
@@ -463,7 +480,7 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   }
 };
 
-// DEBUG MODE: Using getDocs to see what documents are actually being matched
+// DEBUG MODE for countProjectSubTasks
 export const countProjectSubTasks = async (projectId: string): Promise<number> => {
   console.log(`taskService: countProjectSubTasks (DEBUG MODE) called for projectId: ${projectId}`);
   if (!projectId) {
@@ -475,10 +492,11 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
-    where('parentId', '!=', null)
+    where('parentId', '!=', null) // Key condition for sub-tasks
   );
 
   try {
+    // DEBUG: Using getDocs to see what documents are actually being matched
     const querySnapshot = await getDocs(q);
     const count = querySnapshot.size;
     const docsFound = querySnapshot.docs.map(doc => ({ id: doc.id, parentId: doc.data().parentId, projectId: doc.data().projectId, name: doc.data().name }));
@@ -488,7 +506,7 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
     } else {
       console.log(`taskService: countProjectSubTasks (DEBUG MODE) - Successfully queried using getDocs. Found ${count} sub-tasks for project ${projectId}. Docs: ${JSON.stringify(docsFound)}`);
     }
-    return count;
+    return count; // Return the count from getDocs().size
   } catch (error: any) {
     const e = error as { code?: string; message?: string };
     console.error(`\n\n🚨🚨🚨 Firestore Index Might Be Required or Query Failed for countProjectSubTasks (DEBUG MODE) 🚨🚨🚨\n` +
@@ -499,12 +517,12 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
       `  - Collection: 'tasks'\n` +
       `  - Fields:\n` +
       `    1. 'projectId' (Ascending)\n` +
-      `    2. 'parentId' (Ascending OR Descending - Firestore will guide you. An ascending index on parentId often works for '!=' comparisons when combined with an equality filter on another field like projectId.)\n` +
+      `    2. 'parentId' (Ascending OR Descending - Firestore will guide you if a specific direction is needed for '!=' queries. An ascending index on parentId often works well when combined with an equality filter on another field like projectId.)\n` +
       `ACTION: Please check your Firebase Console -> Firestore Database -> Indexes. If the exact error message from Firebase provides a direct link to create the index, use that.\n` +
       `OTHER CHECKS: Ensure 'parentId' fields are correctly set to a string ID for sub-tasks and 'null' for main tasks. Also, verify that 'projectId' on these sub-tasks matches the project ID being queried.\n` +
       `Original error message: ${e.message}\n` +
       `Error code: ${e.code || 'N/A'}\n\n`, error);
-    return 0; 
+    return 0; // Return 0 in case of an error to prevent breaking the dashboard further
   }
 };
 
@@ -543,7 +561,7 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     } else {
       console.error(`An unexpected error occurred while counting main tasks for project ${projectId}.`);
     }
-    return 0; 
+    return 0; // Return 0 in case of an error to prevent breaking the dashboard further
   }
 };
     
