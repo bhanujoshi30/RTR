@@ -1,5 +1,4 @@
 
-"use client";
 
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { useParams, useRouter } from 'next/navigation';
