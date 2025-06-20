@@ -7,33 +7,27 @@ import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createProject, updateProject } from '@/services/projectService';
-import type { Project, ProjectStatus } from '@/types';
+import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-// import { Label } from '@/components/ui/label'; // Not used directly
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-// import { Slider } from '@/components/ui/slider'; // Slider removed
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Save, Loader2 } from 'lucide-react';
 
-const projectStatuses: ProjectStatus[] = ['Not Started', 'In Progress', 'Completed'];
-
-// Progress removed from schema
+// Status removed from schema, as it's now dynamic
 const projectSchema = z.object({
   name: z.string().min(3, { message: 'Project name must be at least 3 characters' }).max(100),
   description: z.string().max(500).optional(),
-  status: z.enum(projectStatuses),
 });
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
 
 interface ProjectFormProps {
-  project?: Project; 
-  onFormSuccess?: () => void; 
+  project?: Project;
+  onFormSuccess?: () => void;
 }
 
 export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
@@ -47,8 +41,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
     defaultValues: {
       name: project?.name || '',
       description: project?.description || '',
-      status: project?.status || 'Not Started',
-      // progress: project?.progress || 0, // Progress removed
+      // status is no longer part of the form's default values
     },
   });
 
@@ -62,23 +55,26 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
       return;
     }
     setLoading(true);
-    // Remove progress from data payload
-    const { ...projectDataWithoutProgress } = data;
+    // projectData will not include status
+    const projectData = {
+      name: data.name,
+      description: data.description || '', // Ensure description is at least an empty string
+    };
 
     try {
       if (project) {
-        await updateProject(project.id, user.uid, projectDataWithoutProgress);
+        await updateProject(project.id, user.uid, projectData);
         toast({ title: 'Project Updated', description: `"${data.name}" has been updated.` });
       } else {
-        const newProjectId = await createProject(user.uid, projectDataWithoutProgress);
+        const newProjectId = await createProject(user.uid, projectData);
         toast({ title: 'Project Created', description: `"${data.name}" has been created.` });
-        router.push(`/projects/${newProjectId}`); 
+        router.push(`/projects/${newProjectId}`);
       }
-      
+
       if (onFormSuccess) {
-        onFormSuccess(); 
+        onFormSuccess();
       }
-      router.refresh(); 
+      router.refresh();
     } catch (error: any) {
       toast({
         title: project ? 'Update Failed' : 'Creation Failed',
@@ -124,49 +120,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select project status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {projectStatuses.map(status => (
-                        <SelectItem key={status} value={status}>{status}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            {/* Progress Slider Removed
-            <FormField
-              control={form.control}
-              name="progress"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Progress: {field.value}%</FormLabel>
-                  <FormControl>
-                    <Slider
-                      defaultValue={[field.value]}
-                      onValueChange={(value) => field.onChange(value[0])}
-                      max={100}
-                      step={1}
-                      aria-label="Project progress slider"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            */}
+            {/* Status Field Removed */}
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>
