@@ -38,7 +38,7 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
   return {
     id: docSnapshot.id,
     projectId: data.projectId,
-    parentId: data.parentId || null, // Ensure parentId is null if not present or falsy
+    parentId: data.parentId || null,
     name: data.name,
     description: data.description || '',
     status: data.status as TaskStatus,
@@ -46,9 +46,19 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
     assignedToUids: data.assignedToUids || [],
     assignedToNames: data.assignedToNames || [],
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
-    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : null),
+    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : (data.parentId ? new Date() : null)), // ensure subtask has date, main task can be null
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
+    progress: data.progress // Will be populated for main tasks by calling functions
   };
+};
+
+export const calculateMainTaskProgress = async (mainTaskId: string): Promise<number> => {
+  const subTasks = await getSubTasks(mainTaskId);
+  if (subTasks.length === 0) {
+    return 0; // Or 100 if main tasks without subtasks are considered complete by default
+  }
+  const completedSubTasks = subTasks.filter(st => st.status === 'Completed').length;
+  return Math.round((completedSubTasks / subTasks.length) * 100);
 };
 
 export const createTask = async (
@@ -77,16 +87,16 @@ export const createTask = async (
   if (taskData.parentId) { 
     newTaskPayload.description = taskData.description || '';
     newTaskPayload.status = taskData.status || 'To Do';
-    if (taskData.dueDate === undefined && taskData.parentId) { 
+    if (taskData.dueDate === undefined || taskData.dueDate === null) { 
         throw new Error('Due date is required for sub-tasks.');
     }
-    newTaskPayload.dueDate = taskData.dueDate ? Timestamp.fromDate(taskData.dueDate) : null;
+    newTaskPayload.dueDate = Timestamp.fromDate(taskData.dueDate);
     newTaskPayload.assignedToUids = taskData.assignedToUids || [];
     newTaskPayload.assignedToNames = taskData.assignedToNames || [];
   } else { 
     newTaskPayload.description = ''; 
     newTaskPayload.status = 'To Do'; 
-    newTaskPayload.dueDate = null; 
+    newTaskPayload.dueDate = taskData.dueDate ? Timestamp.fromDate(taskData.dueDate) : null; 
     newTaskPayload.assignedToUids = []; 
     newTaskPayload.assignedToNames = [];
   }
@@ -112,7 +122,13 @@ export const getProjectMainTasks = async (projectId: string): Promise<Task[]> =>
 
   try {
     const querySnapshot = await getDocs(q);
-    const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    const mainTasksPromises = querySnapshot.docs.map(async (docSnap) => {
+      const task = mapDocumentToTask(docSnap);
+      task.progress = await calculateMainTaskProgress(task.id);
+      return task;
+    });
+    const tasks = await Promise.all(mainTasksPromises);
+
      if (tasks.length === 0) {
       console.log(`taskService: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks. Index needed: projectId (ASC), parentId (ASC), createdAt (DESC)`);
     }
@@ -196,8 +212,11 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
   }
 
   const taskData = mapDocumentToTask(taskSnap);
+  
+  if (!taskData.parentId) { // If it's a main task, calculate its progress
+      taskData.progress = await calculateMainTaskProgress(taskId);
+  }
 
-  // Admin Override: If the user is an admin, grant access if the task exists.
   if (userRole === 'admin') {
     console.log(`[taskService.getTaskById] Access GRANTED to task ${taskId} (User is admin).`);
     return taskData;
@@ -319,14 +338,20 @@ export const updateTask = async (
       throw new Error('Access denied. Only the project owner can edit main task details.');
     }
     if (updates.name !== undefined) updatePayload.name = updates.name;
+    if (updates.description !== undefined) updatePayload.description = updates.description; // Allow description update for main task by owner
+    if (updates.dueDate !== undefined) { // Allow due date update for main task by owner
+        updatePayload.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
+    }
 
-    const allowedMainTaskKeys = ['name', 'updatedAt'];
+
+    const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt'];
     Object.keys(updatePayload).forEach(key => {
         if (!allowedMainTaskKeys.includes(key as string)) {
             delete updatePayload[key];
         }
     });
-    if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt && updates.name === undefined) return;
+     if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt && updates.name === undefined && updates.description === undefined && updates.dueDate === undefined) return;
+
   }
 
   if (Object.keys(updatePayload).length > 1) {
@@ -470,40 +495,46 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   }
 };
 
+// DEBUG MODE - uses getDocs to see what query returns
 export const countProjectSubTasks = async (projectId: string): Promise<number> => {
-  console.log(`taskService: countProjectSubTasks called for projectId: ${projectId}`);
+  console.log(`taskService: countProjectSubTasks (DEBUG MODE) called for projectId: ${projectId}`);
   if (!projectId) {
-    console.warn('taskService: countProjectSubTasks called with no projectId.');
+    console.warn('taskService: countProjectSubTasks (DEBUG MODE) called with no projectId.');
     return 0;
   }
 
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
-    where('parentId', '!=', null) 
+    where('parentId', '!=', null)
   );
 
   try {
-    const snapshot = await getCountFromServer(q);
-    const count = snapshot.data().count;
+    const querySnapshot = await getDocs(q);
+    const count = querySnapshot.size;
     if (count === 0) {
-      console.warn(`taskService: countProjectSubTasks - Query for projectId '${projectId}' (parentId != null) executed successfully using getCountFromServer but returned 0 sub-tasks. Please verify data and/or Firestore indexes if this is unexpected. Ensure tasks intended as sub-tasks have a non-null 'parentId' and the correct 'projectId'.`);
+      console.warn(`taskService: countProjectSubTasks (DEBUG MODE) - Query for projectId '${projectId}' (parentId != null) executed successfully using getDocs but returned 0 sub-tasks. Docs found by query: []. Please verify data and/or Firestore indexes if this is unexpected. Ensure tasks intended as sub-tasks have a non-null 'parentId' and the correct 'projectId'.`);
     } else {
-      console.log(`taskService: countProjectSubTasks - Successfully queried using getCountFromServer. Found ${count} sub-tasks for project ${projectId}.`);
+      const docsFound = querySnapshot.docs.map(d => ({ id: d.id, parentId: d.data().parentId, projectId: d.data().projectId, name: d.data().name}));
+      console.log(`taskService: countProjectSubTasks (DEBUG MODE) - Successfully queried using getDocs. Found ${count} sub-tasks for project ${projectId}. Docs: ${JSON.stringify(docsFound)}`);
     }
     return count;
   } catch (error: any) {
     const e = error as { code?: string; message?: string };
-    console.error(`\n\n🚨 taskService: Error counting sub-tasks for project ${projectId} using getCountFromServer. Message: ${e.message}. Code: ${e.code || 'N/A'}. Full error:\n`, error);
+    console.error(`\n\n🚨 taskService: Error counting sub-tasks for project ${projectId} (DEBUG MODE - using getDocs). Message: ${e.message}. Code: ${e.code || 'N/A'}. Full error:\n`, error);
     if (e.code === 'failed-precondition' && e.message && e.message.toLowerCase().includes("index")) {
-      console.error(`\n\n🚨🚨🚨 Firestore Index Required for countProjectSubTasks 🚨🚨🚨\n` +
-        `The query to count sub-tasks for project '${projectId}' failed because a Firestore index is missing or not yet active.\n` +
-        `DETAILS:\n` +
-        ` - Collection: 'tasks'\n` +
-        ` - Query conditions: projectId == '${projectId}', parentId != null\n` +
-        ` - Likely required index fields: 'projectId' (Ascending), 'parentId' (Ascending or Descending - Firestore will guide you if a specific direction is needed for '!=' queries).\n` +
-        `Please go to your Firebase Console -> Firestore Database -> Indexes, and create the required composite index.\n` +
-        `The detailed error message from Firebase (often including a URL to create the index) might be visible in your browser's network tab for the failing request, or earlier in the console if not caught cleanly.\n\n`);
+      console.error(`\n\n🚨🚨🚨 Firestore Index Might Be Required or Query Failed for countProjectSubTasks (DEBUG MODE) 🚨🚨🚨\n` +
+        `PROJECT ID: '${projectId}'\n` +
+        `QUERY: Firestore query on 'tasks' collection where 'projectId' == '${projectId}' AND 'parentId' != null.\n` +
+        `COMMON CAUSE: This type of query often requires a composite index.\n` +
+        `SUGGESTED INDEX:\n` +
+        `  - Collection: 'tasks'\n` +
+        `  - Fields:\n` +
+        `    1. 'projectId' (Ascending)\n` +
+        `    2. 'parentId' (Ascending OR Descending - Firestore will guide you if a specific direction is needed for '!=' queries)\n` +
+        `ACTION: Please check your Firebase Console -> Firestore Database -> Indexes. If the exact error message from Firebase provides a direct link to create the index, use that.\n` +
+        `Original error message: ${e.message}\n` +
+        `Error code: ${e.code}\n\n`);
     } else if (e.message && e.message.toLowerCase().includes("index")) {
         console.error(`An index-related error occurred while counting sub-tasks for project ${projectId}. Please check your Firestore indexes for the 'tasks' collection. Query: projectId == ${projectId}, parentId != null.`);
     }
@@ -556,4 +587,5 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     
     
   
+
 

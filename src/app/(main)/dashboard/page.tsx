@@ -7,13 +7,12 @@ import { FolderPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project, Task as AppTask } from '@/types';
+import type { Project, Task as AppTask } from '@/types'; // Task aliased as AppTask if needed, but direct use is fine if no conflict
 import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
-// Firestore functions like collection, query, where, getDocs are NOT needed here anymore
-// as we revert to using service functions.
+// Firestore functions are not directly used here for counts anymore due to service layer abstraction
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -61,6 +60,7 @@ export default function DashboardPage() {
           console.log(`DashboardPage: ${userRoleForLog} - Combined ${allRelevantProjectIds.length} unique projectIds from user's work:`, allRelevantProjectIds);
 
           if (allRelevantProjectIds.length > 0) {
+            // getProjectsByIds now calculates progress dynamically
             const baseProjectsForUser = await getProjectsByIds(allRelevantProjectIds);
             console.log(`DashboardPage: ${userRoleForLog} - Fetched ${baseProjectsForUser.length} base projects for user-specific counts.`);
 
@@ -80,7 +80,7 @@ export default function DashboardPage() {
               console.log(`DashboardPage: [${userRoleForLog} View][Project: ${project.id}] User-involved main task count (via assigned sub-tasks): ${countMainTasksForUser}`);
 
               return {
-                ...project,
+                ...project, // project already has calculated progress
                 totalMainTasks: countMainTasksForUser,
                 totalSubTasks: countSubTasksForUser,
                 totalOpenIssues: countOpenIssuesForUser,
@@ -91,18 +91,18 @@ export default function DashboardPage() {
           }
         } else if (isAdminOrOwner) {
           console.log(`DashboardPage: User is admin/owner (UID: ${user.uid}). Fetching owned projects and project-wide counts.`);
+          // getUserProjects now calculates progress dynamically
           const baseProjectsAdmin = await getUserProjects(user.uid);
           console.log(`DashboardPage: Admin/Owner - Fetched ${baseProjectsAdmin.length} base projects. IDs: ${baseProjectsAdmin.map(p=>p.id).join(', ')}`);
 
           if (baseProjectsAdmin.length > 0) {
             finalProjectsToDisplay = await Promise.all(
-              baseProjectsAdmin.map(async (project) => {
+              baseProjectsAdmin.map(async (project) => { // project already has calculated progress
                 console.log(`DashboardPage: [Admin/Owner View] Processing project ${project.id} (${project.name}) for project-wide counts.`);
                 
                 console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectMainTasks.`);
                 const mainTaskCountPromise = countProjectMainTasks(project.id);
                 
-                // Revert to using the service function for sub-task count
                 console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks (service).`);
                 const subTaskCountPromise = countProjectSubTasks(project.id);
                 
@@ -120,7 +120,7 @@ export default function DashboardPage() {
                 console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved openIssueCount: ${openIssueCount}`);
                 
                 return {
-                  ...project,
+                  ...project, // project already has calculated progress
                   totalMainTasks: mainTaskCount,
                   totalSubTasks: subTaskCount,
                   totalOpenIssues: openIssueCount,

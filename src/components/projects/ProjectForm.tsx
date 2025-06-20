@@ -11,22 +11,22 @@ import type { Project, ProjectStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
+// import { Label } from '@/components/ui/label'; // Not used directly
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
+// import { Slider } from '@/components/ui/slider'; // Slider removed
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Save, Loader2 } from 'lucide-react';
 
 const projectStatuses: ProjectStatus[] = ['Not Started', 'In Progress', 'Completed'];
 
+// Progress removed from schema
 const projectSchema = z.object({
   name: z.string().min(3, { message: 'Project name must be at least 3 characters' }).max(100),
   description: z.string().max(500).optional(),
   status: z.enum(projectStatuses),
-  progress: z.number().min(0).max(100),
 });
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
@@ -48,7 +48,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
       name: project?.name || '',
       description: project?.description || '',
       status: project?.status || 'Not Started',
-      progress: project?.progress || 0,
+      // progress: project?.progress || 0, // Progress removed
     },
   });
 
@@ -62,12 +62,15 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
       return;
     }
     setLoading(true);
+    // Remove progress from data payload
+    const { ...projectDataWithoutProgress } = data;
+
     try {
       if (project) {
-        await updateProject(project.id, user.uid, data);
+        await updateProject(project.id, user.uid, projectDataWithoutProgress);
         toast({ title: 'Project Updated', description: `"${data.name}" has been updated.` });
       } else {
-        const newProjectId = await createProject(user.uid, data);
+        const newProjectId = await createProject(user.uid, projectDataWithoutProgress);
         toast({ title: 'Project Created', description: `"${data.name}" has been created.` });
         router.push(`/projects/${newProjectId}`); 
       }
@@ -115,7 +118,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
                 <FormItem>
                   <FormLabel>Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Briefly describe the project" {...field} rows={4} />
+                    <Textarea placeholder="Briefly describe the project" {...field} value={field.value ?? ''} rows={4} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -143,6 +146,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
                 </FormItem>
               )}
             />
+            {/* Progress Slider Removed
             <FormField
               control={form.control}
               name="progress"
@@ -162,6 +166,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
                 </FormItem>
               )}
             />
+            */}
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>

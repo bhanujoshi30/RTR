@@ -97,7 +97,7 @@ export default function ProjectDetailsPage() {
   const handleProjectFormSuccess = () => {
     setShowEditModal(false);
     fetchProjectDetails(); 
-    router.refresh(); 
+    // router.refresh(); // fetchProjectDetails already re-fetches, refresh might be redundant if it causes another full reload
   };
 
 
@@ -127,6 +127,7 @@ export default function ProjectDetailsPage() {
   }
   
   const canManageProject = user && !isSupervisor && !isMember;
+  const displayProgress = project.progress !== undefined ? Math.round(project.progress) : 0;
 
   return (
     <div className="space-y-8">
@@ -189,8 +190,8 @@ export default function ProjectDetailsPage() {
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Progress</p>
               <div className="flex items-center gap-2">
-                <Progress value={project.progress} className="h-3 w-full" aria-label={`Project progress: ${project.progress}%`} />
-                <span className="text-sm font-semibold text-primary">{project.progress}%</span>
+                <Progress value={displayProgress} className="h-3 w-full" aria-label={`Project progress: ${displayProgress}%`} />
+                <span className="text-sm font-semibold text-primary">{displayProgress}%</span>
               </div>
             </div>
             <div className="space-y-1">

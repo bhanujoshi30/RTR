@@ -26,25 +26,26 @@ import { getUsersByRole } from '@/services/userService';
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 
-const baseTaskSchema = z.object({
+// Schema for Sub-tasks (most fields are relevant)
+const subTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
-});
-
-const subTaskSchema = baseTaskSchema.extend({
   description: z.string().max(1000).optional(),
   status: z.enum(taskStatuses),
-  dueDate: z.date({ required_error: "Due date is required." }),
+  dueDate: z.date({ required_error: "Due date is required for sub-tasks." }),
   assignedToUids: z.array(z.string()).optional().default([]), 
 });
 
-const mainTaskSchema = baseTaskSchema.extend({
-  description: z.string().max(1000).optional().nullable().default(null), 
-  status: z.enum(taskStatuses).default('To Do'), 
-  dueDate: z.date().optional().nullable().default(null),
-  assignedToUids: z.array(z.string()).optional().default([]), 
+// Schema for Main Tasks (fewer fields directly editable or relevant here)
+const mainTaskSchema = z.object({
+  name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
+  description: z.string().max(1000).optional().nullable().default(null), // Description can be optional for main task
+  dueDate: z.date().optional().nullable().default(null), // Due date can be optional for main task
+  // Status for main tasks is effectively 'To Do' or derived, not set here
+  // assignedToUids is not directly set for main tasks in this form
 });
 
-type SubTaskFormValues = z.infer<typeof subTaskSchema>;
+type TaskFormValues = z.infer<typeof subTaskSchema> | z.infer<typeof mainTaskSchema>;
+
 
 interface TaskFormProps {
   projectId: string;
@@ -63,14 +64,14 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const isSubTask = !!(parentId || task?.parentId);
   const currentSchema = isSubTask ? subTaskSchema : mainTaskSchema;
 
-  const form = useForm<z.infer<typeof currentSchema>>({
+  const form = useForm<TaskFormValues>({
     resolver: zodResolver(currentSchema),
     defaultValues: {
       name: task?.name || '',
-      description: isSubTask ? (task?.description || '') : undefined,
-      status: isSubTask ? (task?.status || 'To Do') : 'To Do',
-      dueDate: isSubTask ? (task?.dueDate || undefined) : null, // undefined for new sub-task to trigger validation
-      assignedToUids: isSubTask ? (task?.assignedToUids || []) : [],
+      description: task?.description || (isSubTask ? '' : null),
+      status: isSubTask ? (task?.status || 'To Do') : undefined, // status only for subTaskSchema
+      dueDate: task?.dueDate || (isSubTask ? undefined : null), // undefined for new sub-task to trigger validation
+      assignedToUids: isSubTask ? (task?.assignedToUids || []) : undefined, // assignedToUids only for subTaskSchema
     },
   });
 
@@ -104,7 +105,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     }
   }, [isSubTask, toast]);
 
-  const onSubmit: SubmitHandler<z.infer<typeof currentSchema>> = async (data) => {
+  const onSubmit: SubmitHandler<TaskFormValues> = async (data) => {
     if (!user) {
       toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
       return;
@@ -112,8 +113,8 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     setLoading(true);
 
     let assignedToNamesForPayload: string[] | undefined = undefined;
-    if (isSubTask && data.assignedToUids && data.assignedToUids.length > 0) {
-      assignedToNamesForPayload = data.assignedToUids.map(uid => {
+    if (isSubTask && (data as z.infer<typeof subTaskSchema>).assignedToUids && (data as z.infer<typeof subTaskSchema>).assignedToUids!.length > 0) {
+      assignedToNamesForPayload = (data as z.infer<typeof subTaskSchema>).assignedToUids!.map(uid => {
         const assignedUser = assignableUsers.find(u => u.uid === uid);
         return assignedUser?.displayName || uid; 
       });
@@ -121,21 +122,25 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     
     const taskPayload: any = {
       name: data.name,
-      description: isSubTask ? (data as SubTaskFormValues).description || '' : '',
-      status: isSubTask ? (data as SubTaskFormValues).status : 'To Do',
-      // For sub-tasks, dueDate will be a Date object due to schema. Pass it as is.
-      // For main tasks, it will be null.
-      dueDate: isSubTask ? (data as SubTaskFormValues).dueDate : null,
+      description: data.description || '', // Ensure description is at least an empty string
       parentId: parentId || task?.parentId || null,
-      assignedToUids: isSubTask ? (data as SubTaskFormValues).assignedToUids || [] : [],
-      assignedToNames: isSubTask ? assignedToNamesForPayload || [] : [],
     };
-    
-    if (!isSubTask) {
-      delete taskPayload.description;
-      // dueDate is already null for main tasks from the line above
-      delete taskPayload.assignedToUids;
-      delete taskPayload.assignedToNames;
+
+    if (isSubTask) {
+      const subTaskData = data as z.infer<typeof subTaskSchema>;
+      taskPayload.status = subTaskData.status;
+      taskPayload.dueDate = subTaskData.dueDate; // Already a Date object
+      taskPayload.assignedToUids = subTaskData.assignedToUids || [];
+      taskPayload.assignedToNames = assignedToNamesForPayload || [];
+    } else {
+      const mainTaskData = data as z.infer<typeof mainTaskSchema>;
+      // For main tasks, status defaults in service if not provided or applicable here.
+      // Description and DueDate are optional for main tasks and taken from mainTaskData.
+      taskPayload.description = mainTaskData.description || '';
+      taskPayload.dueDate = mainTaskData.dueDate || null; // Can be null for main tasks
+      taskPayload.status = 'To Do'; // Main tasks default to 'To Do'
+      taskPayload.assignedToUids = []; // Main tasks are not directly assigned users this way
+      taskPayload.assignedToNames = [];
     }
 
 
@@ -194,21 +199,27 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 </FormItem>
               )}
             />
+             <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description (Optional)</FormLabel>
+                    <FormControl>
+                      <Textarea 
+                        placeholder={isSubTask ? "Detailed information about the sub-task" : "Brief description of the main task"} 
+                        {...field} 
+                        value={(field.value as string) ?? ''} 
+                        rows={4} 
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
             {isSubTask && (
               <>
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Description (Optional)</FormLabel>
-                      <FormControl>
-                        <Textarea placeholder="Detailed information about the sub-task" {...field} value={(field.value as string) ?? ''} rows={4} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
                 <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                   <FormField
                     control={form.control}
@@ -259,6 +270,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                               selected={field.value as Date | undefined}
                               onSelect={field.onChange}
                               initialFocus
+                              disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() -1))}
                             />
                           </PopoverContent>
                         </Popover>
@@ -299,6 +311,43 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   )}
                 />
               </>
+            )}
+            {!isSubTask && ( // Optional Due Date for Main Task
+                <FormField
+                    control={form.control}
+                    name="dueDate"
+                    render={({ field }) => (
+                    <FormItem className="flex flex-col">
+                        <FormLabel>Due Date (Optional)</FormLabel>
+                        <Popover>
+                        <PopoverTrigger asChild>
+                            <FormControl>
+                            <Button
+                                variant={"outline"}
+                                className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !field.value && "text-muted-foreground"
+                                )}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {field.value ? format(field.value as Date, "PPP") : <span>Pick a date</span>}
+                            </Button>
+                            </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                            mode="single"
+                            selected={field.value as Date | undefined}
+                            onSelect={field.onChange}
+                            initialFocus
+                            disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() -1))}
+                            />
+                        </PopoverContent>
+                        </Popover>
+                        <FormMessage />
+                    </FormItem>
+                    )}
+                />
             )}
           </CardContent>
           <CardFooter>

@@ -25,7 +25,7 @@ export interface Project {
   ownerUid: string;
   createdAt: Date;
   status: ProjectStatus;
-  progress: number; // 0-100
+  progress: number; // 0-100, Now dynamically calculated
   totalMainTasks?: number;
   totalSubTasks?: number;
   totalOpenIssues?: number;
@@ -39,11 +39,12 @@ export interface Task {
   description?: string;
   status: TaskStatus; // Status is user-editable only for sub-tasks
   createdAt: Date;
-  dueDate: Date; // Made mandatory from previous change
+  dueDate: Date; // Made mandatory from previous change for sub-tasks, optional for main tasks
   ownerUid: string;
   assignedToUids?: string[] | null; // Array of UIDs, applicable for sub-tasks
   assignedToNames?: string[] | null; // Array of names, applicable for sub-tasks
   updatedAt?: Date;
+  progress?: number; // For main tasks: % completion based on sub-tasks
 }
 
 export interface Issue {
