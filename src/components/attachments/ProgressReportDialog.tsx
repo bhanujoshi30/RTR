@@ -35,62 +35,75 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [location, setLocation] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // Note: We no longer need the stream in the component's state for this logic.
+  // It will be managed within the useEffect hook.
 
   useEffect(() => {
-    if (open) {
-      const getPermissions = async () => {
-        // Camera Permission
-        try {
-          let cameraStream;
-          try {
-            // Prefer rear camera
-            cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-          } catch (e) {
-            console.warn("Could not get rear camera, trying default.", e);
-            // Fallback to any camera
-            cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
-          }
-
-          setStream(cameraStream);
-          if (videoRef.current) {
-            videoRef.current.srcObject = cameraStream;
-          }
-          setHasPermission(true);
-        } catch (error) {
-          console.error('Error accessing camera:', error);
-          setHasPermission(false);
-        }
-
-        // Geolocation Permission
-        if (navigator.geolocation) {
-          navigator.geolocation.getCurrentPosition(
-            (position) => {
-              setLocation({
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-              });
-              setLocationError(null);
-            },
-            (error) => {
-              setLocationError(error.message);
-              console.error('Error getting location:', error);
-            }
-          );
-        } else {
-          setLocationError("Geolocation is not supported by this browser.");
-        }
-      };
-      getPermissions();
-    } else {
-      // Cleanup when dialog closes
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-        setStream(null);
-      }
+    if (!open) {
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    let localStream: MediaStream | null = null;
+
+    const getPermissionsAndStream = async () => {
+      // Reset states for a clean open
+      setHasPermission(null);
+      setLocation(null);
+      setLocationError(null);
+
+      // Camera Permission
+      try {
+        let cameraStream;
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        } catch (e) {
+          console.warn("Could not get rear camera, trying default.", e);
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+        
+        localStream = cameraStream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = localStream;
+        }
+        setHasPermission(true);
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasPermission(false);
+      }
+
+      // Geolocation Permission
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            setLocation({
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+            });
+            setLocationError(null);
+          },
+          (error) => {
+            setLocationError(error.message);
+            console.error('Error getting location:', error);
+          }
+        );
+      } else {
+        setLocationError("Geolocation is not supported by this browser.");
+      }
+    };
+    
+    getPermissionsAndStream();
+
+    // The cleanup function is crucial. It's called when `open` changes or the component unmounts.
+    return () => {
+      if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+    };
   }, [open]);
 
   const handleCaptureAndUpload = async () => {
