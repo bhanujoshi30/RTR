@@ -311,7 +311,6 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                     mode="single"
                     selected={field.value || undefined}
                     onSelect={field.onChange}
-                    initialFocus
                   />
                 </PopoverContent>
               </Popover>
@@ -329,4 +328,3 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Form>
   );
 }
-

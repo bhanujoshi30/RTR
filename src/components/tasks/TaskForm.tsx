@@ -269,7 +269,6 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                               mode="single"
                               selected={field.value as Date | undefined}
                               onSelect={field.onChange}
-                              initialFocus
                               disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() -1))}
                             />
                           </PopoverContent>
@@ -339,7 +338,6 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                             mode="single"
                             selected={field.value as Date | undefined}
                             onSelect={field.onChange}
-                            initialFocus
                             disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() -1))}
                             />
                         </PopoverContent>
@@ -361,4 +359,3 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     </Card>
   );
 }
-
