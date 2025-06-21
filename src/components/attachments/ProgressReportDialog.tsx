@@ -102,25 +102,33 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
     setUploadProgress(0);
 
     try {
+      console.log("Upload Step 1: Starting process...");
       toast({ title: 'Processing...', description: 'Preparing your image.' });
 
       // Step 1: Load image from preview URL
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        console.log("Upload Step 2: Creating Image object from preview URL.");
         const img = new window.Image();
-        // This is crucial to prevent a "tainted canvas" error which blocks export
-        img.crossOrigin = 'anonymous';
-        img.onload = () => resolve(img);
-        img.onerror = () => reject(new Error('Failed to load selected image. It might be corrupt.'));
+        img.onload = () => {
+           console.log("Upload Step 3: Image loaded successfully.");
+           resolve(img);
+        };
+        img.onerror = (err) => {
+          console.error("Upload Step 3.1: Image failed to load.", err);
+          reject(new Error('Failed to load selected image. It might be corrupt.'));
+        };
         img.src = previewUrl;
       });
 
       // Step 2: Draw image and metadata on canvas
+      console.log("Upload Step 4: Getting canvas and context.");
       const canvas = canvasRef.current;
       const context = canvas.getContext('2d');
       if (!context) {
           throw new Error('Could not prepare image for upload. Canvas context is unavailable.');
       }
       
+      console.log("Upload Step 5: Drawing image and metadata to canvas.");
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
       context.drawImage(image, 0, 0);
@@ -147,20 +155,32 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       );
       context.fillStyle = 'white';
       context.fillText(fullStamp, canvas.width - padding, canvas.height - padding);
+      console.log("Upload Step 6: Stamped metadata onto canvas.");
 
       // Step 3: Get stamped image as a Blob
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Could not convert canvas to image blob.')), 'image/jpeg', 0.9);
+        console.log("Upload Step 7: Converting canvas to blob.");
+        canvas.toBlob((b) => {
+            if (b) {
+              console.log("Upload Step 7.1: Canvas converted to blob successfully.");
+              resolve(b);
+            } else {
+              console.error("Upload Step 7.2: Canvas toBlob failed, returned null.");
+              reject(new Error('Could not convert canvas to image blob.'));
+            }
+        }, 'image/jpeg', 0.9);
       });
       
       const filename = `${reportType}-${Date.now()}.jpg`;
       const stampedFile = new File([blob], filename, { type: 'image/jpeg' });
       
       // Step 4: Upload stamped file
+      console.log("Upload Step 8: Starting upload to Firebase Storage.");
       toast({ title: 'Uploading...', description: 'Your report is being submitted.' });
       const downloadURL = await uploadAttachment(taskId, stampedFile, (progress) => setUploadProgress(progress));
       
       // Step 5: Save metadata to Firestore
+      console.log("Upload Step 9: Upload complete. Saving metadata to Firestore.");
       await addAttachmentMetadata({
         projectId,
         taskId,
@@ -173,20 +193,21 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       });
 
       // --- SUCCESS ---
+      console.log("Upload Step 10: Process complete.");
       toast({ title: 'Success!', description: 'Report submitted successfully.' });
       onSuccess(); // Close dialog on success
 
     } catch (error: any) {
       // --- FAILURE ---
-      console.error('Upload Error:', error);
+      console.error('Upload failed at some point. Full Error:', error);
       toast({
         title: 'Upload Failed',
         description: error.message || 'An unexpected error occurred during the submission process.',
         variant: 'destructive',
       });
     } finally {
-      // --- CLEANUP ---
-      // This block will run regardless of success or failure, guaranteeing the UI is reset.
+      // --- GUARANTEED CLEANUP ---
+      console.log("Upload Step FINAL: Resetting UI state in finally block.");
       setIsUploading(false);
       setUploadProgress(null);
     }
