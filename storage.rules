@@ -2,12 +2,16 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow read and write access to all files for any authenticated user.
-    // This is a simple starting point. For production, you would likely want
-    // to add more specific rules, e.g., checking file size, type, or
-    // ensuring users can only write to their own folders.
-    match /{allPaths=**} {
-      allow read, write: if request.auth != null;
+    // Grant read access to any authenticated user, which is generally safe for non-sensitive images.
+    match /attachments/{taskId}/{filename} {
+      allow read: if request.auth != null;
+      
+      // Grant write access (uploads) only if the user is the owner of the parent task
+      // or is explicitly assigned to that task. This is a secure, cross-service rule.
+      allow write: if request.auth != null && (
+        get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids
+      );
     }
   }
 }
