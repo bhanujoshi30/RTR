@@ -48,6 +48,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       setPreviewUrl(null);
       setLocation(null);
       setLocationError(null);
+      setIsUploading(false); // Explicitly reset uploading state
 
       // Fetch location
       if (navigator.geolocation) {
@@ -110,7 +111,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
         img.onload = () => resolve(img);
-        img.onerror = reject;
+        img.onerror = (err) => reject(new Error('Failed to load image for processing.'));
         img.src = URL.createObjectURL(selectedFile);
       });
 
@@ -167,6 +168,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       });
 
       toast({ title: 'Success', description: 'Report submitted successfully.' });
+      setIsUploading(false);
       onSuccess();
 
     } catch (error: any) {
@@ -180,7 +182,6 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
           'Upload failed due to a permission error. Please ensure Firebase Storage rules allow writes for authenticated users.';
       }
       toast({ title: 'Upload Failed', description, variant: 'destructive' });
-    } finally {
       setIsUploading(false);
     }
   };
