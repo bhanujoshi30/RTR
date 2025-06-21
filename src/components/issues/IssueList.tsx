@@ -5,12 +5,12 @@ import { useEffect, useState } from 'react';
 import { getTaskIssues } from '@/services/issueService';
 import { getTaskById } from '@/services/taskService'; 
 import type { Issue, Task } from '@/types';
-import { IssueCard } from './IssueCard';
+import { IssueCard } from '@/components/issues/IssueCard';
 import { Button } from '@/components/ui/button';
 import { Loader2, PlusCircle, Bug } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
-import { IssueForm } from './IssueForm';
+import { IssueForm } from '@/components/issues/IssueForm';
 
 interface IssueListProps {
   projectId: string;

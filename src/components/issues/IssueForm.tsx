@@ -6,7 +6,7 @@ import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
-import { getTaskById } from '@/services/taskService';
+import { getTaskById, updateTask } from '@/services/taskService';
 import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser, Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,9 +21,6 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { getUsersByIds } from '@/services/userService';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -138,10 +135,10 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
 
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
-    if (!user) {
+    if (!user || !parentSubTask) {
       toast({
-        title: 'Authentication Error',
-        description: 'You must be logged in to perform this action.',
+        title: 'Error',
+        description: 'User or parent task details are missing. Cannot proceed.',
         variant: 'destructive',
       });
       return;
@@ -173,12 +170,35 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         toast({ title: 'Issue Created', description: `"${data.title}" has been added.` });
 
         // Side effect: If parent task was 'Completed', move it to 'In Progress'
-        if (parentSubTask && parentSubTask.status === 'Completed') {
-          await updateTask(taskId, { status: 'In Progress' }, user.uid, user.role);
+        if (parentSubTask.status === 'Completed') {
+          await updateTask(taskId, user.uid, { status: 'In Progress' }, user.role);
           toast({ title: 'Task Status Updated', description: `Parent sub-task "${parentSubTask.name}" was automatically moved to 'In Progress'.` });
         }
       }
+      
+      // Post-creation/update logic to ensure parent task has assignees
+      const finalAssigneeUids = data.assignedToUids || [];
+      if (finalAssigneeUids.length > 0) {
+        const parentTaskAssigneeUids = parentSubTask.assignedToUids || [];
+        const newUidsToAdd = finalAssigneeUids.filter(uid => !parentTaskAssigneeUids.includes(uid));
+
+        if (newUidsToAdd.length > 0) {
+          const newNamesToAdd = newUidsToAdd.map(uid => {
+            const assignee = assignableUsersForIssue.find(u => u.uid === uid);
+            return assignee?.displayName || uid;
+          });
+
+          await updateTask(taskId, user.uid, {
+            assignedToUids: [...parentTaskAssigneeUids, ...newUidsToAdd],
+            assignedToNames: [...(parentSubTask.assignedToNames || []), ...newNamesToAdd],
+          }, user.role);
+
+          toast({ title: "Parent Task Updated", description: "New assignees were added to the parent sub-task." });
+        }
+      }
+
       onFormSuccess();
+
     } catch (error: any) {
       toast({
         title: issue ? 'Update Failed' : 'Creation Failed',

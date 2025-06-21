@@ -20,7 +20,6 @@ import {
   getCountFromServer,
 } from 'firebase/firestore';
 import { logTimelineEvent } from '@/services/timelineService';
-import { updateTask as updateParentTask } from '@/services/taskService';
 
 const issuesCollection = collection(db, 'issues');
 
@@ -54,46 +53,6 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
     dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : new Date()), 
   };
 };
-
-async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUids: string[], issueAssigneeNames: string[], currentUserUid: string, currentUserRole?: UserRole) {
-  if (!issueAssigneeUids || issueAssigneeUids.length === 0) return;
-
-  const parentTaskRef = doc(db, 'tasks', parentTaskId);
-  
-  try {
-    const parentTaskSnap = await getDoc(parentTaskRef);
-    if (!parentTaskSnap.exists()) {
-      throw new Error(`Parent sub-task ${parentTaskId} not found during issue assignment mandate.`);
-    }
-    const parentTaskData = parentTaskSnap.data() as Task;
-    const currentParentAssigneeUids = parentTaskData.assignedToUids || [];
-
-    const newUidsToAdd = issueAssigneeUids.filter(uid => !currentParentAssigneeUids.includes(uid));
-
-    if (newUidsToAdd.length > 0) {
-      // Get the names corresponding to the new UIDs
-      const newNamesToAdd = issueAssigneeUids.reduce((acc: string[], uid, index) => {
-        if (newUidsToAdd.includes(uid)) {
-          acc.push(issueAssigneeNames[index]);
-        }
-        return acc;
-      }, []);
-      
-      const updatedUids = [...currentParentAssigneeUids, ...newUidsToAdd];
-      const updatedNames = [...(parentTaskData.assignedToNames || []), ...newNamesToAdd];
-
-      await updateParentTask(parentTaskId, {
-        assignedToUids: updatedUids,
-        assignedToNames: updatedNames,
-      }, currentUserUid, currentUserRole);
-      console.log(`Mandate: Updated parent sub-task ${parentTaskId} with new assignees.`);
-    }
-  } catch (error) {
-    console.error(`Mandate Error: Failed to update parent sub-task ${parentTaskId} assignees:`, error);
-    // Do not re-throw, to allow issue creation to succeed.
-  }
-}
-
 
 export const createIssue = async (projectId: string, taskId: string, userUid: string, ownerName: string, issueData: CreateIssueData): Promise<string> => {
   if (!userUid) throw new Error('User not authenticated');
@@ -144,13 +103,9 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
         `created issue: "${issueData.title}".`,
         { issueId: newIssueRef.id, title: issueData.title }
     );
-
-    if (newIssuePayload.assignedToUids && newIssuePayload.assignedToUids.length > 0) {
-      await ensureAssigneesInParentTask(taskId, newIssuePayload.assignedToUids, newIssuePayload.assignedToNames, userUid);
-    }
     
-    // Note: The logic to re-open a 'Completed' parent task is now handled in the component
-    // to avoid circular dependencies between services.
+    // Note: The logic to re-open a 'Completed' parent task or to ensure assignees are on the parent task
+    // is now handled in the component layer (IssueForm) to avoid circular dependencies.
 
     return newIssueRef.id;
   } catch (error: any) {
@@ -306,13 +261,8 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
 
   try {
     await updateDoc(issueDocRef, updatePayload as any);
-
-    const finalAssignedUids = updatePayload.assignedToUids || issueData.assignedToUids || [];
-    const finalAssignedNames = updatePayload.assignedToNames || issueData.assignedToNames || [];
-
-    if (finalAssignedUids.length > 0 && updates.assignedToUids !== undefined) {
-      await ensureAssigneesInParentTask(parentSubTaskId, finalAssignedUids, finalAssignedNames, userUid);
-    }
+    
+    // Logic to update parent task is now in the component layer (IssueForm)
 
     if (updates.status && updates.status !== issueData.status) {
         await logTimelineEvent(

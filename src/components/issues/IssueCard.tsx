@@ -22,7 +22,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
-import { IssueForm } from './IssueForm';
+import { IssueForm } from '@/components/issues/IssueForm';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 

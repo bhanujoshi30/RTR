@@ -26,7 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { ProgressReportDialog } from '../attachments/ProgressReportDialog';
+import { ProgressReportDialog } from '@/components/attachments/ProgressReportDialog';
 
 interface TaskCardProps {
   task: Task;
