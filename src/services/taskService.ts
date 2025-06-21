@@ -221,63 +221,36 @@ export const getAssignedSubTasksForUser = async (mainTaskId: string, userUid: st
   }
 };
 
-
 export const getTaskById = async (taskId: string, userUid: string, userRole?: UserRole): Promise<Task | null> => {
-  if (!userUid) {
-    console.error('[taskService.getTaskById] Error: User not authenticated (userUid is missing).');
-    throw new Error('User not authenticated for getting task');
-  }
-  console.log(`[taskService.getTaskById] Attempting to fetch task: ${taskId} for user: ${userUid}, role: ${userRole}`);
+    if (!userUid) { throw new Error('User not authenticated'); }
 
-  const taskDocRef = doc(db, 'tasks', taskId);
-  const taskSnap = await getDoc(taskDocRef);
+    console.log(`[taskService.getTaskById] Attempting to fetch task: ${taskId} for user: ${userUid}, role: ${userRole}`);
+    const taskDocRef = doc(db, 'tasks', taskId);
 
-  if (!taskSnap.exists()) {
-    console.warn(`[taskService.getTaskById] Task ${taskId} not found in Firestore.`);
-    return null;
-  }
+    try {
+        const taskSnap = await getDoc(taskDocRef);
 
-  const taskData = mapDocumentToTask(taskSnap);
-  
-  if (!taskData.parentId) { // If it's a main task, calculate its progress
-      taskData.progress = await calculateMainTaskProgress(taskId);
-  }
+        if (!taskSnap.exists()) {
+            console.warn(`[taskService.getTaskById] Task ${taskId} not found in Firestore.`);
+            return null;
+        }
 
-  if (userRole === 'admin') {
-    console.log(`[taskService.getTaskById] Access GRANTED to task ${taskId} (User is admin).`);
-    return taskData;
-  }
-  
-  const isOwner = taskData.ownerUid === userUid;
+        const taskData = mapDocumentToTask(taskSnap);
+        if (!taskData.parentId) {
+            taskData.progress = await calculateMainTaskProgress(taskId);
+        }
+        
+        // If getDoc succeeds, we assume rules have granted access.
+        // Now, we can return the data.
+        return taskData;
 
-  console.log(`[taskService.getTaskById] Task data fetched for ${taskId}: OwnerUID=${taskData.ownerUid}, ParentID=${taskData.parentId}, AssignedToUids=[${taskData.assignedToUids?.join(',')}]`);
-  console.log(`[taskService.getTaskById] Current user ${userUid}. Is Owner: ${isOwner}`);
-
-  if (taskData.parentId) { 
-    console.log(`[taskService.getTaskById] Task ${taskId} is a sub-task. Checking permissions...`);
-    const isAssigned = taskData.assignedToUids?.includes(userUid) ?? false;
-
-    if (isOwner || isAssigned) {
-      console.log(`[taskService.getTaskById] Access GRANTED to sub-task ${taskId}. IsOwner: ${isOwner}, IsAssigned: ${isAssigned}`);
-      return taskData;
-    } else {
-      console.warn(
-        `[taskService.getTaskById] Sub-task access DENIED for user ${userUid} (Role: ${userRole}) to task ${taskId}. \n` +
-        `  - Is Owner: ${isOwner}\n` +
-        `  - Attempted Assignment Check: taskData.assignedToUids (type: ${typeof taskData.assignedToUids}, value: [${taskData.assignedToUids?.join(', ') ?? 'N/A'}]) includes userUid (type: ${typeof userUid}, value: '${userUid}')? Result: ${isAssigned}\n` +
-        `  - Raw taskData.assignedToUids from Firestore: ${JSON.stringify(taskData.assignedToUids)}`
-      );
-      return null; 
+    } catch (error: any) {
+        console.error(`[taskService.getTaskById] Error fetching task ${taskId}.`, error);
+        if ((error as any)?.code === 'permission-denied') {
+            throw new Error(`Access denied when fetching task ${taskId}. Please check your Firestore security rules to ensure you have read access to this specific task document.`);
+        }
+        throw error;
     }
-  } else { 
-    console.log(`[taskService.getTaskById] Task ${taskId} is a main task. Checking permissions...`);
-    if (isOwner || userRole === 'supervisor' || userRole === 'member') {
-      console.log(`[taskService.getTaskById] Access GRANTED to main task ${taskId} (user is owner, supervisor, or member).`);
-      return taskData;
-    }
-    console.warn(`[taskService.getTaskById] Main task access DENIED for user ${userUid} (Role: ${userRole}) to task ${taskId}. Not owner, supervisor, or member.`);
-    return null; 
-  }
 };
 
 export const getTasksByIds = async (taskIds: string[]): Promise<Task[]> => {
@@ -630,6 +603,7 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     
     
   
+
 
 
 

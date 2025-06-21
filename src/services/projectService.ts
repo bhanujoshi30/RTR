@@ -128,19 +128,17 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       const projectData = mapDocumentToProject(projectSnap);
       projectData.progress = await calculateProjectProgress(projectId);
       projectData.status = getDynamicStatusFromProgress(projectData.progress); // Set dynamic status
-
-      if (projectData.ownerUid === userUid || userRole === 'supervisor' || userRole === 'admin' || userRole === 'member') {
-        return projectData;
-      } else {
-        console.warn('projectService: User UID', userUid, 'does not own project ID:', projectId, 'Project owner UID:', projectData.ownerUid, 'Role:', userRole);
-        throw new Error('Access denied. You do not own this project or lack permissions.');
-      }
+      // If getDoc succeeds, we assume access is granted by security rules.
+      return projectData;
     } else {
       console.warn('projectService: Project not found for ID:', projectId);
       return null;
     }
   } catch (error: any) {
-    console.error('projectService: Error fetching project by ID:', projectId, 'for user UID:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
+    console.error(`projectService: Error fetching project by ID ${projectId}.`, error);
+    if ((error as any)?.code === 'permission-denied') {
+        throw new Error(`Access denied to project ${projectId}. Check Firestore security rules.`);
+    }
     throw error;
   }
 };

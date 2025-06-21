@@ -54,18 +54,16 @@ export default function ProjectDetailsPage() {
       if (fetchedProject) {
         setProject(fetchedProject);
       } else {
-        setError('Project not found or you do not have permission to view it.');
-        router.push('/dashboard'); 
+        setError('Project not found. It may have been deleted or you do not have permission to view it.');
+        // router.push('/dashboard'); 
       }
     } catch (err: any) {
       console.error('Error fetching project:', err);
-      setError('Failed to load project details.');
-      if ((err as any)?.message?.includes('index')) {
-        setError('Failed to load project details. This might be due to a missing database index. Please check Firebase console.');
-      } else if ((err as any)?.message?.includes('permissions') || (err as any)?.message?.includes('Access denied')) {
-         setError('Failed to load project details due to missing permissions or access denial. Please check Firestore security rules and project ownership.');
-         router.push('/dashboard');
+      let errorMessage = 'Failed to load project details.';
+      if (err.message?.includes('permission') || err.message?.includes('Access denied')) {
+        errorMessage = `Failed to load project: ${err.message}. This is likely due to Firestore security rules.`;
       }
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
