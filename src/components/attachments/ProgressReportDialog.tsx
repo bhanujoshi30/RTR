@@ -200,9 +200,13 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
     } catch (error: any) {
       // --- FAILURE ---
       console.error('Upload failed at some point. Full Error:', error);
+      let description = error.message || 'An unexpected error occurred during the submission process.';
+      if (error.code === 'storage/unauthorized' || (error.message && error.message.toLowerCase().includes('cors'))) {
+          description = "Permission denied by storage. Please ensure the storage CORS configuration has been applied correctly for this Firebase project using the `gsutil` command.";
+      }
       toast({
         title: 'Upload Failed',
-        description: error.message || 'An unexpected error occurred during the submission process.',
+        description: description,
         variant: 'destructive',
       });
     } finally {
