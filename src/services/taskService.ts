@@ -53,14 +53,40 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
   };
 };
 
-export const calculateMainTaskProgress = async (mainTaskId: string): Promise<number> => {
-  const subTasks = await getSubTasks(mainTaskId);
-  if (subTasks.length === 0) {
-    return 0; // Or 100 if main tasks without subtasks are considered complete by default
+export const calculateMainTaskProgress = async (mainTaskId: string, userUid: string, userRole?: UserRole): Promise<number> => {
+  // We need to know who owns the main task to decide which sub-tasks to count.
+  const mainTaskDocRef = doc(db, 'tasks', mainTaskId);
+  const mainTaskSnap = await getDoc(mainTaskDocRef);
+
+  if (!mainTaskSnap.exists()) {
+    console.warn(`calculateMainTaskProgress: main task ${mainTaskId} not found.`);
+    return 0;
   }
-  const completedSubTasks = subTasks.filter(st => st.status === 'Completed').length;
-  return Math.round((completedSubTasks / subTasks.length) * 100);
+  const mainTaskOwnerUid = mainTaskSnap.data().ownerUid;
+  
+  const isOwner = mainTaskOwnerUid === userUid;
+  // Consider admin role as owner for progress calculation purposes
+  const canSeeAll = isOwner || userRole === 'admin';
+
+  let relevantSubTasks: Task[];
+  if (canSeeAll) {
+    // Owner/Admin progress is based on ALL sub-tasks.
+    relevantSubTasks = await getSubTasks(mainTaskId);
+  } else {
+    // Supervisor/Member progress is based on ONLY their assigned sub-tasks.
+    relevantSubTasks = await getAssignedSubTasksForUser(mainTaskId, userUid);
+  }
+
+  if (relevantSubTasks.length === 0) {
+    // If an owner sees no sub-tasks, progress is 0.
+    // If a supervisor has no assigned sub-tasks, their "view" of the progress is also 0.
+    // This is correct behavior from a data-visibility perspective.
+    return 0;
+  }
+  const completedSubTasks = relevantSubTasks.filter(st => st.status === 'Completed').length;
+  return Math.round((completedSubTasks / relevantSubTasks.length) * 100);
 };
+
 
 export const createTask = async (
   projectId: string,
@@ -125,7 +151,7 @@ export const getProjectMainTasks = async (projectId: string): Promise<Task[]> =>
     const querySnapshot = await getDocs(q);
     const mainTasksPromises = querySnapshot.docs.map(async (docSnap) => {
       const task = mapDocumentToTask(docSnap);
-      task.progress = await calculateMainTaskProgress(task.id);
+      // Note: Progress is now calculated in the component that calls this, e.g., TaskList
       return task;
     });
     const tasks = await Promise.all(mainTasksPromises);
@@ -237,7 +263,7 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
 
         const taskData = mapDocumentToTask(taskSnap);
         if (!taskData.parentId) {
-            taskData.progress = await calculateMainTaskProgress(taskId);
+            taskData.progress = await calculateMainTaskProgress(taskId, userUid, userRole);
         }
         
         // If getDoc succeeds, we assume rules have granted access.
@@ -603,6 +629,7 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     
     
   
+
 
 
 

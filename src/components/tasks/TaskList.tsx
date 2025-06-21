@@ -46,7 +46,7 @@ export function TaskList({ projectId }: TaskListProps) {
           
           const tasksWithProgress = await Promise.all(
             involvedMainTasks.map(async (task) => {
-              task.progress = await calculateMainTaskProgress(task.id);
+              task.progress = await calculateMainTaskProgress(task.id, user.uid, user.role);
               return task;
             })
           );
@@ -61,9 +61,17 @@ export function TaskList({ projectId }: TaskListProps) {
       } else {
         // Admin or project owner sees all main tasks
         console.log('TaskList: User is admin/owner. Fetching all main tasks for project.');
-        const allMainTasks = await getProjectMainTasks(projectId);
-        setTasks(allMainTasks);
-        console.log('TaskList: Fetched all main tasks for admin/owner:', allMainTasks.length > 0 ? allMainTasks : 'None');
+        const allMainTasksRaw = await getProjectMainTasks(projectId);
+        
+        const allMainTasksWithProgress = await Promise.all(
+            allMainTasksRaw.map(async (task) => {
+              task.progress = await calculateMainTaskProgress(task.id, user.uid, user.role);
+              return task;
+            })
+        );
+
+        setTasks(allMainTasksWithProgress);
+        console.log('TaskList: Fetched all main tasks for admin/owner:', allMainTasksWithProgress.length > 0 ? allMainTasksWithProgress : 'None');
       }
     } catch (err: any) {
       console.error('TaskList: Error fetching main tasks:', err);
