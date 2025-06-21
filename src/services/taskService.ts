@@ -138,11 +138,12 @@ export const createTask = async (
 
   try {
     const newTaskRef = await addDoc(tasksCollection, newTaskPayload);
+    const newTaskId = newTaskRef.id;
     
-    // Log timeline event for sub-task creation
-    if (newTaskPayload.parentId) {
+    // Log timeline event for creation
+    if (newTaskPayload.parentId) { // It's a sub-task
       await logTimelineEvent(
-        newTaskRef.id,
+        newTaskId,
         userUid,
         'TASK_CREATED',
         `created the sub-task.`
@@ -150,16 +151,24 @@ export const createTask = async (
       if (newTaskPayload.assignedToUids.length > 0) {
           const names = newTaskPayload.assignedToNames.join(', ');
           await logTimelineEvent(
-            newTaskRef.id,
+            newTaskId,
             userUid,
             'ASSIGNMENT_CHANGED',
             `assigned the task to ${names}.`,
             { assigned: newTaskPayload.assignedToNames }
           );
       }
+    } else { // It's a main task
+        await logTimelineEvent(
+            newTaskId,
+            userUid,
+            'TASK_CREATED',
+            'created the main task.'
+        );
     }
 
-    return newTaskRef.id;
+    return newTaskId;
+
   } catch (error: any) {
     console.error('taskService: Error creating task:', error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;
@@ -399,28 +408,49 @@ export const updateTask = async (
         if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt) return;
       }
     }
-  } else { 
+  } else { // This is a Main Task
     if (!isOwner) {
       throw new Error('Access denied. Only the project owner can edit main task details.');
     }
-    if (updates.name !== undefined) updatePayload.name = updates.name;
-    if (updates.description !== undefined) updatePayload.description = updates.description; // Allow description update for main task by owner
-    if (updates.dueDate !== undefined) { // Allow due date update for main task by owner
-        updatePayload.dueDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
+    let detailsChanged = false;
+    if (updates.name !== undefined && updates.name !== taskDataFromSnap.name) {
+      updatePayload.name = updates.name;
+      detailsChanged = true;
     }
-
-
+    if (updates.description !== undefined && updates.description !== taskDataFromSnap.description) {
+      updatePayload.description = updates.description;
+      detailsChanged = true;
+    }
+    if (updates.dueDate !== undefined) {
+        const newDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
+        if (newDate?.toMillis() !== (taskDataFromSnap.dueDate ? Timestamp.fromDate(taskDataFromSnap.dueDate).toMillis() : null)) {
+            updatePayload.dueDate = newDate;
+            detailsChanged = true;
+        }
+    }
+    
+    // Log if details changed
+    if (detailsChanged) {
+        await logTimelineEvent(
+            taskId,
+            userUid,
+            'MAIN_TASK_UPDATED',
+            'updated the main task details.'
+        );
+    }
+    
+    // Filter out disallowed updates for main tasks
     const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt'];
     Object.keys(updatePayload).forEach(key => {
         if (!allowedMainTaskKeys.includes(key as string)) {
             delete updatePayload[key];
         }
     });
-     if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt && updates.name === undefined && updates.description === undefined && updates.dueDate === undefined) return;
 
+    if (Object.keys(updatePayload).length <= 1) return; // Only updatedAt, no actual change
   }
   
-  // Timeline logging for assignments
+  // Timeline logging for assignments (applies to sub-tasks)
   if (updates.assignedToUids !== undefined && JSON.stringify(updates.assignedToUids) !== JSON.stringify(taskDataFromSnap.assignedToUids)) {
     const newNames = updates.assignedToNames?.join(', ') || 'nobody';
     await logTimelineEvent(
@@ -432,7 +462,7 @@ export const updateTask = async (
     );
   }
 
-  // Timeline logging for status change
+  // Timeline logging for status change (applies to sub-tasks)
   if (updates.status !== undefined && updates.status !== taskDataFromSnap.status) {
       await logTimelineEvent(
         taskId,
@@ -442,7 +472,6 @@ export const updateTask = async (
         { oldStatus: taskDataFromSnap.status, newStatus: updates.status }
     );
   }
-
 
   if (Object.keys(updatePayload).length > 1) {
     await updateDoc(taskDocRef, updatePayload);

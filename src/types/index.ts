@@ -83,6 +83,7 @@ export interface Attachment {
 
 export type TimelineEventType =
   | 'TASK_CREATED'
+  | 'MAIN_TASK_UPDATED'
   | 'STATUS_CHANGED'
   | 'ASSIGNMENT_CHANGED'
   | 'ISSUE_CREATED'
@@ -93,7 +94,7 @@ export type TimelineEventType =
 
 export interface TimelineEvent {
   id: string;
-  taskId: string;
+  taskId: string; // The ID of the task where the event is stored
   timestamp: Date;
   type: TimelineEventType;
   description: string;
@@ -102,4 +103,10 @@ export interface TimelineEvent {
     name: string;
   };
   details: Record<string, any>;
+  // For aggregation on Main Task Timeline
+  source?: 'mainTask' | 'subTask';
+  subTaskInfo?: {
+    id: string;
+    name: string;
+  };
 }

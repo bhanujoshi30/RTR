@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { IssueList } from '@/components/issues/IssueList';
 import { SubTaskList } from '@/components/tasks/SubTaskList';
 import { TaskForm } from '@/components/tasks/TaskForm';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, Users, Camera } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -22,6 +22,7 @@ import { format } from 'date-fns';
 import { ProgressReportDialog } from '@/components/attachments/ProgressReportDialog';
 import { AttachmentList } from '@/components/attachments/AttachmentList';
 import { Timeline } from '@/components/timeline/Timeline';
+import { MainTaskTimeline } from '@/components/timeline/MainTaskTimeline';
 
 
 export default function TaskDetailsPage() {
@@ -252,7 +253,7 @@ export default function TaskDetailsPage() {
               <CardDescription className="mt-2 text-lg">{task.description}</CardDescription>
             )}
              {isMainTask && (
-               <CardDescription className="mt-2 text-lg">This is a main task. Manage its sub-tasks below. {isSupervisor && "You will see sub-tasks assigned to you if applicable."}</CardDescription>
+               <CardDescription className="mt-2 text-lg">This is a main task. Manage its sub-tasks and view its full timeline below. {isSupervisor && "You will see sub-tasks assigned to you if applicable."}</CardDescription>
              )}
           </CardHeader>
           <CardContent>
@@ -286,31 +287,50 @@ export default function TaskDetailsPage() {
         </Card>
 
         {isMainTask && task && task.ownerUid && (
-          <div className="space-y-6">
-            <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center rounded-lg border bg-card p-6 shadow-sm">
-              <h2 className="font-headline text-2xl font-semibold flex items-center">
-                <ListChecks className="mr-3 h-7 w-7 text-primary" />
-                Sub-tasks
-              </h2>
-              {canAddSubTask && (
-                <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
-                  <DialogTrigger asChild>
-                    <Button onClick={() => { setEditingTask(null); setShowAddEditTaskModal(true); }}>
-                      <PlusCircle className="mr-2 h-4 w-4" /> Add New Sub-task
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-xl">
-                    <DialogHeader>
-                      <DialogTitle className="font-headline text-xl">Add New Sub-task</DialogTitle>
-                      <DialogDescription>Fill in the details for the new sub-task.</DialogDescription>
-                    </DialogHeader>
-                    {user && <TaskForm projectId={projectId} parentId={taskId} onFormSuccess={handleTaskFormSuccess} />}
-                  </DialogContent>
-                </Dialog>
-              )}
-            </div>
-            {user && task && task.ownerUid && <SubTaskList mainTaskId={taskId} projectId={projectId} mainTaskOwnerUid={task.ownerUid} />}
-          </div>
+          <Tabs defaultValue="subtasks" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="subtasks"><ListChecks className="mr-2 h-4 w-4" /> Sub-tasks</TabsTrigger>
+              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Timeline</TabsTrigger>
+            </TabsList>
+            <TabsContent value="subtasks" className="mt-6">
+              <div className="space-y-6">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center rounded-lg border bg-card p-6 shadow-sm">
+                  <h2 className="font-headline text-2xl font-semibold flex items-center">
+                    <ListChecks className="mr-3 h-7 w-7 text-primary" />
+                    Sub-tasks
+                  </h2>
+                  {canAddSubTask && (
+                    <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
+                      <DialogTrigger asChild>
+                        <Button onClick={() => { setEditingTask(null); setShowAddEditTaskModal(true); }}>
+                          <PlusCircle className="mr-2 h-4 w-4" /> Add New Sub-task
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-xl">
+                        <DialogHeader>
+                          <DialogTitle className="font-headline text-xl">Add New Sub-task</DialogTitle>
+                          <DialogDescription>Fill in the details for the new sub-task.</DialogDescription>
+                        </DialogHeader>
+                        {user && <TaskForm projectId={projectId} parentId={taskId} onFormSuccess={handleTaskFormSuccess} />}
+                      </DialogContent>
+                    </Dialog>
+                  )}
+                </div>
+                {user && task && task.ownerUid && <SubTaskList mainTaskId={taskId} projectId={projectId} mainTaskOwnerUid={task.ownerUid} />}
+              </div>
+            </TabsContent>
+            <TabsContent value="timeline" className="mt-6">
+               <Card>
+                  <CardHeader>
+                      <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Main Task Timeline</CardTitle>
+                      <CardDescription>An overview of all events related to this main task and its sub-tasks.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      <MainTaskTimeline mainTaskId={taskId} />
+                  </CardContent>
+              </Card>
+            </TabsContent>
+          </Tabs>
         )}
 
         {isSubTask && (
