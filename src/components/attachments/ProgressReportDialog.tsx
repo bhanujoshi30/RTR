@@ -102,13 +102,9 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
     setUploadProgress(0);
 
     try {
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      if (!context) {
-          throw new Error('Could not prepare image for upload. Canvas context is unavailable.');
-      }
-      
       toast({ title: 'Processing...', description: 'Preparing your image.' });
+
+      // 1. Load image from preview URL
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
         img.onload = () => resolve(img);
@@ -116,6 +112,13 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         img.src = previewUrl;
       });
 
+      // 2. Draw image and metadata on canvas
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (!context) {
+          throw new Error('Could not prepare image for upload. Canvas context is unavailable.');
+      }
+      
       canvas.width = image.naturalWidth;
       canvas.height = image.naturalHeight;
       context.drawImage(image, 0, 0);
@@ -143,6 +146,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       context.fillStyle = 'white';
       context.fillText(fullStamp, canvas.width - padding, canvas.height - padding);
 
+      // 3. Get stamped image as a Blob
       const blob = await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Could not convert canvas to image blob.')), 'image/jpeg', 0.9);
       });
@@ -150,9 +154,11 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       const filename = `${reportType}-${Date.now()}.jpg`;
       const stampedFile = new File([blob], filename, { type: 'image/jpeg' });
       
+      // 4. Upload stamped file
       toast({ title: 'Uploading...', description: 'Your report is being submitted.' });
       const downloadURL = await uploadAttachment(taskId, stampedFile, (progress) => setUploadProgress(progress));
       
+      // 5. Save metadata to Firestore
       await addAttachmentMetadata({
         projectId,
         taskId,
@@ -166,9 +172,9 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
 
       // --- SUCCESS ---
       toast({ title: 'Success!', description: 'Report submitted successfully.' });
-      setIsUploading(false);
+      setIsUploading(false); // Reset state
       setUploadProgress(null);
-      onSuccess();
+      onSuccess(); // Then close dialog
 
     } catch (error: any) {
       // --- FAILURE ---
@@ -178,7 +184,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         description: error.message || 'An unexpected error occurred during the submission process.',
         variant: 'destructive',
       });
-      setIsUploading(false);
+      setIsUploading(false); // Reset state on error
       setUploadProgress(null);
     }
   };
@@ -212,6 +218,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
+              disabled={isUploading}
             />
             <Button
               variant="outline"
@@ -250,7 +257,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
           {/* Canvas is hidden, used for processing only */}
           <canvas ref={canvasRef} className="hidden" />
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
             <X className="mr-2 h-4 w-4" /> Cancel
           </Button>
