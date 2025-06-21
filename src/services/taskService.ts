@@ -37,6 +37,7 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
   return {
     id: docSnapshot.id,
     projectId: data.projectId,
+    projectOwnerUid: data.projectOwnerUid,
     parentId: data.parentId || null,
     name: data.name,
     description: data.description || '',
@@ -154,12 +155,7 @@ export const getProjectMainTasks = async (projectId: string): Promise<Task[]> =>
 
   try {
     const querySnapshot = await getDocs(q);
-    const mainTasksPromises = querySnapshot.docs.map(async (docSnap) => {
-      const task = mapDocumentToTask(docSnap);
-      // Note: Progress is now calculated in the component that calls this, e.g., TaskList
-      return task;
-    });
-    const tasks = await Promise.all(mainTasksPromises);
+    const tasks = querySnapshot.docs.map(mapDocumentToTask);
 
      if (tasks.length === 0) {
       console.log(`taskService: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks. Index needed: projectId (ASC), parentId (ASC), createdAt (DESC)`);

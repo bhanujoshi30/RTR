@@ -61,7 +61,7 @@ export default function DashboardPage() {
 
           if (allRelevantProjectIds.length > 0) {
             // getProjectsByIds now calculates progress dynamically
-            const baseProjectsForUser = await getProjectsByIds(allRelevantProjectIds);
+            const baseProjectsForUser = await getProjectsByIds(allRelevantProjectIds, user.uid, user.role);
             console.log(`DashboardPage: ${userRoleForLog} - Fetched ${baseProjectsForUser.length} base projects for user-specific counts.`);
 
             finalProjectsToDisplay = baseProjectsForUser.map(project => {
@@ -92,7 +92,7 @@ export default function DashboardPage() {
         } else if (isAdminOrOwner) {
           console.log(`DashboardPage: User is admin/owner (UID: ${user.uid}). Fetching owned projects and project-wide counts.`);
           // getUserProjects now calculates progress dynamically
-          const baseProjectsAdmin = await getUserProjects(user.uid);
+          const baseProjectsAdmin = await getUserProjects(user.uid, user.role);
           console.log(`DashboardPage: Admin/Owner - Fetched ${baseProjectsAdmin.length} base projects. IDs: ${baseProjectsAdmin.map(p=>p.id).join(', ')}`);
 
           if (baseProjectsAdmin.length > 0) {

@@ -1,6 +1,6 @@
 
 import { db } from '@/lib/firebase';
-import type { Project, ProjectStatus, Task } from '@/types';
+import type { Project, ProjectStatus, Task, UserRole } from '@/types';
 import {
   collection,
   addDoc,
@@ -16,7 +16,7 @@ import {
   orderBy,
   documentId,
 } from 'firebase/firestore';
-import { deleteAllTasksForProject, getProjectMainTasks } from './taskService';
+import { deleteAllTasksForProject, getProjectMainTasks, calculateMainTaskProgress } from './taskService';
 
 const projectsCollection = collection(db, 'projects');
 
@@ -43,12 +43,17 @@ const getDynamicStatusFromProgress = (progress: number): ProjectStatus => {
   }
 };
 
-const calculateProjectProgress = async (projectId: string): Promise<number> => {
+const calculateProjectProgress = async (projectId: string, userUid: string, userRole?: UserRole): Promise<number> => {
   const mainTasks = await getProjectMainTasks(projectId);
   if (mainTasks.length === 0) {
     return 0;
   }
-  const totalProgressSum = mainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+
+  const progressValues = await Promise.all(
+    mainTasks.map(task => calculateMainTaskProgress(task.id, userUid, userRole))
+  );
+
+  const totalProgressSum = progressValues.reduce((sum, progress) => sum + progress, 0);
   return Math.round(totalProgressSum / mainTasks.length);
 };
 
@@ -86,7 +91,7 @@ export const createProject = async (
   }
 };
 
-export const getUserProjects = async (userUid: string): Promise<Project[]> => {
+export const getUserProjects = async (userUid: string, userRole?: UserRole): Promise<Project[]> => {
   console.log(`projectService: getUserProjects for user: ${userUid}`);
   if (!userUid) {
     return [];
@@ -97,7 +102,7 @@ export const getUserProjects = async (userUid: string): Promise<Project[]> => {
     const querySnapshot = await getDocs(q);
     const projectsPromises = querySnapshot.docs.map(async (docSnap) => {
       const project = mapDocumentToProject(docSnap);
-      project.progress = await calculateProjectProgress(project.id);
+      project.progress = await calculateProjectProgress(project.id, userUid, userRole);
       project.status = getDynamicStatusFromProgress(project.progress); // Set dynamic status
       return project;
     });
@@ -113,7 +118,7 @@ export const getUserProjects = async (userUid: string): Promise<Project[]> => {
   }
 };
 
-export const getProjectById = async (projectId: string, userUid: string, userRole?: string): Promise<Project | null> => {
+export const getProjectById = async (projectId: string, userUid: string, userRole?: UserRole): Promise<Project | null> => {
   if (!userUid) {
     throw new Error('User not authenticated for getting project by ID');
   }
@@ -124,7 +129,7 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
 
     if (projectSnap.exists()) {
       const projectData = mapDocumentToProject(projectSnap);
-      projectData.progress = await calculateProjectProgress(projectId);
+      projectData.progress = await calculateProjectProgress(projectId, userUid, userRole);
       projectData.status = getDynamicStatusFromProgress(projectData.progress); // Set dynamic status
       // If getDoc succeeds, we assume access is granted by security rules.
       return projectData;
@@ -142,7 +147,7 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
 };
 
 
-export const getProjectsByIds = async (projectIds: string[]): Promise<Project[]> => {
+export const getProjectsByIds = async (projectIds: string[], userUid: string, userRole?: UserRole): Promise<Project[]> => {
   if (!projectIds || projectIds.length === 0) {
     return [];
   }
@@ -170,7 +175,7 @@ export const getProjectsByIds = async (projectIds: string[]): Promise<Project[]>
   }
   
   const projectsWithProgressAndStatusPromises = fetchedProjectsMapped.map(async (project) => {
-    project.progress = await calculateProjectProgress(project.id);
+    project.progress = await calculateProjectProgress(project.id, userUid, userRole);
     project.status = getDynamicStatusFromProgress(project.progress); // Set dynamic status
     return project;
   });
