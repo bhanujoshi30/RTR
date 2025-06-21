@@ -43,7 +43,16 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       const getPermissions = async () => {
         // Camera Permission
         try {
-          const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          let cameraStream;
+          try {
+            // Prefer rear camera
+            cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          } catch (e) {
+            console.warn("Could not get rear camera, trying default.", e);
+            // Fallback to any camera
+            cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+          }
+
           setStream(cameraStream);
           if (videoRef.current) {
             videoRef.current.srcObject = cameraStream;
@@ -97,6 +106,16 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
 
     if (!context) {
       toast({ title: "Error", description: "Could not get canvas context.", variant: "destructive" });
+      setIsLoading(false);
+      return;
+    }
+
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      toast({
+        title: "Camera Not Ready",
+        description: "The camera is still initializing. Please wait a moment and try again.",
+        variant: "destructive",
+      });
       setIsLoading(false);
       return;
     }
