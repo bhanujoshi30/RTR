@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from 'next/link';
@@ -20,8 +19,6 @@ import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users 
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 
-const ADMIN_EMAIL = 'joshi1bhanu@gmail.com';
-
 export function Header() {
   const { user } = useAuth();
   const router = useRouter();
@@ -39,7 +36,7 @@ export function Header() {
 
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = user?.role === 'admin';
 
   const baseNavLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="mr-2 h-4 w-4" /> },

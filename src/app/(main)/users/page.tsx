@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -13,8 +12,6 @@ import type { User as AppUser, UserRole } from '@/types';
 import { upsertUserDocument, getAllUsers } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
 
-const ADMIN_EMAIL = 'joshi1bhanu@gmail.com';
-
 export default function UsersPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
@@ -27,11 +24,11 @@ export default function UsersPage() {
   const [showUserFormModal, setShowUserFormModal] = useState(false);
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
 
-  const isAdmin = user?.email === ADMIN_EMAIL;
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     if (!authLoading) {
-      if (!user || user.email !== ADMIN_EMAIL) {
+      if (!user || user.role !== 'admin') {
         toast({ title: 'Access Denied', description: 'You do not have permission to view this page.', variant: 'destructive'});
         router.push('/dashboard');
       }
