@@ -18,6 +18,7 @@ import {
   getDoc,
   writeBatch,
   getCountFromServer,
+  documentId,
 } from 'firebase/firestore';
 import { deleteIssuesForTask, hasOpenIssues } from './issueService';
 
@@ -170,6 +171,31 @@ export const getSubTasks = async (parentId: string): Promise<Task[]> => {
   }
 };
 
+export const getProjectSubTasksAssignedToUser = async (projectId: string, userUid: string): Promise<Task[]> => {
+  console.log(`taskService: getProjectSubTasksAssignedToUser for projectId: ${projectId}, userUid: ${userUid}`);
+  if (!projectId || !userUid) return [];
+
+  const q = query(
+    tasksCollection,
+    where('projectId', '==', projectId),
+    where('assignedToUids', 'array-contains', userUid),
+    where('parentId', '!=', null)
+  );
+
+  try {
+    const querySnapshot = await getDocs(q);
+    const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    console.log(`taskService: Fetched ${tasks.length} sub-tasks assigned to user ${userUid} in project ${projectId}.`);
+    return tasks;
+  } catch (error: any) {
+    console.error(`taskService: Error in getProjectSubTasksAssignedToUser for projectId: ${projectId}, userUid: ${userUid}`, error.message, error.stack);
+    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
+      console.error("Firestore query for getProjectSubTasksAssignedToUser requires a composite index. Fields: projectId (ASC), assignedToUids (ARRAY_CONTAINS), parentId (!= null). Check Firebase console.");
+    }
+    throw error;
+  }
+};
+
 export const getAssignedSubTasksForUser = async (mainTaskId: string, userUid: string): Promise<Task[]> => {
   console.log(`taskService: getAssignedSubTasksForUser for mainTaskId: ${mainTaskId}, userUid: ${userUid}`);
   if (!mainTaskId || !userUid) return [];
@@ -252,6 +278,23 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
     console.warn(`[taskService.getTaskById] Main task access DENIED for user ${userUid} (Role: ${userRole}) to task ${taskId}. Not owner, supervisor, or member.`);
     return null; 
   }
+};
+
+export const getTasksByIds = async (taskIds: string[]): Promise<Task[]> => {
+  if (taskIds.length === 0) {
+    return [];
+  }
+  const tasks: Task[] = [];
+  // Firestore 'in' query limit is 30
+  for (let i = 0; i < taskIds.length; i += 30) {
+    const chunk = taskIds.slice(i, i + 30);
+    const q = query(tasksCollection, where(documentId(), 'in', chunk));
+    const querySnapshot = await getDocs(q);
+    querySnapshot.forEach((doc) => {
+      tasks.push(mapDocumentToTask(doc));
+    });
+  }
+  return tasks;
 };
 
 interface UpdateTaskData {
@@ -587,5 +630,7 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     
     
   
+
+
 
 

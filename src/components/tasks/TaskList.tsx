@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getProjectMainTasks, getAllTasksAssignedToUser } from '@/services/taskService';
+import { getProjectMainTasks, getProjectSubTasksAssignedToUser, getTasksByIds, calculateMainTaskProgress } from '@/services/taskService';
 import type { Task } from '@/types';
 import { TaskCard } from './TaskCard';
 import { Loader2, ListTodo } from 'lucide-react';
@@ -31,39 +31,39 @@ export function TaskList({ projectId }: TaskListProps) {
     setLoading(true);
     setError(null);
     try {
-      console.log(`TaskList: Attempting to fetch all main tasks for projectId: ${projectId}`);
-      const allMainTasks = await getProjectMainTasks(projectId);
-      console.log('TaskList: Fetched all main tasks:', allMainTasks.length > 0 ? allMainTasks : 'None');
-
       if (isSupervisorOrMember) {
-        console.log(`TaskList: User is ${user.role}. Fetching all sub-tasks assigned to user ${user.uid}.`);
-        const allAssignedSubTasks = await getAllTasksAssignedToUser(user.uid);
-        console.log('TaskList: Fetched all assigned sub-tasks globally:', allAssignedSubTasks.length > 0 ? allAssignedSubTasks : 'None');
-
-        const projectSpecificAssignedSubTasks = allAssignedSubTasks.filter(
-          (subTask) => subTask.projectId === projectId && subTask.parentId
-        );
-        console.log(`TaskList: Filtered to ${projectSpecificAssignedSubTasks.length} sub-tasks assigned to user in project ${projectId}.`);
-
+        console.log(`TaskList: User is ${user.role}. Fetching sub-tasks assigned to user ${user.uid} within project ${projectId}.`);
+        const projectSpecificAssignedSubTasks = await getProjectSubTasksAssignedToUser(projectId, user.uid);
+        console.log(`TaskList: Fetched ${projectSpecificAssignedSubTasks.length} assigned sub-tasks directly from project.`);
+        
         if (projectSpecificAssignedSubTasks.length > 0) {
-          const mainTaskIdsUserIsInvolvedWith = new Set(
-            projectSpecificAssignedSubTasks.map((subTask) => subTask.parentId!)
+          const mainTaskIdsUserIsInvolvedWith = [
+            ...new Set(projectSpecificAssignedSubTasks.map((subTask) => subTask.parentId!))
+          ];
+          console.log(`TaskList: User is involved with main task IDs: ${mainTaskIdsUserIsInvolvedWith.join(', ')}. Fetching these tasks.`);
+          
+          const involvedMainTasks = await getTasksByIds(mainTaskIdsUserIsInvolvedWith);
+          
+          const tasksWithProgress = await Promise.all(
+            involvedMainTasks.map(async (task) => {
+              task.progress = await calculateMainTaskProgress(task.id);
+              return task;
+            })
           );
-          console.log('TaskList: Main task IDs user is involved with in this project:', Array.from(mainTaskIdsUserIsInvolvedWith));
-
-          const filteredMainTasks = allMainTasks.filter((mainTask) =>
-            mainTaskIdsUserIsInvolvedWith.has(mainTask.id)
-          );
-          console.log('TaskList: Filtered main tasks for supervisor/member:', filteredMainTasks.length > 0 ? filteredMainTasks : 'None');
-          setTasks(filteredMainTasks);
+          
+          tasksWithProgress.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+          console.log('TaskList: Fetched and processed involved main tasks for supervisor/member:', tasksWithProgress);
+          setTasks(tasksWithProgress);
         } else {
           console.log(`TaskList: User ${user.uid} has no sub-tasks assigned in project ${projectId}. Displaying no main tasks.`);
-          setTasks([]); // No sub-tasks assigned in this project, so no main tasks to show for them
+          setTasks([]);
         }
       } else {
         // Admin or project owner sees all main tasks
-        console.log('TaskList: User is admin/owner. Displaying all main tasks.');
+        console.log('TaskList: User is admin/owner. Fetching all main tasks for project.');
+        const allMainTasks = await getProjectMainTasks(projectId);
         setTasks(allMainTasks);
+        console.log('TaskList: Fetched all main tasks for admin/owner:', allMainTasks.length > 0 ? allMainTasks : 'None');
       }
     } catch (err: any) {
       console.error('TaskList: Error fetching main tasks:', err);
