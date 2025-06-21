@@ -20,6 +20,7 @@ import {
   getCountFromServer,
 } from 'firebase/firestore';
 import { getTaskById, updateTaskStatus as updateParentTaskStatus } from './taskService'; 
+import { logTimelineEvent } from './timelineService';
 
 const issuesCollection = collection(db, 'issues');
 
@@ -140,6 +141,15 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
   try {
     const newIssueRef = await addDoc(issuesCollection, newIssuePayload);
     
+    // Log timeline event for issue creation
+    await logTimelineEvent(
+        taskId,
+        userUid,
+        'ISSUE_CREATED',
+        `created issue: "${issueData.title}".`,
+        { issueId: newIssueRef.id, title: issueData.title }
+    );
+
     if (newIssuePayload.assignedToUids && newIssuePayload.assignedToUids.length > 0) {
       const userDoc = await getDoc(doc(db, 'users', userUid));
       const performingUserRole = userDoc.exists() ? userDoc.data()?.role as UserRole : undefined;
@@ -297,6 +307,14 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
 
     // If the issue status changed, check if parent task status needs update
     if (updates.status && updates.status !== issueData.status) {
+        await logTimelineEvent(
+            issueData.taskId,
+            userUid,
+            'ISSUE_STATUS_CHANGED',
+            `changed status of issue "${issueData.title}" to '${updates.status}'.`,
+            { issueId, oldStatus: issueData.status, newStatus: updates.status, title: issueData.title }
+        );
+
         if (updates.status === 'Open' && issueData.status === 'Closed') {
             const parentTask = await getTaskById(issueData.taskId, userUid, undefined); // Assuming user role is not critical here, or fetch it
             if (parentTask && parentTask.status === 'Completed') {
@@ -335,7 +353,17 @@ export const updateIssueStatus = async (
   }
 
   try {
-    await updateDoc(issueDocRef, { status: newStatus, updatedAt: serverTimestamp() as Timestamp });
+    if (oldStatus !== newStatus) {
+        await updateDoc(issueDocRef, { status: newStatus, updatedAt: serverTimestamp() as Timestamp });
+        await logTimelineEvent(
+            issueData.taskId,
+            userUid,
+            'ISSUE_STATUS_CHANGED',
+            `changed status of issue "${issueData.title}" to '${newStatus}'.`,
+            { issueId, oldStatus, newStatus, title: issueData.title }
+        );
+    }
+    
 
     // If issue is reopened, and parent task was completed, set parent task to In Progress
     if (newStatus === 'Open' && oldStatus === 'Closed') {
@@ -363,13 +391,15 @@ export const deleteIssue = async (issueId: string, userUid: string): Promise<voi
   if (!issueSnap.exists()){
       throw new Error('Issue not found.');
   }
+  const issueData = mapDocumentToIssue(issueSnap);
   // Permission: Only owner can delete.
-  if ((mapDocumentToIssue(issueSnap)).ownerUid !== userUid) {
+  if (issueData.ownerUid !== userUid) {
     throw new Error('Access denied. Only the issue creator can delete it.');
   }
 
   try {
     await deleteDoc(issueDocRef);
+    // Do not log deletion to the timeline, as the timeline is part of the task being modified.
   } catch (error: any) {
     console.error('issueService: Error deleting issue ID:', issueId, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;

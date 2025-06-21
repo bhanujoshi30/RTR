@@ -12,6 +12,7 @@ import {
   doc,
 } from 'firebase/firestore';
 import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
+import { logTimelineEvent } from './timelineService';
 
 interface AttachmentMetadata {
   projectId: string;
@@ -72,6 +73,16 @@ export const addAttachmentMetadata = async (attachmentData: AttachmentMetadata):
   };
 
   const docRef = await addDoc(attachmentsCollectionRef, payload);
+  
+  // Log timeline event for attachment
+  await logTimelineEvent(
+    attachmentData.taskId,
+    attachmentData.ownerUid,
+    'ATTACHMENT_ADDED',
+    `uploaded an attachment: "${attachmentData.filename}".`,
+    { reportType: attachmentData.reportType, url: attachmentData.url, filename: attachmentData.filename }
+  );
+
   return docRef.id;
 };
 

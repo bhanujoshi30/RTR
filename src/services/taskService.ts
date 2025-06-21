@@ -19,6 +19,7 @@ import {
   documentId,
 } from 'firebase/firestore';
 import { deleteIssuesForTask, hasOpenIssues } from './issueService';
+import { logTimelineEvent } from './timelineService';
 
 const tasksCollection = collection(db, 'tasks');
 
@@ -103,7 +104,8 @@ export const createTask = async (
 
   const projectData = projectSnap.data();
 
-  if (projectData.ownerUid !== userUid) {
+  const isOwnerOrAdmin = projectData.ownerUid === userUid;
+  if (!isOwnerOrAdmin) {
     throw new Error('Access denied for creating task in this project.');
   }
 
@@ -136,6 +138,27 @@ export const createTask = async (
 
   try {
     const newTaskRef = await addDoc(tasksCollection, newTaskPayload);
+    
+    // Log timeline event for sub-task creation
+    if (newTaskPayload.parentId) {
+      await logTimelineEvent(
+        newTaskRef.id,
+        userUid,
+        'TASK_CREATED',
+        `created the sub-task.`
+      );
+      if (newTaskPayload.assignedToUids.length > 0) {
+          const names = newTaskPayload.assignedToNames.join(', ');
+          await logTimelineEvent(
+            newTaskRef.id,
+            userUid,
+            'ASSIGNMENT_CHANGED',
+            `assigned the task to ${names}.`,
+            { assigned: newTaskPayload.assignedToNames }
+          );
+      }
+    }
+
     return newTaskRef.id;
   } catch (error: any) {
     console.error('taskService: Error creating task:', error.message, error.code ? `(${error.code})` : '', error.stack);
@@ -396,6 +419,30 @@ export const updateTask = async (
      if (Object.keys(updatePayload).length === 1 && updatePayload.updatedAt && updates.name === undefined && updates.description === undefined && updates.dueDate === undefined) return;
 
   }
+  
+  // Timeline logging for assignments
+  if (updates.assignedToUids !== undefined && JSON.stringify(updates.assignedToUids) !== JSON.stringify(taskDataFromSnap.assignedToUids)) {
+    const newNames = updates.assignedToNames?.join(', ') || 'nobody';
+    await logTimelineEvent(
+      taskId,
+      userUid,
+      'ASSIGNMENT_CHANGED',
+      `updated assignments to ${newNames}.`,
+      { assigned: updates.assignedToNames }
+    );
+  }
+
+  // Timeline logging for status change
+  if (updates.status !== undefined && updates.status !== taskDataFromSnap.status) {
+      await logTimelineEvent(
+        taskId,
+        userUid,
+        'STATUS_CHANGED',
+        `changed status from '${taskDataFromSnap.status}' to '${updates.status}'.`,
+        { oldStatus: taskDataFromSnap.status, newStatus: updates.status }
+    );
+  }
+
 
   if (Object.keys(updatePayload).length > 1) {
     await updateDoc(taskDocRef, updatePayload);
@@ -423,7 +470,19 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
           throw new Error('Cannot complete sub-task: There are still open issues associated with it.');
         }
       }
-      await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
+      
+      const oldStatus = taskData.status;
+      if (oldStatus !== status) {
+        await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
+        await logTimelineEvent(
+          taskId,
+          userUid,
+          'STATUS_CHANGED',
+          `changed status from '${oldStatus}' to '${status}'.`,
+          { oldStatus, newStatus: status }
+        );
+      }
+
     } else {
       throw new Error('Access denied for status update. Task not owned by you, or you are not assigned to it.');
     }

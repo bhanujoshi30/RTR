@@ -80,3 +80,24 @@ export interface Attachment {
   };
   createdAt: Date;
 }
+
+export type TimelineEventType =
+  | 'TASK_CREATED'
+  | 'STATUS_CHANGED'
+  | 'ASSIGNMENT_CHANGED'
+  | 'ISSUE_CREATED'
+  | 'ISSUE_STATUS_CHANGED'
+  | 'ATTACHMENT_ADDED';
+
+export interface TimelineEvent {
+  id: string;
+  taskId: string;
+  timestamp: Date;
+  type: TimelineEventType;
+  description: string;
+  author: {
+    uid: string;
+    name: string;
+  };
+  details: Record<string, any>;
+}

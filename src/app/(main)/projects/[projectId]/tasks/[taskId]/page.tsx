@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ProgressReportDialog } from '@/components/attachments/ProgressReportDialog';
 import { AttachmentList } from '@/components/attachments/AttachmentList';
+import { Timeline } from '@/components/timeline/Timeline';
 
 
 export default function TaskDetailsPage() {
@@ -355,7 +356,14 @@ export default function TaskDetailsPage() {
                 </Card>
             </TabsContent>
             <TabsContent value="timeline" className="mt-6">
-              <Card><CardHeader><CardTitle>Timeline</CardTitle></CardHeader><CardContent><p className="text-muted-foreground">Timeline for this sub-task (to be implemented).</p></CardContent></Card>
+              <Card>
+                  <CardHeader>
+                      <CardTitle>Timeline</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                      <Timeline taskId={taskId} />
+                  </CardContent>
+              </Card>
             </TabsContent>
           </Tabs>
         )}
