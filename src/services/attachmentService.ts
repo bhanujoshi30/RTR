@@ -11,7 +11,7 @@ import {
   orderBy,
   doc,
 } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 
 interface AttachmentMetadata {
   projectId: string;
@@ -27,15 +27,39 @@ interface AttachmentMetadata {
   };
 }
 
-// Uploads a file and returns its public URL
-export const uploadAttachment = async (taskId: string, file: File): Promise<string> => {
-  const filePath = `attachments/${taskId}/${Date.now()}-${file.name}`;
-  const storageRef = ref(storage, filePath);
-  
-  await uploadBytes(storageRef, file);
-  const downloadURL = await getDownloadURL(storageRef);
-  
-  return downloadURL;
+// Uploads a file and returns its public URL, with progress reporting
+export const uploadAttachment = (
+  taskId: string,
+  file: File,
+  onProgress: (progress: number) => void
+): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const filePath = `attachments/${taskId}/${Date.now()}-${file.name}`;
+    const storageRef = ref(storage, filePath);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        onProgress(progress);
+      },
+      (error) => {
+        console.error('Upload failed:', error);
+        reject(error);
+      },
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref)
+          .then((downloadURL) => {
+            resolve(downloadURL);
+          })
+          .catch((error) => {
+            console.error('Failed to get download URL:', error);
+            reject(error);
+          });
+      }
+    );
+  });
 };
 
 // Adds attachment metadata to a subcollection under the task

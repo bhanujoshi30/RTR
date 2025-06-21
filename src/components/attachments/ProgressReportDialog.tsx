@@ -12,6 +12,7 @@ import { Loader2, Camera, Upload, MapPin, X, ImagePlus } from 'lucide-react';
 import type { User } from '@/types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { Progress } from '@/components/ui/progress';
 
 interface ProgressReportDialogProps {
   open: boolean;
@@ -39,6 +40,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   const [isUploading, setIsUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
 
   useEffect(() => {
@@ -48,7 +50,8 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       setPreviewUrl(null);
       setLocation(null);
       setLocationError(null);
-      setIsUploading(false); // Explicitly reset uploading state
+      setIsUploading(false);
+      setUploadProgress(null); 
 
       // Fetch location
       if (navigator.geolocation) {
@@ -100,6 +103,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
     }
 
     setIsUploading(true);
+    setUploadProgress(0);
 
     try {
       const canvas = canvasRef.current;
@@ -155,7 +159,12 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       const filename = `${reportType}-${Date.now()}.jpg`;
       const stampedFile = new File([blob], filename, { type: 'image/jpeg' });
       
-      const downloadURL = await uploadAttachment(taskId, stampedFile);
+      const downloadURL = await uploadAttachment(
+        taskId, 
+        stampedFile,
+        (progress) => setUploadProgress(progress)
+      );
+
       await addAttachmentMetadata({
         projectId,
         taskId,
@@ -168,7 +177,6 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       });
 
       toast({ title: 'Success', description: 'Report submitted successfully.' });
-      setIsUploading(false);
       onSuccess();
 
     } catch (error: any) {
@@ -183,6 +191,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       }
       toast({ title: 'Upload Failed', description, variant: 'destructive' });
       setIsUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -241,6 +250,14 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
               </div>
             )}
           </div>
+          
+           {isUploading && uploadProgress !== null && (
+            <div className="space-y-1 pt-2">
+              <p className="text-sm text-center text-muted-foreground">Uploading...</p>
+              <Progress value={uploadProgress} className="w-full" />
+            </div>
+          )}
+
           {/* Canvas is hidden, used for processing only */}
           <canvas ref={canvasRef} className="hidden" />
         </div>
