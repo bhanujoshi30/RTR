@@ -8,8 +8,9 @@ import { uploadAttachment, addAttachmentMetadata } from '@/services/attachmentSe
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Camera, CameraOff, UploadCloud, MapPin, X } from 'lucide-react';
+import { Loader2, Camera, CameraOff, MapPin, X } from 'lucide-react';
 import type { User } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface ProgressReportDialogProps {
   open: boolean;
@@ -35,11 +36,9 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [location, setLocation] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isCameraInitializing, setIsCameraInitializing] = useState(false);
   
-  // Note: We no longer need the stream in the component's state for this logic.
-  // It will be managed within the useEffect hook.
-
   useEffect(() => {
     if (!open) {
       return;
@@ -52,26 +51,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       setHasPermission(null);
       setLocation(null);
       setLocationError(null);
-
-      // Camera Permission
-      try {
-        let cameraStream;
-        try {
-          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        } catch (e) {
-          console.warn("Could not get rear camera, trying default.", e);
-          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        }
-        
-        localStream = cameraStream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = localStream;
-        }
-        setHasPermission(true);
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        setHasPermission(false);
-      }
+      setIsCameraInitializing(true);
 
       // Geolocation Permission
       if (navigator.geolocation) {
@@ -91,11 +71,33 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       } else {
         setLocationError("Geolocation is not supported by this browser.");
       }
+      
+      // Camera Permission
+      try {
+        let cameraStream;
+        try {
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        } catch (e) {
+          console.warn("Could not get rear camera, trying default.", e);
+          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        }
+        
+        localStream = cameraStream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = localStream;
+        }
+        setHasPermission(true);
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasPermission(false);
+      } finally {
+        setIsCameraInitializing(false);
+      }
     };
     
     getPermissionsAndStream();
 
-    // The cleanup function is crucial. It's called when `open` changes or the component unmounts.
+    // Cleanup function when dialog closes or component unmounts
     return () => {
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
@@ -103,6 +105,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       if (videoRef.current) {
         videoRef.current.srcObject = null;
       }
+      setIsCameraInitializing(false);
     };
   }, [open]);
 
@@ -111,7 +114,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       toast({ title: "Error", description: "Component not ready or user not logged in.", variant: "destructive" });
       return;
     }
-    setIsLoading(true);
+    setIsUploading(true);
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
@@ -119,7 +122,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
 
     if (!context) {
       toast({ title: "Error", description: "Could not get canvas context.", variant: "destructive" });
-      setIsLoading(false);
+      setIsUploading(false);
       return;
     }
 
@@ -129,7 +132,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         description: "The camera is still initializing. Please wait a moment and try again.",
         variant: "destructive",
       });
-      setIsLoading(false);
+      setIsUploading(false);
       return;
     }
 
@@ -183,9 +186,13 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
           toast({ title: "Success", description: "Report submitted successfully." });
           onSuccess();
         } catch (error: any) {
-          toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+           let description = error.message;
+            if (error.code === 'storage/unknown' || error.code === 'storage/unauthorized') {
+                description = "Upload failed due to a permission error. Please ensure Firebase Storage rules allow writes for authenticated users.";
+            }
+          toast({ title: "Upload Failed", description: description, variant: "destructive" });
         } finally {
-          setIsLoading(false);
+          setIsUploading(false);
         }
       }
     }, 'image/png');
@@ -220,19 +227,24 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
             </Alert>
           )}
 
-          {hasPermission && (
-            <div className="relative w-full aspect-video bg-muted rounded-md overflow-hidden">
-              <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
-              <canvas ref={canvasRef} className="hidden" />
-            </div>
-          )}
+          <div className="relative w-full aspect-video bg-muted rounded-md overflow-hidden flex items-center justify-center">
+             {isCameraInitializing && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">
+                    <Loader2 className="h-8 w-8 animate-spin text-white" />
+                    <p className="text-white mt-2">Starting camera...</p>
+                </div>
+            )}
+            <video ref={videoRef} className={cn("w-full h-full object-cover", { 'invisible': isCameraInitializing })} autoPlay muted playsInline />
+            <canvas ref={canvasRef} className="hidden" />
+          </div>
+
         </div>
         <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
+            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
                 <X className="mr-2 h-4 w-4" /> Cancel
             </Button>
-            <Button onClick={handleCaptureAndUpload} disabled={!hasPermission || isLoading}>
-                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
+            <Button onClick={handleCaptureAndUpload} disabled={!hasPermission || isUploading || isCameraInitializing}>
+                {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
                 Capture &amp; Submit
             </Button>
         </div>
