@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { createTask, updateTask } from '@/services/taskService';
+import { createTask, updateTask, getAllTasksForProject } from '@/services/taskService';
 import type { Task, TaskStatus, User as AppUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { getUsersByRole } from '@/services/userService';
+import { getUsersByIds } from '@/services/userService';
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 
@@ -79,17 +79,23 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     if (isSubTask) {
       const fetchAssignableUsers = async () => {
         try {
-          const fetchedSupervisors = await getUsersByRole('supervisor');
-          const fetchedMembers = await getUsersByRole('member');
+          // Fetch all tasks in the project to discover users
+          const allProjectTasks = await getAllTasksForProject(projectId);
+          const userIds = new Set<string>();
+          allProjectTasks.forEach(t => {
+            if (t.ownerUid) userIds.add(t.ownerUid);
+            t.assignedToUids?.forEach(uid => userIds.add(uid));
+          });
           
-          const allUsersMap = new Map<string, AppUser>();
-          fetchedSupervisors.forEach(u => allUsersMap.set(u.uid, u));
-          fetchedMembers.forEach(u => allUsersMap.set(u.uid, u));
+          if (userIds.size === 0 && user?.uid) {
+              userIds.add(user.uid); // Add current user if no other users are found
+          }
+
+          const projectUsers = await getUsersByIds(Array.from(userIds));
           
-          const combinedUsers = Array.from(allUsersMap.values()).sort((a, b) => 
-            (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
-          );
-          setAssignableUsers(combinedUsers);
+          // Filter for only supervisors and members
+          const assignable = projectUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
+          setAssignableUsers(assignable);
 
         } catch (error) {
           console.error("Failed to fetch assignable users for TaskForm:", error);
@@ -103,7 +109,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       };
       fetchAssignableUsers();
     }
-  }, [isSubTask, toast]);
+  }, [isSubTask, projectId, toast, user]);
 
   const onSubmit: SubmitHandler<TaskFormValues> = async (data) => {
     if (!user) {
@@ -285,7 +291,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
-                      {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available or still loading...</p>}
+                      {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available in this project yet...</p>}
                       <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                         {assignableUsers.map(assignableUser => (
                           <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">

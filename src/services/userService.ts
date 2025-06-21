@@ -1,7 +1,7 @@
 
 import { db } from '@/lib/firebase';
 import type { User, UserRole } from '@/types';
-import { collection, query, where, getDocs, orderBy, doc, setDoc, getDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, setDoc, getDoc, deleteDoc, serverTimestamp, Timestamp, documentId } from 'firebase/firestore';
 
 const usersCollection = collection(db, 'users');
 
@@ -35,31 +35,31 @@ export const getUserDisplayName = async (uid: string): Promise<string | null> =>
   }
 };
 
-export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
-  console.log(`userService: getUsersByRole called for role: ${role}`);
-  // Query without ordering to avoid composite index
-  const q = query(
-    usersCollection,
-    where('role', '==', role)
-  );
-
-  try {
-    const querySnapshot = await getDocs(q);
-    const usersWithRole = querySnapshot.docs.map(mapDocumentToUser);
-    
-    // Sort in application code
-    usersWithRole.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
-
-    console.log(`userService: Fetched ${usersWithRole.length} users with role '${role}'.`);
-    return usersWithRole;
-  } catch (error: any) {
-    console.error(`userService: Error fetching users with role '${role}':`, error.message, error.code ? `(${error.code})` : '', error.stack);
-    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error(`Firestore query for users by role ('${role}') requires an index on 'role'. Please create this in the Firebase console.`);
+export const getUsersByIds = async (uids: string[]): Promise<User[]> => {
+    if (!uids || uids.length === 0) {
+      return [];
     }
-    throw error;
-  }
-};
+    const users: User[] = [];
+    const userChunks: string[][] = [];
+    for (let i = 0; i < uids.length; i += 30) {
+        userChunks.push(uids.slice(i, i + 30));
+    }
+  
+    for (const chunk of userChunks) {
+        if (chunk.length === 0) continue;
+        const q = query(collection(db, 'users'), where(documentId(), 'in', chunk));
+        try {
+            const querySnapshot = await getDocs(q);
+            querySnapshot.forEach((docSnap) => {
+                users.push(mapDocumentToUser(docSnap));
+            });
+        } catch (error) {
+            console.error(`Error fetching user chunk:`, error);
+        }
+    }
+    users.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+    return users;
+  };
 
 export const getAllUsers = async (requestingUserUid: string): Promise<User[]> => {
   console.log(`userService: getAllUsers called by user: ${requestingUserUid}`);

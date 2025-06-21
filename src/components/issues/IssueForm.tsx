@@ -6,7 +6,7 @@ import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
-import { getTaskById, updateTaskStatus } from '@/services/taskService';
+import { getTaskById, updateTaskStatus, getAllTasksForProject } from '@/services/taskService';
 import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser, Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +21,7 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { getUsersByRole } from '@/services/userService';
+import { getUsersByIds } from '@/services/userService';
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -65,50 +65,42 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   });
 
   useEffect(() => {
-    const fetchParentTaskAndAssignableUsers = async () => {
+    const fetchPrerequisites = async () => {
       if (!user || !taskId) return;
       setLoadingAssignableUsers(true);
       try {
-        const fetchedParentTask = await getTaskById(taskId, user.uid, user.role);
+        // Fetch parent task in parallel with project users
+        const parentTaskPromise = getTaskById(taskId, user.uid, user.role);
+
+        // Discover users from the entire project
+        const projectTasksPromise = getAllTasksForProject(projectId);
+        const [fetchedParentTask, allProjectTasks] = await Promise.all([parentTaskPromise, projectTasksPromise]);
+
         if (!fetchedParentTask) {
           toast({ title: "Error", description: "Parent sub-task not found.", variant: "destructive" });
-          setAssignableUsersForIssue([]);
-          setParentSubTask(null);
-          setLoadingAssignableUsers(false);
-          return;
         }
         setParentSubTask(fetchedParentTask);
 
-        const parentAssigneeUids = fetchedParentTask.assignedToUids || [];
-
-        if (parentAssigneeUids.length === 0) {
-          setAssignableUsersForIssue([]);
-          setLoadingAssignableUsers(false);
-          return;
-        }
-
-        const [supervisors, members] = await Promise.all([
-          getUsersByRole('supervisor'),
-          getUsersByRole('member')
-        ]);
+        const userIds = new Set<string>();
+        allProjectTasks.forEach(t => {
+            if (t.ownerUid) userIds.add(t.ownerUid);
+            t.assignedToUids?.forEach(uid => userIds.add(uid));
+        });
         
-        const allPotentialAssigneesMap = new Map<string, AppUser>();
-        [...supervisors, ...members].forEach(u => allPotentialAssigneesMap.set(u.uid, u));
+        const projectUsers = await getUsersByIds(Array.from(userIds));
 
-        const filteredUsers = parentAssigneeUids
-          .map(uid => allPotentialAssigneesMap.get(uid))
-          .filter(Boolean) as AppUser[]; 
-
-        const sortedFilteredUsers = filteredUsers.sort((a, b) =>
+        // Filter for only supervisors and members for assignment
+        const assignable = projectUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
+        const sortedUsers = assignable.sort((a, b) =>
           (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
         );
-        setAssignableUsersForIssue(sortedFilteredUsers);
 
+        setAssignableUsersForIssue(sortedUsers);
       } catch (error) {
-        console.error("Failed to fetch parent task or assignable users for IssueForm:", error);
+        console.error("Failed to fetch prerequisites for IssueForm:", error);
         toast({
           title: "Error",
-          description: "Could not load users for assignment. Ensure parent sub-task is accessible and has assignees.",
+          description: "Could not load data required for the form.",
           variant: "destructive"
         });
         setAssignableUsersForIssue([]);
@@ -118,9 +110,9 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     };
 
     if (!authLoading && user) {
-      fetchParentTaskAndAssignableUsers();
+      fetchPrerequisites();
     }
-  }, [taskId, user, authLoading, toast]);
+  }, [taskId, projectId, user, authLoading, toast]);
 
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
     if (!user) {
@@ -255,15 +247,12 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           name="assignedToUids"
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To (from Sub-task Assignees)</FormLabel>
+              <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To (Team Members)</FormLabel>
               {loadingAssignableUsers && <p className="text-sm text-muted-foreground">Loading assignable users...</p>}
               {!loadingAssignableUsers && assignableUsersForIssue.length === 0 && (
                 <div className="p-3 text-sm text-muted-foreground border rounded-md flex items-center gap-2">
                    <AlertCircle className="h-5 w-5 text-amber-500" />
-                  {parentSubTask && (parentSubTask.assignedToUids || []).length === 0
-                    ? "Parent sub-task has no assigned users. Assign users to the sub-task first to enable issue assignment."
-                    : "No users from the parent sub-task are available for assignment, or parent task not loaded."
-                  }
+                  No assignable team members found in this project.
                 </div>
               )}
               {!loadingAssignableUsers && assignableUsersForIssue.length > 0 && (
@@ -326,7 +315,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           )}
         />
         <div className="flex justify-end">
-          <Button type="submit" disabled={loading || !user || loadingAssignableUsers || (assignableUsersForIssue.length === 0 && !issue?.id) }>
+          <Button type="submit" disabled={loading || !user || loadingAssignableUsers}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {issue ? 'Save Changes' : 'Create Issue'}
           </Button>

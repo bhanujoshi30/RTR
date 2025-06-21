@@ -315,6 +315,13 @@ export const getTasksByIds = async (taskIds: string[]): Promise<Task[]> => {
   return tasks;
 };
 
+export const getAllTasksForProject = async (projectId: string): Promise<Task[]> => {
+    if (!projectId) return [];
+    const q = query(tasksCollection, where('projectId', '==', projectId));
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(mapDocumentToTask);
+};
+
 interface UpdateTaskData {
     name?: string;
     description?: string;
