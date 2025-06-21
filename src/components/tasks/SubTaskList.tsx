@@ -2,12 +2,36 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getSubTasks } from '@/services/taskService';
 import { countOpenIssuesForTask } from '@/services/issueService';
 import type { Task } from '@/types';
 import { TaskCard } from './TaskCard';
 import { Loader2, ListChecks } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { query, where, getDocs, orderBy, collection, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+
+// This helper function is now local to avoid service dependency issues
+const mapDocumentToTask = (docSnapshot: any): Task => {
+  const data = docSnapshot.data();
+  return {
+    id: docSnapshot.id,
+    projectId: data.projectId,
+    projectOwnerUid: data.projectOwnerUid,
+    parentId: data.parentId || null,
+    name: data.name,
+    description: data.description || '',
+    status: data.status as Task['status'],
+    ownerUid: data.ownerUid,
+    assignedToUids: data.assignedToUids || [],
+    assignedToNames: data.assignedToNames || [],
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
+    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : (data.parentId ? new Date() : null)),
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
+    progress: data.progress,
+    openIssueCount: data.openIssueCount,
+  };
+};
 
 interface SubTaskListProps {
   mainTaskId: string;
@@ -22,11 +46,10 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
   const { user, loading: authLoading } = useAuth();
   
   const isViewerMainTaskOwner = user?.uid === mainTaskOwnerUid;
+  const isAdmin = user?.role === 'admin';
 
   const fetchSubTasksData = async () => {
-    console.log('[SubTaskList Debug] fetchSubTasksData called. mainTaskId:', mainTaskId, 'Auth Loading:', authLoading, 'User:', user ? user.uid : 'null', 'MainTaskOwnerUid:', mainTaskOwnerUid);
     if (authLoading || !user || !mainTaskId) {
-      console.log('[SubTaskList Debug] Skipping fetch, auth loading, no user, or no mainTaskId.');
       if(!authLoading && !user && mainTaskId) setLoading(false); 
       return;
     }
@@ -34,21 +57,31 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
     setLoading(true);
     setError(null);
     try {
-      // Fetch all sub-tasks for the main task. This query does not require a composite index.
-      const allSubTasksForParent = await getSubTasks(mainTaskId);
-      
-      let fetchedSubTasks: Task[];
-      if (isViewerMainTaskOwner) {
-        console.log(`[SubTaskList Debug] User ${user.uid} IS the main task owner. Using all ${allSubTasksForParent.length} sub-tasks.`);
-        fetchedSubTasks = allSubTasksForParent;
-      } else {
-        // Filter client-side to avoid composite index query.
-        console.log(`[SubTaskList Debug] User ${user.uid} is NOT main task owner. Filtering ${allSubTasksForParent.length} sub-tasks on client...`);
-        fetchedSubTasks = allSubTasksForParent.filter(task => 
-          task.assignedToUids?.includes(user.uid)
+      const tasksCollectionRef = collection(db, 'tasks');
+      let subTasksQuery;
+
+      if (isViewerMainTaskOwner || isAdmin) {
+        // Owners/Admins see all subtasks. This query requires an index on parentId (ASC), createdAt (ASC).
+        subTasksQuery = query(
+          tasksCollectionRef,
+          where('parentId', '==', mainTaskId),
+          orderBy('createdAt', 'asc')
         );
-        console.log(`[SubTaskList Debug] Client-side filter resulted in ${fetchedSubTasks.length} assigned sub-tasks.`);
+      } else {
+        // Supervisors/Members only see assigned subtasks.
+        // THIS QUERY REQUIRES A COMPOSITE INDEX in Firestore.
+        // The error message in the browser console will provide a direct link to create it.
+        // Index fields: parentId (ASC), assignedToUids (ARRAY-CONTAINS), createdAt (ASC)
+        subTasksQuery = query(
+          tasksCollectionRef,
+          where('parentId', '==', mainTaskId),
+          where('assignedToUids', 'array-contains', user.uid),
+          orderBy('createdAt', 'asc')
+        );
       }
+
+      const querySnapshot = await getDocs(subTasksQuery);
+      const fetchedSubTasks = querySnapshot.docs.map(mapDocumentToTask);
 
       const subTasksWithIssueCounts = await Promise.all(
         fetchedSubTasks.map(async (task) => {
@@ -58,49 +91,36 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
       );
 
       setSubTasks(subTasksWithIssueCounts);
-      console.log(`[SubTaskList Debug] Set ${subTasksWithIssueCounts.length} sub-tasks for display with issue counts.`);
 
     } catch (err: any) {
-      console.error('[SubTaskList Debug] Error fetching sub-tasks for mainTaskId', mainTaskId, ':', err);
-      let displayError = `Failed to load sub-tasks. ${err.message || "Unknown error"}`;
-      if (err.message?.toLowerCase().includes("index")) {
-        displayError = `Failed to load sub-tasks. A Firestore query error occurred, likely due to a missing database index. Please check the browser console for detailed error messages from 'taskService' which may include a link to create the required index. Ensure an index on 'tasks' for 'parentId' (ASC) and 'createdAt' (ASC) exists.`;
-      }
+      console.error('[SubTaskList] Error fetching sub-tasks:', err);
+      let displayError = `Failed to load sub-tasks. This is likely due to a missing database index. Please open your browser's developer console (F12) for an error message from Firestore that contains a direct link to create the required index automatically.`;
       setError(displayError);
     } finally {
       setLoading(false);
-      console.log('[SubTaskList Debug] fetchSubTasksData finished for mainTaskId', mainTaskId, '. Loading set to false.');
     }
   };
 
   useEffect(() => {
-    console.log('[SubTaskList Debug] useEffect triggered. mainTaskId:', mainTaskId, 'User available:', !!user, 'Auth loading:', authLoading, 'MainTaskOwnerUid:', mainTaskOwnerUid);
     if (!mainTaskId) {
-        console.warn('[SubTaskList Debug] mainTaskId is undefined or null, skipping fetch.');
         setLoading(false);
         setError('Cannot load sub-tasks: Main task ID is missing.');
         return;
     }
-    if (!mainTaskOwnerUid && user && !authLoading) {
-        console.warn('[SubTaskList Debug] mainTaskOwnerUid is undefined or null, but user is available. Filtering behavior might be unexpected or default to showing all. Ensure mainTaskOwnerUid is passed.');
-    }
     if (user && !authLoading) {
         fetchSubTasksData();
     } else if (!user && !authLoading) {
-        console.warn('[SubTaskList Debug] User not available, skipping fetch.');
         setLoading(false);
         setError('Cannot load sub-tasks: User not authenticated.');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mainTaskId, user, authLoading, mainTaskOwnerUid]); // Added mainTaskOwnerUid as dependency
+  }, [mainTaskId, user, authLoading]);
 
   const onSubTaskUpdated = () => {
-    console.log('[SubTaskList Debug] onSubTaskUpdated called, re-fetching sub-tasks for mainTaskId:', mainTaskId);
     fetchSubTasksData(); 
   };
 
   if (loading) {
-    console.log('[SubTaskList Debug] Render - Loading state true for mainTaskId:', mainTaskId);
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -110,16 +130,14 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
   }
 
   if (error) {
-    console.log('[SubTaskList Debug] Render - Error state for mainTaskId:', mainTaskId, 'Error:', error);
-    return <p className="text-center text-destructive py-4">{error}</p>;
+    return <p className="text-center text-destructive py-4 whitespace-pre-wrap">{error}</p>;
   }
 
   if (subTasks.length === 0) {
     let noSubTasksMessage = "No sub-tasks yet for this main task. Add sub-tasks to get started.";
-    if (user && mainTaskOwnerUid && user.uid !== mainTaskOwnerUid) {
-      noSubTasksMessage = "No sub-tasks assigned to you under this main task.";
+    if (user && mainTaskOwnerUid && user.uid !== mainTaskOwnerUid && !isAdmin) {
+      noSubTasksMessage = "No sub-tasks have been assigned to you under this main task.";
     }
-    console.log('[SubTaskList Debug] Render - No sub-tasks to display for mainTaskId:', mainTaskId, 'Message:', noSubTasksMessage);
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <ListChecks className="mx-auto h-12 w-12 text-muted-foreground/50" />
@@ -130,7 +148,7 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
       </div>
     );
   }
-  console.log('[SubTaskList Debug] Render - Displaying sub-tasks for mainTaskId:', mainTaskId, 'Count:', subTasks.length, 'SubTasks:', subTasks);
+
   return (
     <div className="space-y-4">
       {subTasks.map((subTask) => (
