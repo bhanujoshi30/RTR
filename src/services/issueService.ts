@@ -398,8 +398,14 @@ export const deleteIssue = async (issueId: string, userUid: string): Promise<voi
   }
 
   try {
+    await logTimelineEvent(
+        issueData.taskId,
+        userUid,
+        'ISSUE_DELETED',
+        `deleted issue: "${issueData.title}".`,
+        { issueId: issueData.id, title: issueData.title }
+    );
     await deleteDoc(issueDocRef);
-    // Do not log deletion to the timeline, as the timeline is part of the task being modified.
   } catch (error: any) {
     console.error('issueService: Error deleting issue ID:', issueId, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;

@@ -10,6 +10,8 @@ import {
   Paperclip,
   CheckCircle2,
   AlertCircle,
+  Trash2,
+  FileX,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -26,6 +28,8 @@ const eventIcons: Record<TimelineEventType, React.ElementType> = {
   ISSUE_CREATED: Bug,
   ISSUE_STATUS_CHANGED: AlertCircle,
   ATTACHMENT_ADDED: Paperclip,
+  ISSUE_DELETED: Trash2,
+  ATTACHMENT_DELETED: FileX,
 };
 
 export function TimelineEventCard({ event }: TimelineEventCardProps) {

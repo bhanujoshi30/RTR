@@ -87,7 +87,9 @@ export type TimelineEventType =
   | 'ASSIGNMENT_CHANGED'
   | 'ISSUE_CREATED'
   | 'ISSUE_STATUS_CHANGED'
-  | 'ATTACHMENT_ADDED';
+  | 'ISSUE_DELETED'
+  | 'ATTACHMENT_ADDED'
+  | 'ATTACHMENT_DELETED';
 
 export interface TimelineEvent {
   id: string;

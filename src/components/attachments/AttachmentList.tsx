@@ -2,12 +2,27 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getAttachmentsForTask } from '@/services/attachmentService';
+import { getAttachmentsForTask, deleteAttachment } from '@/services/attachmentService';
 import type { Attachment } from '@/types';
-import { Loader2, Paperclip, FileImage } from 'lucide-react';
+import { Loader2, Paperclip, FileImage, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import Image from 'next/image';
 import { format } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
+
 
 interface AttachmentListProps {
   taskId: string;
@@ -17,24 +32,42 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+  const { toast } = useToast();
+
+  const fetchAttachments = async () => {
+    if (!taskId) return;
+    try {
+      setLoading(true);
+      const fetchedAttachments = await getAttachmentsForTask(taskId);
+      setAttachments(fetchedAttachments);
+    } catch (err: any) {
+      setError('Failed to load attachments.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchAttachments = async () => {
-      if (!taskId) return;
-      try {
-        setLoading(true);
-        const fetchedAttachments = await getAttachmentsForTask(taskId);
-        setAttachments(fetchedAttachments);
-      } catch (err: any) {
-        setError('Failed to load attachments.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchAttachments();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId]);
+
+  const handleDelete = async (attachmentId: string) => {
+    if (!user) {
+        toast({ title: "Error", description: "You must be logged in.", variant: "destructive" });
+        return;
+    }
+    try {
+        await deleteAttachment(taskId, attachmentId, user.uid);
+        toast({ title: "Success", description: "Attachment deleted." });
+        fetchAttachments(); // Re-fetch list
+    } catch (error: any) {
+        toast({ title: "Deletion Failed", description: error.message, variant: "destructive" });
+    }
+  };
+
 
   if (loading) {
     return (
@@ -64,7 +97,7 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {attachments.map((att) => (
-        <Card key={att.id} className="overflow-hidden">
+        <Card key={att.id} className="overflow-hidden group/attachment">
           <a href={att.url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square w-full">
             <Image
               src={att.url}
@@ -75,6 +108,28 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
             />
              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
           </a>
+           {user && user.uid === att.ownerUid && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="icon" className="absolute top-2 right-2 z-10 h-7 w-7 opacity-0 transition-opacity group-hover/attachment:opacity-100">
+                    <Trash2 className="h-4 w-4" />
+                    <span className="sr-only">Delete Attachment</span>
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Attachment?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This will permanently delete "{att.filename}". This action cannot be undone.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => handleDelete(att.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
           <CardHeader className="p-3">
              <CardTitle className="text-sm font-semibold truncate flex items-center gap-1.5">
                 <FileImage className="h-4 w-4 text-muted-foreground" />
