@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle, RotateCcw } from 'lucide-react'; 
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateIssueStatus, deleteIssue } from '@/services/issueService';
+import { getTaskById, updateTaskStatus as updateParentTaskStatus } from '@/services/taskService';
 import { useToast } from '@/hooks/use-toast';
 import {
   AlertDialog,
@@ -55,6 +56,15 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
     }
     try {
       await updateIssueStatus(issue.id, user.uid, newStatus, user.role as UserRole | undefined);
+
+      // If reopening issue, check if parent task needs to be reopened
+      if (newStatus === 'Open' && issue.status === 'Closed') {
+          const parentTask = await getTaskById(taskId, user.uid, user.role);
+          if (parentTask && parentTask.status === 'Completed') {
+              await updateParentTaskStatus(taskId, user.uid, 'In Progress', user.role);
+              toast({ title: 'Task Status Updated', description: `Parent sub-task "${parentTask.name}" was automatically moved to 'In Progress'.` });
+          }
+      }
       toast({ title: 'Issue Updated', description: `Status of "${issue.title}" changed to ${newStatus}.` });
       onIssueUpdated();
     } catch (error: any) {

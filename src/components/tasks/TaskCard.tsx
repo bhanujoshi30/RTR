@@ -189,6 +189,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const cardIcon = isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />;
   const showEditButton = isOwnerOfThisTask;
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
+  const hasOpenIssuesForCard = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
 
   return (
     <>
@@ -210,7 +211,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
               <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
             </div>
             <div className="flex items-center gap-2">
-              {isSubTaskView && typeof task.openIssueCount === 'number' && task.openIssueCount > 0 && (
+              {hasOpenIssuesForCard && (
                 <Badge variant="outline" className="border-amber-500 text-amber-600 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
                   {task.openIssueCount} Open Issue{task.openIssueCount !== 1 ? 's' : ''}

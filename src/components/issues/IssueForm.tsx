@@ -6,6 +6,7 @@ import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
+import { getTaskById, updateTaskStatus } from '@/services/taskService';
 import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser, Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,7 +22,6 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getUsersByRole } from '@/services/userService';
-import { getTaskById } from '@/services/taskService';
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
@@ -145,7 +145,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       ...data,
       assignedToUids: data.assignedToUids || [],
       assignedToNames: assignedToNamesForPayload || [],
-      dueDate: data.dueDate, // Pass JavaScript Date directly
+      dueDate: data.dueDate,
     };
 
     try {
@@ -155,6 +155,12 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       } else {
         await createIssue(projectId, taskId, user.uid, issueDataPayload);
         toast({ title: 'Issue Created', description: `"${data.title}" has been added.` });
+
+        // Side effect: If parent task was 'Completed', move it to 'In Progress'
+        if (parentSubTask && parentSubTask.status === 'Completed') {
+          await updateTaskStatus(taskId, user.uid, 'In Progress', user.role);
+          toast({ title: 'Task Status Updated', description: `Parent sub-task "${parentSubTask.name}" was automatically moved to 'In Progress'.` });
+        }
       }
       onFormSuccess();
     } catch (error: any) {

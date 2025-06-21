@@ -18,7 +18,7 @@ import {
   getCountFromServer,
   documentId,
 } from 'firebase/firestore';
-import { deleteIssuesForTask, hasOpenIssues } from './issueService';
+import { deleteIssuesForTask, hasOpenIssues, getOpenIssuesForTaskIds } from './issueService';
 import { logTimelineEvent } from './timelineService';
 
 const tasksCollection = collection(db, 'tasks');
@@ -49,44 +49,10 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
     dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : (data.parentId ? new Date() : null)), // ensure subtask has date, main task can be null
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
-    progress: data.progress // Will be populated for main tasks by calling functions
+    progress: data.progress, // Will be populated for main tasks by calling functions
+    openIssueCount: data.openIssueCount, // Will be populated for main tasks
   };
 };
-
-export const calculateMainTaskProgress = async (mainTaskId: string, userUid: string, userRole?: UserRole): Promise<number> => {
-  // We need to know who owns the main task to decide which sub-tasks to count.
-  const mainTaskDocRef = doc(db, 'tasks', mainTaskId);
-  const mainTaskSnap = await getDoc(mainTaskDocRef);
-
-  if (!mainTaskSnap.exists()) {
-    console.warn(`calculateMainTaskProgress: main task ${mainTaskId} not found.`);
-    return 0;
-  }
-  const mainTaskOwnerUid = mainTaskSnap.data().ownerUid;
-  
-  const isOwner = mainTaskOwnerUid === userUid;
-  // Consider admin role as owner for progress calculation purposes
-  const canSeeAll = isOwner || userRole === 'admin';
-
-  let relevantSubTasks: Task[];
-  if (canSeeAll) {
-    // Owner/Admin progress is based on ALL sub-tasks.
-    relevantSubTasks = await getSubTasks(mainTaskId);
-  } else {
-    // Supervisor/Member progress is based on ONLY their assigned sub-tasks.
-    relevantSubTasks = await getAssignedSubTasksForUser(mainTaskId, userUid);
-  }
-
-  if (relevantSubTasks.length === 0) {
-    // If an owner sees no sub-tasks, progress is 0.
-    // If a supervisor has no assigned sub-tasks, their "view" of the progress is also 0.
-    // This is correct behavior from a data-visibility perspective.
-    return 0;
-  }
-  const completedSubTasks = relevantSubTasks.filter(st => st.status === 'Completed').length;
-  return Math.round((completedSubTasks / relevantSubTasks.length) * 100);
-};
-
 
 export const createTask = async (
   projectId: string,
@@ -140,8 +106,7 @@ export const createTask = async (
     const newTaskRef = await addDoc(tasksCollection, newTaskPayload);
     const newTaskId = newTaskRef.id;
     
-    // Log timeline event for creation
-    if (newTaskPayload.parentId) { // It's a sub-task
+    if (newTaskPayload.parentId) {
       await logTimelineEvent(
         newTaskId,
         userUid,
@@ -158,7 +123,7 @@ export const createTask = async (
             { assigned: newTaskPayload.assignedToNames }
           );
       }
-    } else { // It's a main task
+    } else { 
         await logTimelineEvent(
             newTaskId,
             userUid,
@@ -175,31 +140,69 @@ export const createTask = async (
   }
 };
 
-export const getProjectMainTasks = async (projectId: string): Promise<Task[]> => {
-  console.log('taskService: getProjectMainTasks for projectId:', projectId);
+export const getProjectMainTasks = async (projectId: string, filterByIds?: string[]): Promise<Task[]> => {
+    console.log(`taskService: getProjectMainTasks for projectId: ${projectId}, filterByIds: ${filterByIds?.join(',')}`);
 
-  const q = query(
-    tasksCollection,
-    where('projectId', '==', projectId),
-    where('parentId', '==', null),
-    orderBy('createdAt', 'desc')
-  );
+    const allTasksQuery = filterByIds 
+      ? query(tasksCollection, where(documentId(), 'in', filterByIds))
+      : query(tasksCollection, where('projectId', '==', projectId));
 
-  try {
-    const querySnapshot = await getDocs(q);
-    const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    const allTasksSnapshot = await getDocs(allTasksQuery);
+    const allTasks = allTasksSnapshot.docs.map(mapDocumentToTask);
 
-     if (tasks.length === 0) {
-      console.log(`taskService: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks. Index needed: projectId (ASC), parentId (ASC), createdAt (DESC)`);
+    const mainTasks = filterByIds 
+      ? allTasks // If we filtered by ID, they are the main tasks we want
+      : allTasks.filter(t => !t.parentId);
+    
+    const subTasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
+    const subTasksSnapshot = await getDocs(subTasksQuery);
+    const allSubTasksInProject = subTasksSnapshot.docs.map(mapDocumentToTask);
+    
+    if (allSubTasksInProject.length === 0) {
+        mainTasks.forEach(mt => {
+            mt.progress = 0;
+            mt.openIssueCount = 0;
+        });
+        mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+        return mainTasks;
     }
-    return tasks;
-  } catch (error: any) {
-    console.error('taskService: Error fetching main project tasks for projectId:', projectId, error.message, error.code ? `(${error.code})` : '', error.stack);
-    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error("Firestore query for main tasks requires an index. Fields: projectId (ASC), parentId (ASC), createdAt (DESC). Check Firebase console for link.");
+    
+    const subTaskIds = allSubTasksInProject.map(t => t.id);
+    const openIssues = await getOpenIssuesForTaskIds(subTaskIds);
+
+    const issuesBySubTaskId = openIssues.reduce((acc, issue) => {
+        acc[issue.taskId] = (acc[issue.taskId] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const subTasksByMainTaskId = allSubTasksInProject.reduce((acc, subTask) => {
+        const mainTaskId = subTask.parentId!;
+        if (!acc[mainTaskId]) {
+            acc[mainTaskId] = [];
+        }
+        acc[mainTaskId].push(subTask);
+        return acc;
+    }, {} as Record<string, Task[]>);
+
+    mainTasks.forEach(mainTask => {
+        const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
+        let totalOpenIssues = 0;
+        relatedSubTasks.forEach(subTask => {
+            totalOpenIssues += (issuesBySubTaskId[subTask.id] || 0);
+        });
+        mainTask.openIssueCount = totalOpenIssues;
+
+        const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
+        mainTask.progress = relatedSubTasks.length > 0 ? Math.round((completedSubTasks / relatedSubTasks.length) * 100) : 0;
+    });
+
+    mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    
+    if (mainTasks.length === 0) {
+      console.log(`taskService: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks.`);
     }
-    throw error;
-  }
+
+    return mainTasks;
 };
 
 export const getSubTasks = async (parentId: string): Promise<Task[]> => {
@@ -296,11 +299,11 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
 
         const taskData = mapDocumentToTask(taskSnap);
         if (!taskData.parentId) {
-            taskData.progress = await calculateMainTaskProgress(taskId, userUid, userRole);
+            // Re-fetch with full aggregation to get progress and issue counts
+            const mainTasks = await getProjectMainTasks(taskData.projectId, [taskId]);
+            return mainTasks[0] || null;
         }
         
-        // If getDoc succeeds, we assume rules have granted access.
-        // Now, we can return the data.
         return taskData;
 
     } catch (error: any) {
@@ -429,7 +432,6 @@ export const updateTask = async (
         }
     }
     
-    // Log if details changed
     if (detailsChanged) {
         await logTimelineEvent(
             taskId,
@@ -439,7 +441,6 @@ export const updateTask = async (
         );
     }
     
-    // Filter out disallowed updates for main tasks
     const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt'];
     Object.keys(updatePayload).forEach(key => {
         if (!allowedMainTaskKeys.includes(key as string)) {
@@ -447,10 +448,9 @@ export const updateTask = async (
         }
     });
 
-    if (Object.keys(updatePayload).length <= 1) return; // Only updatedAt, no actual change
+    if (Object.keys(updatePayload).length <= 1) return;
   }
   
-  // Timeline logging for assignments (applies to sub-tasks)
   if (updates.assignedToUids !== undefined && JSON.stringify(updates.assignedToUids) !== JSON.stringify(taskDataFromSnap.assignedToUids)) {
     const newNames = updates.assignedToNames?.join(', ') || 'nobody';
     await logTimelineEvent(
@@ -462,7 +462,6 @@ export const updateTask = async (
     );
   }
 
-  // Timeline logging for status change (applies to sub-tasks)
   if (updates.status !== undefined && updates.status !== taskDataFromSnap.status) {
       await logTimelineEvent(
         taskId,
@@ -626,7 +625,6 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   }
 };
 
-// DEBUG MODE - uses getDocs to see what query returns
 export const countProjectSubTasks = async (projectId: string): Promise<number> => {
   console.log(`taskService: countProjectSubTasks (DEBUG MODE) called for projectId: ${projectId}`);
   if (!projectId) {

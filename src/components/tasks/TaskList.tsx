@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getProjectMainTasks, getProjectSubTasksAssignedToUser, getTasksByIds, calculateMainTaskProgress } from '@/services/taskService';
+import { getProjectMainTasks, getProjectSubTasksAssignedToUser, getTasksByIds } from '@/services/taskService';
 import type { Task } from '@/types';
 import { TaskCard } from './TaskCard';
 import { Loader2, ListTodo } from 'lucide-react';
@@ -42,18 +42,12 @@ export function TaskList({ projectId }: TaskListProps) {
           ];
           console.log(`TaskList: User is involved with main task IDs: ${mainTaskIdsUserIsInvolvedWith.join(', ')}. Fetching these tasks.`);
           
-          const involvedMainTasks = await getTasksByIds(mainTaskIdsUserIsInvolvedWith);
+          // Now fetch the main tasks themselves, with their data aggregated
+          const involvedMainTasks = await getProjectMainTasks(projectId, mainTaskIdsUserIsInvolvedWith);
           
-          const tasksWithProgress = await Promise.all(
-            involvedMainTasks.map(async (task) => {
-              task.progress = await calculateMainTaskProgress(task.id, user.uid, user.role);
-              return task;
-            })
-          );
-          
-          tasksWithProgress.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-          console.log('TaskList: Fetched and processed involved main tasks for supervisor/member:', tasksWithProgress);
-          setTasks(tasksWithProgress);
+          involvedMainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+          console.log('TaskList: Fetched and processed involved main tasks for supervisor/member:', involvedMainTasks);
+          setTasks(involvedMainTasks);
         } else {
           console.log(`TaskList: User ${user.uid} has no sub-tasks assigned in project ${projectId}. Displaying no main tasks.`);
           setTasks([]);
@@ -61,17 +55,10 @@ export function TaskList({ projectId }: TaskListProps) {
       } else {
         // Admin or project owner sees all main tasks
         console.log('TaskList: User is admin/owner. Fetching all main tasks for project.');
-        const allMainTasksRaw = await getProjectMainTasks(projectId);
+        const allMainTasks = await getProjectMainTasks(projectId);
         
-        const allMainTasksWithProgress = await Promise.all(
-            allMainTasksRaw.map(async (task) => {
-              task.progress = await calculateMainTaskProgress(task.id, user.uid, user.role);
-              return task;
-            })
-        );
-
-        setTasks(allMainTasksWithProgress);
-        console.log('TaskList: Fetched all main tasks for admin/owner:', allMainTasksWithProgress.length > 0 ? allMainTasksWithProgress : 'None');
+        setTasks(allMainTasks);
+        console.log('TaskList: Fetched all main tasks for admin/owner:', allMainTasks.length > 0 ? allMainTasks : 'None');
       }
     } catch (err: any) {
       console.error('TaskList: Error fetching main tasks:', err);

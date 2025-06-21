@@ -16,7 +16,7 @@ import {
   orderBy,
   documentId,
 } from 'firebase/firestore';
-import { deleteAllTasksForProject, getProjectMainTasks, calculateMainTaskProgress } from './taskService';
+import { deleteAllTasksForProject, getProjectMainTasks } from './taskService';
 
 const projectsCollection = collection(db, 'projects');
 
@@ -43,18 +43,14 @@ const getDynamicStatusFromProgress = (progress: number): ProjectStatus => {
   }
 };
 
-const calculateProjectProgress = async (projectId: string, userUid: string, userRole?: UserRole): Promise<number> => {
-  const mainTasks = await getProjectMainTasks(projectId);
-  if (mainTasks.length === 0) {
+const calculateProjectProgress = async (projectId: string, mainTasks?: Task[]): Promise<number> => {
+  const tasksToProcess = mainTasks || await getProjectMainTasks(projectId);
+  if (tasksToProcess.length === 0) {
     return 0;
   }
-
-  const progressValues = await Promise.all(
-    mainTasks.map(task => calculateMainTaskProgress(task.id, userUid, userRole))
-  );
-
-  const totalProgressSum = progressValues.reduce((sum, progress) => sum + progress, 0);
-  return Math.round(totalProgressSum / mainTasks.length);
+  
+  const totalProgressSum = tasksToProcess.reduce((sum, task) => sum + (task.progress || 0), 0);
+  return Math.round(totalProgressSum / tasksToProcess.length);
 };
 
 
@@ -63,7 +59,6 @@ export const createProject = async (
   projectData: {
     name: string;
     description?: string;
-    // status is no longer passed from form
   }
 ): Promise<string> => {
   if (!userUid) {
@@ -76,8 +71,8 @@ export const createProject = async (
     ...projectData,
     ownerUid: userUid,
     createdAt: serverTimestamp() as Timestamp,
-    progress: 0, // Initial progress is 0
-    status: 'Not Started' as ProjectStatus, // Initial status
+    progress: 0,
+    status: 'Not Started' as ProjectStatus,
   };
   console.log('projectService: Payload for Firestore addDoc:', projectPayload);
 
@@ -102,8 +97,10 @@ export const getUserProjects = async (userUid: string, userRole?: UserRole): Pro
     const querySnapshot = await getDocs(q);
     const projectsPromises = querySnapshot.docs.map(async (docSnap) => {
       const project = mapDocumentToProject(docSnap);
-      project.progress = await calculateProjectProgress(project.id, userUid, userRole);
-      project.status = getDynamicStatusFromProgress(project.progress); // Set dynamic status
+      // Fetch main tasks once to use for both progress and other calculations
+      const mainTasks = await getProjectMainTasks(project.id);
+      project.progress = await calculateProjectProgress(project.id, mainTasks);
+      project.status = getDynamicStatusFromProgress(project.progress);
       return project;
     });
     const projects = await Promise.all(projectsPromises);
@@ -129,9 +126,9 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
 
     if (projectSnap.exists()) {
       const projectData = mapDocumentToProject(projectSnap);
-      projectData.progress = await calculateProjectProgress(projectId, userUid, userRole);
-      projectData.status = getDynamicStatusFromProgress(projectData.progress); // Set dynamic status
-      // If getDoc succeeds, we assume access is granted by security rules.
+      const mainTasks = await getProjectMainTasks(projectId);
+      projectData.progress = await calculateProjectProgress(projectId, mainTasks);
+      projectData.status = getDynamicStatusFromProgress(projectData.progress);
       return projectData;
     } else {
       console.warn('projectService: Project not found for ID:', projectId);
@@ -175,8 +172,9 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
   }
   
   const projectsWithProgressAndStatusPromises = fetchedProjectsMapped.map(async (project) => {
-    project.progress = await calculateProjectProgress(project.id, userUid, userRole);
-    project.status = getDynamicStatusFromProgress(project.progress); // Set dynamic status
+    const mainTasks = await getProjectMainTasks(project.id);
+    project.progress = await calculateProjectProgress(project.id, mainTasks);
+    project.status = getDynamicStatusFromProgress(project.progress);
     return project;
   });
   const fetchedProjects = await Promise.all(projectsWithProgressAndStatusPromises);
@@ -192,7 +190,7 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
 export const updateProject = async (
   projectId: string,
   userUid: string,
-  updates: Partial<Pick<Project, 'name' | 'description'>> // Status and Progress removed
+  updates: Partial<Pick<Project, 'name' | 'description'>>
 ): Promise<void> => {
   if (!userUid) {
     throw new Error('User not authenticated for updating project');
@@ -205,7 +203,6 @@ export const updateProject = async (
   }
 
   try {
-    // Status and progress are not updated here directly; they are dynamic
     await updateDoc(projectDocRef, {...updates, updatedAt: serverTimestamp() as Timestamp});
   } catch (error: any) {
     console.error('projectService: Error updating project ID:', projectId, error.message, error.code ? `(${error.code})` : '', error.stack);
