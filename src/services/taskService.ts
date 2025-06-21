@@ -1,6 +1,4 @@
 
-'use server';
-
 import { db } from '@/lib/firebase';
 import type { Task, TaskStatus, UserRole } from '@/types';
 import {
@@ -623,15 +621,3 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     return 0; 
   }
 };
-    
-    
-    
-    
-    
-  
-
-
-
-
-
-

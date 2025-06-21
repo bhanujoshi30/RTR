@@ -1,6 +1,4 @@
 
-'use server';
-
 import { db } from '@/lib/firebase';
 import type { User, UserRole } from '@/types';
 import { collection, query, where, getDocs, orderBy, doc, setDoc, getDoc, deleteDoc, serverTimestamp, Timestamp } from 'firebase/firestore';

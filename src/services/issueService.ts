@@ -1,6 +1,4 @@
 
-'use server';
-
 import { db } from '@/lib/firebase';
 import type { Issue, IssueSeverity, IssueProgressStatus, Task, UserRole } from '@/types';
 import {
@@ -444,4 +442,3 @@ export const countProjectOpenIssues = async (projectId: string): Promise<number>
     return 0; // Return 0 on error to prevent breaking dashboard, but log the error.
   }
 };
-

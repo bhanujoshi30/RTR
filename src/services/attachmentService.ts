@@ -1,6 +1,4 @@
 
-'use server';
-
 import { db, storage } from '@/lib/firebase';
 import type { Attachment } from '@/types';
 import {

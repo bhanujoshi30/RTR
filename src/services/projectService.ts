@@ -1,6 +1,4 @@
 
-'use server';
-
 import { db } from '@/lib/firebase';
 import type { Project, ProjectStatus, Task } from '@/types';
 import {
