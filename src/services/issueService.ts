@@ -19,7 +19,7 @@ import {
   runTransaction,
   getCountFromServer,
 } from 'firebase/firestore';
-import { logTimelineEvent } from './timelineService';
+import { logTimelineEvent } from '@/services/timelineService';
 
 const issuesCollection = collection(db, 'issues');
 

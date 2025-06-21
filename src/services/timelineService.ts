@@ -2,8 +2,8 @@
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, Timestamp } from 'firebase/firestore';
 import type { TimelineEvent, TimelineEventType, AggregatedEvent, ProjectAggregatedEvent } from '@/types';
-import { getUserDisplayName } from './userService';
-import { getSubTasks, getProjectMainTasks } from './taskService';
+import { getUserDisplayName } from '@/services/userService';
+import { getSubTasks, getProjectMainTasks } from '@/services/taskService';
 
 /**
  * Logs a new event to a sub-task's timeline.

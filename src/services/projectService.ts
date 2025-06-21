@@ -16,7 +16,7 @@ import {
   orderBy,
   documentId,
 } from 'firebase/firestore';
-import { deleteAllTasksForProject, getProjectMainTasks } from './taskService';
+import { deleteAllTasksForProject, getProjectMainTasks } from '@/services/taskService';
 
 const projectsCollection = collection(db, 'projects');
 

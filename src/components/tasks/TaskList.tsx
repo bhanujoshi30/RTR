@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { getProjectMainTasks, getProjectSubTasksAssignedToUser, getTasksByIds } from '@/services/taskService';
 import type { Task } from '@/types';
-import { TaskCard } from './TaskCard';
+import { TaskCard } from '@/components/tasks/TaskCard';
 import { Loader2, ListTodo } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 

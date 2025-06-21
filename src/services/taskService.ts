@@ -18,8 +18,8 @@ import {
   getCountFromServer,
   documentId,
 } from 'firebase/firestore';
-import { deleteIssuesForTask, hasOpenIssues, getOpenIssuesForTaskIds } from './issueService';
-import { logTimelineEvent } from './timelineService';
+import { deleteIssuesForTask, hasOpenIssues, getOpenIssuesForTaskIds } from '@/services/issueService';
+import { logTimelineEvent } from '@/services/timelineService';
 
 const tasksCollection = collection(db, 'tasks');
 
