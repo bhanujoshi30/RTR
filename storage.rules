@@ -1,22 +1,13 @@
-
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read access to all files.
-    // This is useful for user profile pictures and other public assets.
-    // Restrict write access to only authenticated users.
+    // Allow read and write access to all files for any authenticated user.
+    // This is a simple starting point. For production, you would likely want
+    // to add more specific rules, e.g., checking file size, type, or
+    // ensuring users can only write to their own folders.
     match /{allPaths=**} {
-      allow read;
-      allow write: if request.auth != null;
-    }
-
-    // Attachments can only be created by authenticated users.
-    // Reading attachments is handled by generating a download URL in the app,
-    // which bypasses this rule, so we don't need a specific read rule here.
-    // Only the owner of the attachment or an admin should be able to delete it (handled by app logic).
-    match /attachments/{taskId}/{attachmentName} {
-      allow write: if request.auth != null;
+      allow read, write: if request.auth != null;
     }
   }
 }
