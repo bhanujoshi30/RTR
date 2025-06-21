@@ -38,11 +38,10 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isCameraInitializing, setIsCameraInitializing] = useState(false);
-  const [isCameraReady, setIsCameraReady] = useState(false); // New state
+  const [isCameraReady, setIsCameraReady] = useState(false);
 
   useEffect(() => {
     if (!open) {
-      // If dialog is closing, ensure we release the camera.
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
@@ -54,14 +53,12 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
     let localStream: MediaStream | null = null;
 
     const getPermissionsAndStream = async () => {
-      // Reset states for a clean open
       setHasPermission(null);
       setLocation(null);
       setLocationError(null);
       setIsCameraInitializing(true);
       setIsCameraReady(false);
 
-      // Geolocation Permission
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
@@ -80,7 +77,6 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         setLocationError("Geolocation is not supported by this browser.");
       }
       
-      // Camera Permission
       try {
         let cameraStream;
         try {
@@ -94,7 +90,6 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         if (videoRef.current) {
           videoRef.current.srcObject = localStream;
           videoRef.current.onloadedmetadata = () => {
-            // This is the reliable signal that camera is ready
             setIsCameraInitializing(false);
             setIsCameraReady(true);
           };
@@ -109,7 +104,6 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
     
     getPermissionsAndStream();
 
-    // Cleanup function when component unmounts
     return () => {
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
@@ -125,58 +119,56 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
 
   const handleCaptureAndUpload = async () => {
     if (!videoRef.current || !canvasRef.current || !user || !isCameraReady) {
-      toast({ title: "Error", description: "Component not ready, user not logged in, or camera not available.", variant: "destructive" });
-      return;
+        toast({ title: "Error", description: "Component not ready, user not logged in, or camera not available.", variant: "destructive" });
+        return;
     }
+
     setIsUploading(true);
 
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    const context = canvas.getContext('2d');
+    try {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        const context = canvas.getContext('2d');
 
-    if (!context) {
-      toast({ title: "Error", description: "Could not get canvas context.", variant: "destructive" });
-      setIsUploading(false);
-      return;
-    }
-    
-    // Set canvas dimensions
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Draw video frame on canvas
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        if (!context) {
+            throw new Error("Could not get canvas context.");
+        }
 
-    // Prepare and draw the stamp
-    const now = new Date();
-    const timeStamp = now.toLocaleString();
-    const locationStamp = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Location N/A';
-    const userStamp = user.displayName || user.email || 'Unknown User';
-    const fullStamp = `${userStamp} | ${timeStamp} | ${locationStamp}`;
-    
-    const fontSize = Math.max(12, Math.round(canvas.width / 50));
-    context.font = `bold ${fontSize}px Arial`;
-    context.textAlign = 'right';
-    context.textBaseline = 'bottom';
-    
-    const textMetrics = context.measureText(fullStamp);
-    const padding = 10;
-    
-    context.fillStyle = 'rgba(0, 0, 0, 0.5)';
-    context.fillRect(canvas.width - textMetrics.width - (padding * 2), canvas.height - fontSize - (padding * 2), textMetrics.width + (padding * 2), fontSize + (padding * 2));
-    
-    context.fillStyle = 'white';
-    context.fillText(fullStamp, canvas.width - padding, canvas.height - padding);
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Get file from canvas and upload
-    canvas.toBlob(async (blob) => {
-      if (blob) {
+        const now = new Date();
+        const timeStamp = now.toLocaleString();
+        const locationStamp = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Location N/A';
+        const userStamp = user.displayName || user.email || 'Unknown User';
+        const fullStamp = `${userStamp} | ${timeStamp} | ${locationStamp}`;
+        
+        const fontSize = Math.max(12, Math.round(canvas.width / 50));
+        context.font = `bold ${fontSize}px Arial`;
+        context.textAlign = 'right';
+        context.textBaseline = 'bottom';
+        
+        const textMetrics = context.measureText(fullStamp);
+        const padding = 10;
+        
+        context.fillStyle = 'rgba(0, 0, 0, 0.5)';
+        context.fillRect(canvas.width - textMetrics.width - (padding * 2), canvas.height - fontSize - (padding * 2), textMetrics.width + (padding * 2), fontSize + (padding * 2));
+        
+        context.fillStyle = 'white';
+        context.fillText(fullStamp, canvas.width - padding, canvas.height - padding);
+
+        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+        
+        if (!blob) {
+            throw new Error("Could not create image from camera feed.");
+        }
+        
         const filename = `${reportType}-${Date.now()}.png`;
         const file = new File([blob], filename, { type: 'image/png' });
         
-        try {
-          const downloadURL = await uploadAttachment(taskId, file);
-          await addAttachmentMetadata({
+        const downloadURL = await uploadAttachment(taskId, file);
+        await addAttachmentMetadata({
             projectId,
             taskId,
             ownerUid: user.uid,
@@ -185,21 +177,24 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
             filename,
             reportType,
             location: location || undefined
-          });
+        });
 
-          toast({ title: "Success", description: "Report submitted successfully." });
-          onSuccess();
-        } catch (error: any) {
-           let description = error.message;
-            if (error.code === 'storage/unknown' || error.code === 'storage/unauthorized') {
-                description = "Upload failed due to a permission error. Please ensure Firebase Storage rules allow writes for authenticated users.";
-            }
-          toast({ title: "Upload Failed", description: description, variant: "destructive" });
-        } finally {
-          setIsUploading(false);
+        toast({ title: "Success", description: "Report submitted successfully." });
+        onSuccess();
+
+    } catch (error: any) {
+        console.error("Capture and Upload Error:", error);
+        let description = "An unexpected error occurred during capture.";
+        if (error.message) {
+            description = error.message;
         }
-      }
-    }, 'image/png');
+        if (error.code === 'storage/unknown' || error.code === 'storage/unauthorized') {
+            description = "Upload failed due to a permission error. Please ensure Firebase Storage rules allow writes for authenticated users.";
+        }
+        toast({ title: "Action Failed", description, variant: "destructive" });
+    } finally {
+        setIsUploading(false);
+    }
   };
 
   return (
