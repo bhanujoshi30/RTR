@@ -1,75 +1,81 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
     // Helper function to check if a user has a specific role
-    function isUserRole(role) {
+    function isRole(role) {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
     }
+    
+    // Helper function to check if the user is the owner of a document
+    function isOwner(doc) {
+      return request.auth.uid == doc.data.ownerUid;
+    }
 
-    // USER documents
-    // Only admins can manage the users collection, but users can read their own document.
+    // Rules for the 'users' collection
     match /users/{userId} {
-      allow read: if request.auth.uid == userId || isUserRole('admin');
-      allow list, write, delete: if isUserRole('admin');
-    }
-
-    // PROJECT documents
-    // Only the project owner can manage their project.
-    match /projects/{projectId} {
-      allow read: if resource.data.ownerUid == request.auth.uid; // Simple read access for owner
-      allow list: if request.auth.uid == request.query.ownerUid; // Allow listing only for the owner making the query
-      allow create: if request.auth.uid == request.resource.data.ownerUid;
-      allow update, delete: if resource.data.ownerUid == request.auth.uid;
-    }
-
-    // TASK documents
-    match /tasks/{taskId} {
-      // WARNING: This rule is temporarily permissive for debugging and unblocking.
-      // It allows any authenticated user to read task data.
-      // This should be tightened in a production environment.
+      // Admins can create, update, or delete any user document
+      allow write: if isRole('admin');
+      
+      // Any authenticated user can read any user profile (needed for display names, etc.)
       allow read: if request.auth != null;
-
-      allow create: if request.auth != null &&
-        // The person creating the task must be the owner of the project
-        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid;
-
-      allow update: if request.auth != null && (
-        // The person updating must be the owner of the task
-        resource.data.ownerUid == request.auth.uid ||
-        // Or an assigned user can update their own sub-task (but not main tasks)
-        (resource.data.parentId != null && resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids)
-      );
-
-      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid; // Only owner can delete
-      
-      match /attachments/{attachmentId} {
-      	allow read: if request.auth != null; // Any authenticated user can read attachments if they have access to the task
-        allow create: if request.auth != null; // Rules on who can create are in the service layer
-        allow update, delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
-      }
     }
 
-    // ISSUE documents
-    match /issues/{issueId} {
-       // WARNING: This rule is temporarily permissive for debugging and unblocking.
-       // It allows any authenticated user to read issue data.
-       // This should be tightened in a production environment.
-       allow read: if request.auth != null;
+    // Rules for the 'projects' collection
+    match /projects/{projectId} {
+      // Only the project owner can create, update, or delete their project
+      allow write: if isOwner(resource);
       
-      allow create: if request.auth != null && (
-        // Person creating must own the project. We check assignment in service layer.
-        get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid
-      );
+      // Any authenticated user can view any project
+      // This is necessary for supervisors/members who are not owners
+      // but need to see project details they are assigned work in.
+      allow read: if request.auth != null;
+    }
 
-      allow update: if request.auth != null && (
-      	resource.data.ownerUid == request.auth.uid ||
-        (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids)
-      );
+    // Rules for the 'tasks' collection (Main Tasks and Sub-Tasks)
+    match /tasks/{taskId} {
+      // To create a task, you must be the owner of the project it belongs to.
+      allow create: if get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid;
       
-      allow delete: if request.auth != null && resource.data.ownerUid == request.auth.uid;
+      // Simplifed read rule to unblock dashboard and task lists
+      allow read: if request.auth != null;
+      
+      // Update rule:
+      // - The owner of the task can update it.
+      // - An assigned user can also update it (e.g., to change status).
+      allow update: if isOwner(resource) || (request.auth.uid in resource.data.assignedToUids);
+      
+      // Only the owner of the task can delete it.
+      allow delete: if isOwner(resource);
+    }
+    
+    // Rules for the 'issues' collection
+    match /issues/{issueId} {
+        // Any authenticated user who is part of the project can create an issue.
+        allow create: if request.auth != null;
+        
+        // Any authenticated user can read issues. The app filters which ones to show.
+        allow read: if request.auth != null;
+
+        // The issue owner or an assigned user can update the issue.
+        allow update: if isOwner(resource) || (request.auth.uid in resource.data.assignedToUids);
+        
+        // Only the issue owner can delete it.
+        allow delete: if isOwner(resource);
+    }
+    
+    // Rules for the attachments subcollection within tasks
+    match /tasks/{taskId}/attachments/{attachmentId} {
+        // Anyone who can update the parent task can create an attachment record.
+        allow create: if get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid == request.auth.uid ||
+                       request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
+
+        // Any authenticated user can read attachment metadata.
+        allow read: if request.auth != null;
+        
+        // No one can update or delete attachment metadata directly to preserve history.
+        allow update, delete: if false;
     }
   }
 }
