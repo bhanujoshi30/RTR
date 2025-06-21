@@ -6,7 +6,7 @@ import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
-import { getTaskById, updateTaskStatus, getAllTasksForProject, getProjectSubTasksAssignedToUser } from '@/services/taskService';
+import { getTaskById } from '@/services/taskService';
 import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser, Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -71,12 +71,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       if (!user || !taskId) return;
       setLoadingAssignableUsers(true);
       try {
-        const parentTaskPromise = getTaskById(taskId, user.uid, user.role);
-        
-        const projectDocRef = doc(db, 'projects', projectId);
-        const projectDocPromise = getDoc(projectDocRef);
-
-        const [fetchedParentTask, projectDoc] = await Promise.all([parentTaskPromise, projectDocPromise]);
+        const fetchedParentTask = await getTaskById(taskId, user.uid, user.role);
 
         if (!fetchedParentTask) {
           toast({ title: "Error", description: "Parent sub-task not found.", variant: "destructive" });
@@ -85,53 +80,32 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         }
         setParentSubTask(fetchedParentTask);
 
-        if (!projectDoc.exists()) {
-          toast({ title: "Error", description: "Project not found.", variant: "destructive" });
-          setLoadingAssignableUsers(false);
-          return;
-        }
-
-        const projectOwnerUid = projectDoc.data().ownerUid;
-        const isOwner = user.uid === projectOwnerUid;
-
+        // --- Simplified User Discovery Logic ---
         const userIds = new Set<string>();
         
-        if (isOwner || user.role === 'admin') {
-          // Owners/admins can scan all tasks to find all members
-          const allProjectTasks = await getAllTasksForProject(projectId);
-          allProjectTasks.forEach(t => {
-            if (t.ownerUid) userIds.add(t.ownerUid);
-            t.assignedToUids?.forEach(uid => userIds.add(uid));
-          });
-        } else {
-          // Members/supervisors can only discover users from tasks they are part of
-          const assignedTasks = await getProjectSubTasksAssignedToUser(projectId, user.uid);
-          assignedTasks.forEach(task => {
-            if (task.ownerUid) userIds.add(task.ownerUid);
-            task.assignedToUids?.forEach(uid => userIds.add(uid));
-          });
-           // Also add the owner of the current sub-task and its main task if not already included
-           if (fetchedParentTask.ownerUid) userIds.add(fetchedParentTask.ownerUid);
-           if (fetchedParentTask.parentId) {
-               const mainTask = await getTaskById(fetchedParentTask.parentId, user.uid, user.role);
-               if (mainTask && mainTask.ownerUid) userIds.add(mainTask.ownerUid);
-           }
+        // Add the owner of the sub-task
+        if (fetchedParentTask.ownerUid) {
+          userIds.add(fetchedParentTask.ownerUid);
         }
-        
+        // Add all users already assigned to the sub-task
+        fetchedParentTask.assignedToUids?.forEach(uid => userIds.add(uid));
+
         const projectUsers = userIds.size > 0 ? await getUsersByIds(Array.from(userIds)) : [];
 
-        // Filter for only supervisors and members for assignment
+        // Filter for only supervisors and members for assignment list
         const assignable = projectUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
         const sortedUsers = assignable.sort((a, b) =>
           (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
         );
 
         setAssignableUsersForIssue(sortedUsers);
-      } catch (error) {
+        // --- End of Simplified Logic ---
+
+      } catch (error: any) {
         console.error("Failed to fetch prerequisites for IssueForm:", error);
         toast({
-          title: "Error",
-          description: "Could not load data required for the form.",
+          title: "Error loading form data",
+          description: `Could not load required data. ${error.message}`,
           variant: "destructive"
         });
         setAssignableUsersForIssue([]);
@@ -182,7 +156,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
         // Side effect: If parent task was 'Completed', move it to 'In Progress'
         if (parentSubTask && parentSubTask.status === 'Completed') {
-          await updateTaskStatus(taskId, user.uid, 'In Progress', user.role);
+          await updateTask(taskId, { status: 'In Progress' }, user.uid, user.role);
           toast({ title: 'Task Status Updated', description: `Parent sub-task "${parentSubTask.name}" was automatically moved to 'In Progress'.` });
         }
       }
@@ -283,7 +257,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               {!loadingAssignableUsers && assignableUsersForIssue.length === 0 && (
                 <div className="p-3 text-sm text-muted-foreground border rounded-md flex items-center gap-2">
                    <AlertCircle className="h-5 w-5 text-amber-500" />
-                  No assignable team members found in this project.
+                  No assignable team members found for this task.
                 </div>
               )}
               {!loadingAssignableUsers && assignableUsersForIssue.length > 0 && (
