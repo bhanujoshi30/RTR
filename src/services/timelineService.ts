@@ -48,11 +48,12 @@ export const logTimelineEvent = async (
 export const getTimelineForTask = async (taskId: string): Promise<TimelineEvent[]> => {
   try {
     const timelineCollectionRef = collection(db, 'tasks', taskId, 'timeline');
-    const q = query(timelineCollectionRef, orderBy('timestamp', 'desc'));
+    // Query without ordering to prevent index-related permission errors. Sorting is done client-side.
+    const q = query(timelineCollectionRef);
     
     const querySnapshot = await getDocs(q);
     
-    return querySnapshot.docs.map(docSnap => {
+    const events = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
       return {
         id: docSnap.id,
@@ -60,11 +61,14 @@ export const getTimelineForTask = async (taskId: string): Promise<TimelineEvent[
         timestamp: (data.timestamp as Timestamp).toDate(),
       } as TimelineEvent;
     });
+
+    // Sort events in application code.
+    events.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    return events;
   } catch (error: any) {
     console.error(`TimelineService: Failed to fetch timeline for task ${taskId}`, error);
-    if (error.message?.includes("index")) {
-        console.error("A Firestore index is required for the timeline query. Collection: 'timeline' (subcollection of 'tasks'), Field: 'timestamp' (descending).");
-    }
+    // No need to check for index error message anymore, as the query is index-free.
     return []; // Return empty on error
   }
 };
