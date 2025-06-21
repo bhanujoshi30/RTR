@@ -212,15 +212,19 @@ export const getSubTasks = async (parentId: string): Promise<Task[]> => {
     return [];
   }
 
+  // Removed orderBy to prevent needing a composite index by default
   const q = query(
     tasksCollection,
-    where('parentId', '==', parentId),
-    orderBy('createdAt', 'asc')
+    where('parentId', '==', parentId)
   );
 
   try {
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    
+    // Sort client-side
+    tasks.sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
+
     console.log(`taskService: Fetched ${tasks.length} sub-tasks for parentId ${parentId}.`);
     return tasks;
   } catch (error: any) {
@@ -262,16 +266,20 @@ export const getAssignedSubTasksForUser = async (mainTaskId: string, userUid: st
   console.log(`taskService: getAssignedSubTasksForUser for mainTaskId: ${mainTaskId}, userUid: ${userUid}`);
   if (!mainTaskId || !userUid) return [];
 
+  // Removed orderBy to prevent needing a composite index by default
   const q = query(
     tasksCollection,
     where('parentId', '==', mainTaskId),
-    where('assignedToUids', 'array-contains', userUid),
-    orderBy('createdAt', 'asc') 
+    where('assignedToUids', 'array-contains', userUid)
   );
 
   try {
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    
+    // Sort client-side
+    tasks.sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
+
     console.log(`taskService: Fetched ${tasks.length} sub-tasks assigned to user ${userUid} under main task ${mainTaskId}.`);
     return tasks;
   } catch (error: any) {
@@ -710,3 +718,4 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     return 0; 
   }
 };
+
