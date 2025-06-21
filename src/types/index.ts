@@ -34,6 +34,7 @@ export interface Project {
 export interface Task {
   id: string;
   projectId: string;
+  projectOwnerUid?: string; // For security rules
   parentId?: string | null; // null if it's a main task
   name: string;
   description?: string;

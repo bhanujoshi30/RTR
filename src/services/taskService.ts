@@ -95,13 +95,20 @@ export const createTask = async (
 
   const projectDocRef = doc(db, 'projects', projectId);
   const projectSnap = await getDoc(projectDocRef);
+  
+  if (!projectSnap.exists()) {
+      throw new Error('Project not found.');
+  }
 
-  if (!projectSnap.exists() || projectSnap.data()?.ownerUid !== userUid) {
-    throw new Error('Project not found or access denied for creating task in this project.');
+  const projectData = projectSnap.data();
+
+  if (projectData.ownerUid !== userUid) {
+    throw new Error('Access denied for creating task in this project.');
   }
 
   const newTaskPayload: any = {
     projectId,
+    projectOwnerUid: projectData.ownerUid, // Storing project owner UID for rules
     ownerUid: userUid,
     name: taskData.name,
     parentId: taskData.parentId || null,
