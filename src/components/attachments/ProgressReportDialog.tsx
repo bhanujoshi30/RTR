@@ -93,30 +93,29 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !canvasRef.current || !user) {
-      toast({
-        title: 'Error',
-        description: 'Please select a photo to upload.',
-        variant: 'destructive',
-      });
+    if (!selectedFile || !canvasRef.current || !user || !previewUrl) {
+      toast({ title: 'Error', description: 'Please select a photo to upload.', variant: 'destructive' });
       return;
+    }
+    
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+    if (!context) {
+        toast({ title: 'Error', description: 'Could not prepare image for upload. Canvas context is unavailable.', variant: 'destructive' });
+        return;
     }
 
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
-      const canvas = canvasRef.current;
-      const context = canvas.getContext('2d');
-      if (!context) {
-        throw new Error('Could not get canvas context.');
-      }
-
+      // Step 1: Load image and stamp it
+      toast({ title: 'Processing...', description: 'Preparing your image.' });
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
         img.onload = () => resolve(img);
-        img.onerror = (err) => reject(new Error('Failed to load image for processing.'));
-        img.src = URL.createObjectURL(selectedFile);
+        img.onerror = () => reject(new Error('Failed to load selected image. It might be corrupt.'));
+        img.src = previewUrl;
       });
 
       canvas.width = image.naturalWidth;
@@ -125,13 +124,11 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
 
       const now = new Date();
       const timeStamp = now.toLocaleString();
-      const locationStamp = location
-        ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}`
-        : 'Location N/A';
+      const locationStamp = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Location N/A';
       const userStamp = user.displayName || user.email || 'Unknown User';
       const fullStamp = `${userStamp} | ${timeStamp} | ${locationStamp}`;
 
-      const fontSize = Math.max(16, Math.round(canvas.width / 60));
+      const fontSize = Math.max(24, Math.round(canvas.width / 50));
       context.font = `bold ${fontSize}px Arial`;
       context.textAlign = 'right';
       context.textBaseline = 'bottom';
@@ -145,26 +142,21 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         textMetrics.width + padding * 2,
         fontSize + padding * 2
       );
-
       context.fillStyle = 'white';
       context.fillText(fullStamp, canvas.width - padding, canvas.height - padding);
 
+      // Step 2: Get stamped image as a Blob
       const blob = await new Promise<Blob>((resolve, reject) => {
-        canvas.toBlob((b) => {
-          if (b) resolve(b);
-          else reject(new Error('Could not create image blob from canvas.'));
-        }, 'image/jpeg', 0.9); // Use JPEG for better compression
+        canvas.toBlob((b) => b ? resolve(b) : reject(new Error('Could not convert canvas to image blob.')), 'image/jpeg', 0.9);
       });
       
       const filename = `${reportType}-${Date.now()}.jpg`;
       const stampedFile = new File([blob], filename, { type: 'image/jpeg' });
       
-      const downloadURL = await uploadAttachment(
-        taskId, 
-        stampedFile,
-        (progress) => setUploadProgress(progress)
-      );
-
+      // Step 3: Upload file and save metadata
+      toast({ title: 'Uploading...', description: 'Your report is being submitted.' });
+      const downloadURL = await uploadAttachment(taskId, stampedFile, (progress) => setUploadProgress(progress));
+      
       await addAttachmentMetadata({
         projectId,
         taskId,
@@ -176,28 +168,27 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         location: location || undefined,
       });
 
-      // --- SUCCESS PATH ---
-      toast({ title: 'Success', description: 'Report submitted successfully.' });
-      setIsUploading(false); // Reset state BEFORE calling onSuccess
-      setUploadProgress(null);
-      onSuccess(); // Now it is safe to unmount the component
+      // --- SUCCESS ---
+      toast({ title: 'Success!', description: 'Report submitted successfully.' });
+      onSuccess();
 
     } catch (error: any) {
-      // --- FAILURE PATH ---
+      // --- FAILURE ---
       console.error('Upload Error:', error);
-      let description = 'An unexpected error occurred during the upload process.';
-      if (error.message) {
-        description = error.message;
-      }
-      if (error.code === 'storage/unknown' || error.code === 'storage/unauthorized') {
-        description =
-          'Upload failed due to a permission error. Please ensure Firebase Storage rules allow writes for authenticated users.';
-      }
-      toast({ title: 'Upload Failed', description, variant: 'destructive' });
-      setIsUploading(false); // Reset state on any error
+      toast({
+        title: 'Upload Failed',
+        description: error.message || 'An unexpected error occurred during the submission process.',
+        variant: 'destructive',
+      });
+    } finally {
+      // --- GUARANTEED CLEANUP ---
+      // This block will run whether the try block succeeds or fails.
+      // This prevents the UI from ever getting stuck in a loading state.
+      setIsUploading(false);
       setUploadProgress(null);
     }
   };
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -223,7 +214,6 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
             <input
               type="file"
               accept="image/*"
-              capture="environment"
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
@@ -257,7 +247,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
           
            {isUploading && uploadProgress !== null && (
             <div className="space-y-1 pt-2">
-              <p className="text-sm text-center text-muted-foreground">Uploading...</p>
+              <p className="text-sm text-center text-muted-foreground">Uploading... {Math.round(uploadProgress)}%</p>
               <Progress value={uploadProgress} className="w-full" />
             </div>
           )}
