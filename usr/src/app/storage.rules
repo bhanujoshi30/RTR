@@ -1,0 +1,22 @@
+
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Match any file in the attachments folder for a given task
+    match /attachments/{taskId}/{allPaths=**} {
+      // Anyone authenticated can read attachments. 
+      // This could be locked down further if needed, e.g., by checking if the user is part of the project.
+      allow read: if request.auth != null;
+
+      // Allow write (create, update, delete) if the user is authenticated and
+      // one of the following conditions is met:
+      allow write: if request.auth != null && (
+        // 1. The user is the owner of the parent task document.
+        firestore.get(/databases/(default)/documents/tasks/$(taskId)).data.ownerUid == request.auth.uid ||
+        // 2. The user's UID is in the 'assignedToUids' array of the parent task document.
+        request.auth.uid in firestore.get(/databases/(default)/documents/tasks/$(taskId)).data.assignedToUids
+      );
+    }
+  }
+}
