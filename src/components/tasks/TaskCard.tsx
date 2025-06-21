@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2 } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateTaskStatus, deleteTask, getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
+import { hasOpenIssues } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import {
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { ProgressReportDialog } from '../attachments/ProgressReportDialog';
 
 interface TaskCardProps {
   task: Task;
@@ -40,7 +42,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const router = useRouter();
   const [task, setTask] = useState<Task>(initialTask);
   const [subTaskCountLabel, setSubTaskCountLabel] = useState("Sub-tasks");
-  const [loadingSubTaskCount, setLoadingSubTaskCount] = useState(false); // New state
+  const [loadingSubTaskCount, setLoadingSubTaskCount] = useState(false);
+  const [showProofDialog, setShowProofDialog] = useState(false);
   const { user } = useAuth();
 
   const isActuallyMainTask = !task.parentId;
@@ -95,6 +98,17 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor, isMember, isOwnerOfThisTask]);
 
+  const handleProofSuccess = async () => {
+    setShowProofDialog(false);
+    if (!user) return;
+    try {
+      await updateTaskStatus(task.id, user.uid, 'Completed', user.role);
+      toast({ title: 'Task Completed', description: `"${task.name}" has been marked as complete.` });
+      onTaskUpdated();
+    } catch (error: any) {
+      toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
+    }
+  };
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
     if (isActuallyMainTask || !user) {
@@ -105,12 +119,31 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
       toast({ title: 'Permission Denied', description: 'You cannot change the status of this sub-task.', variant: 'destructive'});
       return;
     }
-    try {
-      await updateTaskStatus(task.id, user.uid, newStatus, user.role);
-      toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
-      onTaskUpdated(); 
-    } catch (error: any) {
-      toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
+
+    if (newStatus === 'Completed') {
+      try {
+        const openIssuesExist = await hasOpenIssues(task.id);
+        if (openIssuesExist) {
+          toast({
+            title: 'Cannot Complete Sub-task',
+            description: 'There are still open issues. Please resolve them first.',
+            variant: 'destructive',
+          });
+          onTaskUpdated(); // Refreshes the select to its original value
+          return;
+        }
+        setShowProofDialog(true);
+      } catch (error: any) {
+         toast({ title: 'Error', description: `Could not verify issues: ${error.message}`, variant: 'destructive' });
+      }
+    } else {
+      try {
+        await updateTaskStatus(task.id, user.uid, newStatus, user.role);
+        toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
+        onTaskUpdated(); 
+      } catch (error: any) {
+        toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
+      }
     }
   };
 
@@ -158,131 +191,142 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
 
   return (
-    <Card className="shadow-md transition-shadow hover:shadow-lg">
-      <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={handleViewTask}>
-        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2">
-            {cardIcon}
-            <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
-          </div>
-          {!isActuallyMainTask && task.status && (
-            <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
-              {task.status}
-            </Badge>
-          )}
-          {isActuallyMainTask && (
-            loadingSubTaskCount ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-            ) : (
-              <Badge variant="outline">
-                {subTaskCountLabel}
+    <>
+      {user && (
+        <ProgressReportDialog
+          open={showProofDialog}
+          onOpenChange={setShowProofDialog}
+          taskId={task.id}
+          projectId={task.projectId}
+          reportType="completion-proof"
+          onSuccess={handleProofSuccess}
+        />
+      )}
+      <Card className="shadow-md transition-shadow hover:shadow-lg">
+        <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={handleViewTask}>
+          <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              {cardIcon}
+              <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
+            </div>
+            {!isActuallyMainTask && task.status && (
+              <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
+                {task.status}
               </Badge>
-            )
-          )}
-        </div>
-        {(!isActuallyMainTask && task.description) && (
-          <CardDescription className="pt-1 line-clamp-2">{task.description}</CardDescription>
-        )}
-      </CardHeader>
-      <CardContent className="space-y-3 pt-2 pb-4">
-        <div className="flex flex-col gap-y-2">
-          <div className="flex items-center text-xs text-muted-foreground">
-            <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-            Created {task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true }) : 'N/A'}
-            {(!isActuallyMainTask && task.dueDate) && (
-              <span className="ml-2 border-l pl-2">
-                Due: {format(task.dueDate, 'PP')}
-              </span>
             )}
-             {(isActuallyMainTask && task.dueDate) && ( 
-              <span className="ml-2 border-l pl-2">
-                Due: {format(task.dueDate, 'PP')}
-              </span>
+            {isActuallyMainTask && (
+              loadingSubTaskCount ? (
+                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              ) : (
+                <Badge variant="outline">
+                  {subTaskCountLabel}
+                </Badge>
+              )
             )}
           </div>
-          {!isActuallyMainTask && task.assignedToNames && task.assignedToNames.length > 0 && (
+          {(!isActuallyMainTask && task.description) && (
+            <CardDescription className="pt-1 line-clamp-2">{task.description}</CardDescription>
+          )}
+        </CardHeader>
+        <CardContent className="space-y-3 pt-2 pb-4">
+          <div className="flex flex-col gap-y-2">
             <div className="flex items-center text-xs text-muted-foreground">
-              <Users className="mr-1.5 h-3.5 w-3.5" />
-              Assigned to: {displayAssignedNames}
+              <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
+              Created {task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true }) : 'N/A'}
+              {(!isActuallyMainTask && task.dueDate) && (
+                <span className="ml-2 border-l pl-2">
+                  Due: {format(task.dueDate, 'PP')}
+                </span>
+              )}
+               {(isActuallyMainTask && task.dueDate) && ( 
+                <span className="ml-2 border-l pl-2">
+                  Due: {format(task.dueDate, 'PP')}
+                </span>
+              )}
+            </div>
+            {!isActuallyMainTask && task.assignedToNames && task.assignedToNames.length > 0 && (
+              <div className="flex items-center text-xs text-muted-foreground">
+                <Users className="mr-1.5 h-3.5 w-3.5" />
+                Assigned to: {displayAssignedNames}
+              </div>
+            )}
+          </div>
+
+          {isActuallyMainTask && task.progress !== undefined && (
+            <div className="mt-3">
+              <div className="mb-1 flex justify-between text-xs text-muted-foreground">
+                <span>Main Task Progress</span>
+                <span>{Math.round(task.progress)}%</span>
+              </div>
+              <Progress value={task.progress} className="h-2 w-full" aria-label={`Main task progress: ${Math.round(task.progress)}%`} />
             </div>
           )}
-        </div>
 
-        {isActuallyMainTask && task.progress !== undefined && (
-          <div className="mt-3">
-            <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-              <span>Main Task Progress</span>
-              <span>{Math.round(task.progress)}%</span>
+          <div className="flex items-center justify-end gap-2 pt-2">
+              {!isActuallyMainTask && (
+                <Select
+                  value={task.status}
+                  onValueChange={handleStatusChange}
+                  disabled={!user || !canChangeSubTaskStatus}
+                >
+                  <SelectTrigger className="w-full h-9 text-xs sm:w-[150px]">
+                    <SelectValue placeholder="Change status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {taskStatuses.map(status => (
+                      <SelectItem key={status} value={status} className="text-xs">
+                        {status}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Button variant="outline" size="icon" className="h-9 w-9" title="View Details" onClick={handleViewTask}>
+                  <Eye className="h-4 w-4" />
+                  <span className="sr-only">View Details</span>
+              </Button>
+              {showEditButton && (
+               <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-9 w-9"
+                  title="Edit Task"
+                  onClick={handleEditTask}
+                >
+                  <Edit2 className="h-4 w-4" />
+                   <span className="sr-only">Edit Task</span>
+              </Button>
+              )}
+              {canFullyEditOrDeleteThisTask && (
+               <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title={isActuallyMainTask ? "Delete Main Task & Sub-tasks" : "Delete Sub-task"} disabled={!user}>
+                      <Trash2 className="h-4 w-4" />
+                      <span className="sr-only">Delete</span>
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete "{task.name}"?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {isActuallyMainTask
+                          ? "This action cannot be undone. This will permanently delete this main task and all its sub-tasks and associated issues."
+                          : "This action cannot be undone. This will permanently delete this sub-task and its associated issues."
+                        }
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDeleteTask} className="bg-destructive hover:bg-destructive/90">
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
-            <Progress value={task.progress} className="h-2 w-full" aria-label={`Main task progress: ${Math.round(task.progress)}%`} />
-          </div>
-        )}
-
-        <div className="flex items-center justify-end gap-2 pt-2">
-            {!isActuallyMainTask && (
-              <Select
-                value={task.status}
-                onValueChange={handleStatusChange}
-                disabled={!user || !canChangeSubTaskStatus}
-              >
-                <SelectTrigger className="w-full h-9 text-xs sm:w-[150px]">
-                  <SelectValue placeholder="Change status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {taskStatuses.map(status => (
-                    <SelectItem key={status} value={status} className="text-xs">
-                      {status}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            <Button variant="outline" size="icon" className="h-9 w-9" title="View Details" onClick={handleViewTask}>
-                <Eye className="h-4 w-4" />
-                <span className="sr-only">View Details</span>
-            </Button>
-            {showEditButton && (
-             <Button
-                variant="outline"
-                size="icon"
-                className="h-9 w-9"
-                title="Edit Task"
-                onClick={handleEditTask}
-              >
-                <Edit2 className="h-4 w-4" />
-                 <span className="sr-only">Edit Task</span>
-            </Button>
-            )}
-            {canFullyEditOrDeleteThisTask && (
-             <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title={isActuallyMainTask ? "Delete Main Task & Sub-tasks" : "Delete Sub-task"} disabled={!user}>
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete</span>
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete "{task.name}"?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {isActuallyMainTask
-                        ? "This action cannot be undone. This will permanently delete this main task and all its sub-tasks and associated issues."
-                        : "This action cannot be undone. This will permanently delete this sub-task and its associated issues."
-                      }
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDeleteTask} className="bg-destructive hover:bg-destructive/90">
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
-          </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </>
   );
 }
-

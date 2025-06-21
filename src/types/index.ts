@@ -63,3 +63,18 @@ export interface Issue {
   updatedAt?: Date;
 }
 
+export interface Attachment {
+  id: string;
+  projectId: string;
+  taskId: string; // This is the ID of the parent SubTask
+  ownerUid: string;
+  ownerName: string;
+  url: string;
+  filename: string;
+  reportType: 'daily-progress' | 'completion-proof';
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+  createdAt: Date;
+}
