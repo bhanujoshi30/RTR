@@ -8,9 +8,10 @@ import { uploadAttachment, addAttachmentMetadata } from '@/services/attachmentSe
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Camera, CameraOff, MapPin, X } from 'lucide-react';
+import { Loader2, Camera, Upload, MapPin, X, ImagePlus } from 'lucide-react';
 import type { User } from '@/types';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 interface ProgressReportDialogProps {
   open: boolean;
@@ -30,35 +31,25 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   const { user } = useAuth();
   const { toast } = useToast();
   
-  const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [location, setLocation] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [isCameraInitializing, setIsCameraInitializing] = useState(false);
-  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
 
   useEffect(() => {
-    if (!open) {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-        videoRef.current.srcObject = null;
-      }
-      return;
-    }
-
-    let localStream: MediaStream | null = null;
-
-    const getPermissionsAndStream = async () => {
-      setHasPermission(null);
+    // Reset state when dialog opens
+    if (open) {
+      setSelectedFile(null);
+      setPreviewUrl(null);
       setLocation(null);
       setLocationError(null);
-      setIsCameraInitializing(true);
-      setIsCameraReady(false);
 
+      // Fetch location
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
@@ -76,146 +67,134 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       } else {
         setLocationError("Geolocation is not supported by this browser.");
       }
-      
-      try {
-        let cameraStream;
-        try {
-          cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        } catch (e) {
-          console.warn("Could not get rear camera, trying default.", e);
-          cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        }
-        
-        localStream = cameraStream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = localStream;
-          videoRef.current.onloadedmetadata = () => {
-            setIsCameraInitializing(false);
-            setIsCameraReady(true);
-          };
-        }
-        setHasPermission(true);
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        setHasPermission(false);
-        setIsCameraInitializing(false);
+    } else {
+      // Cleanup preview URL to prevent memory leaks
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
       }
-    };
-    
-    getPermissionsAndStream();
-
-    return () => {
-      if (localStream) {
-        localStream.getTracks().forEach(track => track.stop());
-      }
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-        videoRef.current.onloadedmetadata = null;
-      }
-      setIsCameraInitializing(false);
-      setIsCameraReady(false);
-    };
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  const handleCaptureAndUpload = async () => {
-    if (!videoRef.current || !canvasRef.current || !user || !isCameraReady) {
-        toast({ title: "Error", description: "Component not ready, user not logged in, or camera not available.", variant: "destructive" });
-        return;
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile || !canvasRef.current || !user) {
+      toast({
+        title: 'Error',
+        description: 'Please select a photo to upload.',
+        variant: 'destructive',
+      });
+      return;
     }
 
     setIsUploading(true);
 
     try {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        throw new Error('Could not get canvas context.');
+      }
 
-        if (!context) {
-            throw new Error("Could not get canvas context.");
-        }
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new window.Image();
+        img.onload = () => resolve(img);
+        img.onerror = reject;
+        img.src = URL.createObjectURL(selectedFile);
+      });
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      context.drawImage(image, 0, 0);
 
-        const now = new Date();
-        const timeStamp = now.toLocaleString();
-        const locationStamp = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Location N/A';
-        const userStamp = user.displayName || user.email || 'Unknown User';
-        const fullStamp = `${userStamp} | ${timeStamp} | ${locationStamp}`;
-        
-        const fontSize = Math.max(12, Math.round(canvas.width / 50));
-        context.font = `bold ${fontSize}px Arial`;
-        context.textAlign = 'right';
-        context.textBaseline = 'bottom';
-        
-        const textMetrics = context.measureText(fullStamp);
-        const padding = 10;
-        
-        context.fillStyle = 'rgba(0, 0, 0, 0.5)';
-        context.fillRect(canvas.width - textMetrics.width - (padding * 2), canvas.height - fontSize - (padding * 2), textMetrics.width + (padding * 2), fontSize + (padding * 2));
-        
-        context.fillStyle = 'white';
-        context.fillText(fullStamp, canvas.width - padding, canvas.height - padding);
+      const now = new Date();
+      const timeStamp = now.toLocaleString();
+      const locationStamp = location
+        ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}`
+        : 'Location N/A';
+      const userStamp = user.displayName || user.email || 'Unknown User';
+      const fullStamp = `${userStamp} | ${timeStamp} | ${locationStamp}`;
 
-        const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
-        
-        if (!blob) {
-            throw new Error("Could not create image from camera feed.");
-        }
-        
-        const filename = `${reportType}-${Date.now()}.png`;
-        const file = new File([blob], filename, { type: 'image/png' });
-        
-        const downloadURL = await uploadAttachment(taskId, file);
-        await addAttachmentMetadata({
-            projectId,
-            taskId,
-            ownerUid: user.uid,
-            ownerName: user.displayName || user.email || 'N/A',
-            url: downloadURL,
-            filename,
-            reportType,
-            location: location || undefined
-        });
+      const fontSize = Math.max(16, Math.round(canvas.width / 60));
+      context.font = `bold ${fontSize}px Arial`;
+      context.textAlign = 'right';
+      context.textBaseline = 'bottom';
+      const textMetrics = context.measureText(fullStamp);
+      const padding = Math.round(fontSize * 0.75);
+      
+      context.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      context.fillRect(
+        canvas.width - textMetrics.width - padding * 2,
+        canvas.height - fontSize - padding * 2,
+        textMetrics.width + padding * 2,
+        fontSize + padding * 2
+      );
 
-        toast({ title: "Success", description: "Report submitted successfully." });
-        onSuccess();
+      context.fillStyle = 'white';
+      context.fillText(fullStamp, canvas.width - padding, canvas.height - padding);
+
+      const blob = await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob((b) => {
+          if (b) resolve(b);
+          else reject(new Error('Could not create image blob from canvas.'));
+        }, 'image/jpeg', 0.9); // Use JPEG for better compression
+      });
+      
+      const filename = `${reportType}-${Date.now()}.jpg`;
+      const stampedFile = new File([blob], filename, { type: 'image/jpeg' });
+      
+      const downloadURL = await uploadAttachment(taskId, stampedFile);
+      await addAttachmentMetadata({
+        projectId,
+        taskId,
+        ownerUid: user.uid,
+        ownerName: user.displayName || user.email || 'N/A',
+        url: downloadURL,
+        filename,
+        reportType,
+        location: location || undefined,
+      });
+
+      toast({ title: 'Success', description: 'Report submitted successfully.' });
+      onSuccess();
 
     } catch (error: any) {
-        console.error("Capture and Upload Error:", error);
-        let description = "An unexpected error occurred during capture.";
-        if (error.message) {
-            description = error.message;
-        }
-        if (error.code === 'storage/unknown' || error.code === 'storage/unauthorized') {
-            description = "Upload failed due to a permission error. Please ensure Firebase Storage rules allow writes for authenticated users.";
-        }
-        toast({ title: "Action Failed", description, variant: "destructive" });
+      console.error('Upload Error:', error);
+      let description = 'An unexpected error occurred during the upload process.';
+      if (error.message) {
+        description = error.message;
+      }
+      if (error.code === 'storage/unknown' || error.code === 'storage/unauthorized') {
+        description =
+          'Upload failed due to a permission error. Please ensure Firebase Storage rules allow writes for authenticated users.';
+      }
+      toast({ title: 'Upload Failed', description, variant: 'destructive' });
     } finally {
-        setIsUploading(false);
+      setIsUploading(false);
     }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-headline text-xl capitalize">{reportType.replace('-', ' ')} Submission</DialogTitle>
           <DialogDescription>
-            Capture a photo as proof. Your name, current time, and location will be stamped on the image.
+            Select a photo as proof. Your name, time, and location will be stamped on the image.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {hasPermission === false && (
-            <Alert variant="destructive">
-              <CameraOff className="h-4 w-4" />
-              <AlertTitle>Camera Access Denied</AlertTitle>
-              <AlertDescription>
-                Please enable camera permissions in your browser settings to use this feature.
-              </AlertDescription>
-            </Alert>
-          )}
           {locationError && (
             <Alert variant="destructive">
               <MapPin className="h-4 w-4" />
@@ -226,26 +205,56 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
             </Alert>
           )}
 
-          <div className="relative w-full aspect-video bg-muted rounded-md overflow-hidden flex items-center justify-center">
-             {isCameraInitializing && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 z-10">
-                    <Loader2 className="h-8 w-8 animate-spin text-white" />
-                    <p className="text-white mt-2">Starting camera...</p>
-                </div>
+          <div className="space-y-2">
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+            />
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+            >
+              <Camera className="mr-2 h-4 w-4" />
+              {selectedFile ? 'Change Photo' : 'Select Photo'}
+            </Button>
+            {previewUrl && (
+              <div className="relative w-full aspect-square bg-muted rounded-md overflow-hidden flex items-center justify-center border">
+                <Image
+                  src={previewUrl}
+                  alt="Selected preview"
+                  layout="fill"
+                  objectFit="contain"
+                />
+              </div>
             )}
-            <video ref={videoRef} className={cn("w-full h-full object-cover", { 'invisible': isCameraInitializing })} autoPlay muted playsInline />
-            <canvas ref={canvasRef} className="hidden" />
+             {!previewUrl && (
+              <div className="w-full aspect-square bg-muted rounded-md flex flex-col items-center justify-center border border-dashed">
+                <ImagePlus className="h-12 w-12 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground mt-2">Image preview will appear here</p>
+              </div>
+            )}
           </div>
-
+          {/* Canvas is hidden, used for processing only */}
+          <canvas ref={canvasRef} className="hidden" />
         </div>
         <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
-                <X className="mr-2 h-4 w-4" /> Cancel
-            </Button>
-            <Button onClick={handleCaptureAndUpload} disabled={!isCameraReady || isUploading}>
-                {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
-                Capture &amp; Submit
-            </Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
+            <X className="mr-2 h-4 w-4" /> Cancel
+          </Button>
+          <Button onClick={handleUpload} disabled={!selectedFile || isUploading}>
+            {isUploading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}
+            Submit
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
