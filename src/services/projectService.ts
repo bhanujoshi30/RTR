@@ -92,12 +92,16 @@ export const getUserProjects = async (userUid: string, userRole?: UserRole): Pro
     return [];
   }
 
-  const q = query(projectsCollection, where('ownerUid', '==', userUid), orderBy('createdAt', 'desc'));
+  // Query without ordering to avoid composite index
+  const q = query(projectsCollection, where('ownerUid', '==', userUid));
   try {
     const querySnapshot = await getDocs(q);
-    const projectsPromises = querySnapshot.docs.map(async (docSnap) => {
-      const project = mapDocumentToProject(docSnap);
-      // Fetch main tasks once to use for both progress and other calculations
+    const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
+    
+    // Sort in application code
+    projectsFromDb.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
+    const projectsPromises = projectsFromDb.map(async (project) => {
       const mainTasks = await getProjectMainTasks(project.id);
       project.progress = await calculateProjectProgress(project.id, mainTasks);
       project.status = getDynamicStatusFromProgress(project.progress);
@@ -108,9 +112,6 @@ export const getUserProjects = async (userUid: string, userRole?: UserRole): Pro
     return projects;
   } catch (error: any) {
     console.error('projectService: Error fetching user projects for uid:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
-    if (error.message && error.message.includes("query requires an index")) {
-        console.error("Firestore query for projects requires a composite index. Please create it in the Firebase console. The error message should provide a direct link or details. Fields to index: 'ownerUid' (ASC), 'createdAt' (DESC).");
-    }
     throw error;
   }
 };

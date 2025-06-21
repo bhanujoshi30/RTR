@@ -68,7 +68,6 @@ export const getTimelineForTask = async (taskId: string): Promise<TimelineEvent[
     return events;
   } catch (error: any) {
     console.error(`TimelineService: Failed to fetch timeline for task ${taskId}`, error);
-    // No need to check for index error message anymore, as the query is index-free.
     return []; // Return empty on error
   }
 };

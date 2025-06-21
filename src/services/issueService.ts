@@ -167,21 +167,22 @@ export const getTaskIssues = async (taskId: string, userUid: string, isSuperviso
     return [];
   }
 
+  // Query without ordering to avoid composite index requirement.
   const q = query(
     issuesCollection,
-    where('taskId', '==', taskId),
-    orderBy('createdAt', 'desc')
+    where('taskId', '==', taskId)
   );
 
   try {
     const querySnapshot = await getDocs(q);
     const issues = querySnapshot.docs.map(mapDocumentToIssue);
+    
+    // Sort in application code to avoid index dependency.
+    issues.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
     return issues;
   } catch (error: any) {
     console.error('issueService: Error fetching task issues for taskId (sub-task ID):', taskId, 'uid:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
-    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error("Firestore query for issues requires a composite index. Please create it in the Firebase console. Fields: 'taskId' (ASC), 'createdAt' (DESC).");
-    }
     throw error;
   }
 };
@@ -219,17 +220,21 @@ export const getAllIssuesAssignedToUser = async (userUid: string): Promise<Issue
   if (!userUid) return [];
   console.log(`issueService: getAllIssuesAssignedToUser for userUid: ${userUid}`);
 
+  // Query without ordering to avoid composite index requirement.
   const q = query(
     issuesCollection,
-    where('assignedToUids', 'array-contains', userUid),
-    orderBy('createdAt', 'desc')
+    where('assignedToUids', 'array-contains', userUid)
   );
 
   try {
     const querySnapshot = await getDocs(q);
     const issues = querySnapshot.docs.map(mapDocumentToIssue);
+
+    // Sort in application code.
+    issues.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
     if (issues.length === 0) {
-      console.log(`issueService: getAllIssuesAssignedToUser - Query executed successfully but found 0 issues assigned to user ${userUid}. Index needed: assignedToUids (array-contains), createdAt (DESC)`);
+      console.log(`issueService: getAllIssuesAssignedToUser - Query executed successfully but found 0 issues assigned to user ${userUid}.`);
     } else {
       console.log(`issueService: Fetched ${issues.length} issues assigned to user ${userUid}`);
     }
@@ -237,7 +242,7 @@ export const getAllIssuesAssignedToUser = async (userUid: string): Promise<Issue
   } catch (error: any) {
     console.error('issueService: Error fetching all issues assigned to user:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error("Firestore query for getAllIssuesAssignedToUser requires an index. Fields: assignedToUids (array-contains), createdAt (DESC). Check Firebase console.");
+      console.error("Firestore query for getAllIssuesAssignedToUser requires an index on 'assignedToUids' (array-contains). Check Firebase console.");
     }
     throw error;
   }

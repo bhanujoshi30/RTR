@@ -37,21 +37,25 @@ export const getUserDisplayName = async (uid: string): Promise<string | null> =>
 
 export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
   console.log(`userService: getUsersByRole called for role: ${role}`);
+  // Query without ordering to avoid composite index
   const q = query(
     usersCollection,
-    where('role', '==', role),
-    orderBy('displayName', 'asc')
+    where('role', '==', role)
   );
 
   try {
     const querySnapshot = await getDocs(q);
     const usersWithRole = querySnapshot.docs.map(mapDocumentToUser);
+    
+    // Sort in application code
+    usersWithRole.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+
     console.log(`userService: Fetched ${usersWithRole.length} users with role '${role}'.`);
     return usersWithRole;
   } catch (error: any) {
     console.error(`userService: Error fetching users with role '${role}':`, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error(`Firestore query for users by role ('${role}') and ordered by 'displayName' requires a composite index. Please create it in the Firebase console. The typical fields would be 'role' (ASC) and 'displayName' (ASC). The error message from Firebase usually provides a direct link to create it.`);
+        console.error(`Firestore query for users by role ('${role}') requires an index on 'role'. Please create this in the Firebase console.`);
     }
     throw error;
   }
@@ -59,18 +63,20 @@ export const getUsersByRole = async (role: UserRole): Promise<User[]> => {
 
 export const getAllUsers = async (requestingUserUid: string): Promise<User[]> => {
   console.log(`userService: getAllUsers called by user: ${requestingUserUid}`);
-  const q = query(usersCollection, orderBy('displayName', 'asc'));
+  // Query without ordering to avoid index requirement
+  const q = query(usersCollection);
   try {
     const querySnapshot = await getDocs(q);
     const allUsers = querySnapshot.docs.map(mapDocumentToUser);
+
+    // Sort in application code
+    allUsers.sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
+    
     console.log(`userService: Fetched ${allUsers.length} total users.`);
     return allUsers;
   } catch (error: any)
  {
     console.error(`userService: Error fetching all users:`, error.message, error.code ? `(${error.code})` : '', error.stack);
-     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error("Firestore query for all users requires an index on 'displayName' (ASC). Please create it in the Firebase console.");
-    }
     throw error;
   }
 };

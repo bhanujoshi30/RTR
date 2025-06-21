@@ -145,14 +145,14 @@ export const getProjectMainTasks = async (projectId: string, filterByIds?: strin
 
     const allTasksQuery = filterByIds 
       ? query(tasksCollection, where(documentId(), 'in', filterByIds))
-      : query(tasksCollection, where('projectId', '==', projectId));
+      : query(
+          tasksCollection, 
+          where('projectId', '==', projectId), 
+          where('parentId', '==', null)
+        );
 
     const allTasksSnapshot = await getDocs(allTasksQuery);
-    const allTasks = allTasksSnapshot.docs.map(mapDocumentToTask);
-
-    const mainTasks = filterByIds 
-      ? allTasks // If we filtered by ID, they are the main tasks we want
-      : allTasks.filter(t => !t.parentId);
+    const mainTasks = allTasksSnapshot.docs.map(mapDocumentToTask);
     
     const subTasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
     const subTasksSnapshot = await getDocs(subTasksQuery);
@@ -241,6 +241,7 @@ export const getProjectSubTasksAssignedToUser = async (projectId: string, userUi
   console.log(`taskService: getProjectSubTasksAssignedToUser for projectId: ${projectId}, userUid: ${userUid}`);
   if (!projectId || !userUid) return [];
 
+  // Query without ordering to avoid composite index
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
@@ -578,19 +579,27 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   if (!userUid) return [];
   console.log(`taskService: getAllTasksAssignedToUser (sub-tasks) for userUid: ${userUid}`);
 
+  // Query without ordering to avoid composite index requirement
   const q = query(
     tasksCollection,
     where('assignedToUids', 'array-contains', userUid),
-    where('parentId', '!=', null), 
-    orderBy('parentId'), 
-    orderBy('createdAt', 'desc')
+    where('parentId', '!=', null)
   );
 
   try {
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    
+    // Sort in application code
+    tasks.sort((a, b) => {
+        if (a.parentId === b.parentId) {
+            return (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0);
+        }
+        return (a.parentId || '').localeCompare(b.parentId || '');
+    });
+
     if (tasks.length === 0) {
-      console.log(`taskService: getAllTasksAssignedToUser - Query executed successfully but found 0 sub-tasks assigned to user ${userUid}. Index needed: assignedToUids (array-contains), parentId (ASC/DESC), createdAt (DESC)`);
+      console.log(`taskService: getAllTasksAssignedToUser - Query executed successfully but found 0 sub-tasks assigned to user ${userUid}.`);
     } else {
       console.log(`taskService: Fetched ${tasks.length} sub-tasks assigned to user ${userUid}`);
     }
@@ -598,7 +607,7 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   } catch (error: any) {
     console.error('taskService: Error fetching all sub-tasks assigned to user:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error("Firestore query for getAllTasksAssignedToUser (sub-tasks) requires an index. Example fields: assignedToUids (array-contains), parentId (ASC), createdAt (DESC). Check Firebase console for the exact index needed from the error message link.");
+      console.error("Firestore query for getAllTasksAssignedToUser requires a composite index on `assignedToUids` (array-contains) and `parentId` (!= null). Check Firebase console.");
     }
     throw error;
   }
