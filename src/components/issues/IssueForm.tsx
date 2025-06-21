@@ -80,32 +80,48 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         }
         setParentSubTask(fetchedParentTask);
 
-        // --- Simplified User Discovery Logic ---
-        const userIds = new Set<string>();
-        
+        // --- NEW USER DISCOVERY LOGIC ---
+        // This new logic avoids fetching from the /users collection, preventing permission errors.
+        // It constructs the list of assignable users directly from the denormalized data on the parent task.
+        const assignableUsersMap = new Map<string, AppUser>();
+
         // Add the owner of the sub-task
-        if (fetchedParentTask.ownerUid) {
-          userIds.add(fetchedParentTask.ownerUid);
+        if (fetchedParentTask.ownerUid && fetchedParentTask.ownerName) {
+            assignableUsersMap.set(fetchedParentTask.ownerUid, {
+                uid: fetchedParentTask.ownerUid,
+                displayName: fetchedParentTask.ownerName,
+                email: null, photoURL: null, // Other fields are not needed for the dropdown
+            });
         }
+        
         // Add all users already assigned to the sub-task
-        fetchedParentTask.assignedToUids?.forEach(uid => userIds.add(uid));
+        if (fetchedParentTask.assignedToUids && fetchedParentTask.assignedToNames) {
+            fetchedParentTask.assignedToUids.forEach((uid, index) => {
+                const name = fetchedParentTask.assignedToNames?.[index];
+                if (uid && name) {
+                    assignableUsersMap.set(uid, {
+                        uid,
+                        displayName: name,
+                        email: null, photoURL: null,
+                    });
+                }
+            });
+        }
 
-        const projectUsers = userIds.size > 0 ? await getUsersByIds(Array.from(userIds)) : [];
-
-        // Filter for only supervisors and members for assignment list
-        const assignable = projectUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
-        const sortedUsers = assignable.sort((a, b) =>
-          (a.displayName || a.email || '').localeCompare(b.displayName || b.email || '')
+        const finalAssignableUsers = Array.from(assignableUsersMap.values());
+        
+        const sortedUsers = finalAssignableUsers.sort((a, b) =>
+          (a.displayName || '').localeCompare(b.displayName || '')
         );
 
         setAssignableUsersForIssue(sortedUsers);
-        // --- End of Simplified Logic ---
+        // --- End of New Logic ---
 
       } catch (error: any) {
         console.error("Failed to fetch prerequisites for IssueForm:", error);
         toast({
           title: "Error loading form data",
-          description: `Could not load required data. ${error.message}`,
+          description: `Could not load parent task data. ${error.message}`,
           variant: "destructive"
         });
         setAssignableUsersForIssue([]);
@@ -117,7 +133,9 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     if (!authLoading && user) {
       fetchPrerequisites();
     }
-  }, [taskId, projectId, user, authLoading, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [taskId, user, authLoading, toast]);
+
 
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
     if (!user) {
@@ -276,7 +294,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                         />
                       </FormControl>
                       <FormLabel className="font-normal">
-                        {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
+                        {assignableUser.displayName || assignableUser.email}
                       </FormLabel>
                     </FormItem>
                   ))}
