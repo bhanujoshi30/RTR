@@ -97,34 +97,44 @@ export default function DashboardPage() {
 
           if (baseProjectsAdmin.length > 0) {
             finalProjectsToDisplay = await Promise.all(
-              baseProjectsAdmin.map(async (project) => { // project already has calculated progress
-                console.log(`DashboardPage: [Admin/Owner View] Processing project ${project.id} (${project.name}) for project-wide counts.`);
-                
-                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectMainTasks.`);
-                const mainTaskCountPromise = countProjectMainTasks(project.id);
-                
-                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks (service).`);
-                const subTaskCountPromise = countProjectSubTasks(project.id);
-                
-                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectOpenIssues.`);
-                const openIssueCountPromise = countProjectOpenIssues(project.id);
+              baseProjectsAdmin.map(async (project) => {
+                try {
+                  console.log(`DashboardPage: [Admin/Owner View] Processing project ${project.id} (${project.name}) for project-wide counts.`);
+                  
+                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectMainTasks.`);
+                  const mainTaskCountPromise = countProjectMainTasks(project.id);
+                  
+                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks (service).`);
+                  const subTaskCountPromise = countProjectSubTasks(project.id);
+                  
+                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectOpenIssues.`);
+                  const openIssueCountPromise = countProjectOpenIssues(project.id);
 
-                const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
-                  mainTaskCountPromise,
-                  subTaskCountPromise,
-                  openIssueCountPromise,
-                ]);
-                
-                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved mainTaskCount: ${mainTaskCount}`);
-                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved subTaskCount: ${subTaskCount}`);
-                console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved openIssueCount: ${openIssueCount}`);
-                
-                return {
-                  ...project, // project already has calculated progress
-                  totalMainTasks: mainTaskCount,
-                  totalSubTasks: subTaskCount,
-                  totalOpenIssues: openIssueCount,
-                };
+                  const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
+                    mainTaskCountPromise,
+                    subTaskCountPromise,
+                    openIssueCountPromise,
+                  ]);
+                  
+                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved mainTaskCount: ${mainTaskCount}`);
+                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved subTaskCount: ${subTaskCount}`);
+                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved openIssueCount: ${openIssueCount}`);
+                  
+                  return {
+                    ...project, // project already has calculated progress
+                    totalMainTasks: mainTaskCount,
+                    totalSubTasks: subTaskCount,
+                    totalOpenIssues: openIssueCount,
+                  };
+                } catch (err) {
+                  console.error(`DashboardPage: Failed to get counts for project ${project.id}. Returning project with zero counts.`, err);
+                  return { // Return gracefully on error for one project
+                    ...project,
+                    totalMainTasks: 0,
+                    totalSubTasks: 0,
+                    totalOpenIssues: 0,
+                  };
+                }
               })
             );
           } else {
