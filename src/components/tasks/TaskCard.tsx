@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress'; 
-import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2 } from 'lucide-react';
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateTaskStatus, deleteTask, getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
 import { hasOpenIssues } from '@/services/issueService';
@@ -209,20 +209,28 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
               {cardIcon}
               <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
             </div>
-            {!isActuallyMainTask && task.status && (
-              <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
-                {task.status}
-              </Badge>
-            )}
-            {isActuallyMainTask && (
-              loadingSubTaskCount ? (
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-              ) : (
-                <Badge variant="outline">
-                  {subTaskCountLabel}
+            <div className="flex items-center gap-2">
+              {isSubTaskView && typeof task.openIssueCount === 'number' && task.openIssueCount > 0 && (
+                <Badge variant="outline" className="border-amber-500 text-amber-600 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  {task.openIssueCount} Open Issue{task.openIssueCount !== 1 ? 's' : ''}
                 </Badge>
-              )
-            )}
+              )}
+              {!isActuallyMainTask && task.status && (
+                <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
+                  {task.status}
+                </Badge>
+              )}
+              {isActuallyMainTask && (
+                loadingSubTaskCount ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : (
+                  <Badge variant="outline">
+                    {subTaskCountLabel}
+                  </Badge>
+                )
+              )}
+            </div>
           </div>
           {(!isActuallyMainTask && task.description) && (
             <CardDescription className="pt-1 line-clamp-2">{task.description}</CardDescription>

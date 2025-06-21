@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
+import { countOpenIssuesForTask } from '@/services/issueService';
 import type { Task } from '@/types';
 import { TaskCard } from './TaskCard';
 import { Loader2, ListChecks } from 'lucide-react';
@@ -42,8 +43,15 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
         fetchedSubTasks = await getAssignedSubTasksForUser(mainTaskId, user.uid);
       }
 
-      setSubTasks(fetchedSubTasks);
-      console.log(`[SubTaskList Debug] Set ${fetchedSubTasks.length} sub-tasks for display.`);
+      const subTasksWithIssueCounts = await Promise.all(
+        fetchedSubTasks.map(async (task) => {
+          const openIssueCount = await countOpenIssuesForTask(task.id);
+          return { ...task, openIssueCount };
+        })
+      );
+
+      setSubTasks(subTasksWithIssueCounts);
+      console.log(`[SubTaskList Debug] Set ${subTasksWithIssueCounts.length} sub-tasks for display with issue counts.`);
 
     } catch (err: any) {
       console.error('[SubTaskList Debug] Error fetching sub-tasks for mainTaskId', mainTaskId, ':', err);

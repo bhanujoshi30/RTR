@@ -437,8 +437,8 @@ export const deleteIssuesForTask = async (taskId: string, userUid: string): Prom
   }
 };
 
-// Checks if a specific sub-task has any open issues.
-export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
+export const countOpenIssuesForTask = async (taskId: string): Promise<number> => {
+  if (!taskId) return 0;
   const q = query(
     issuesCollection,
     where('taskId', '==', taskId),
@@ -446,20 +446,33 @@ export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
   );
 
   try {
-    const querySnapshot = await getDocs(q); // Use getDocs and check empty, getCountFromServer might need specific index too
-    if (querySnapshot.empty) {
-      console.log(`issueService: No open issues found for task ${taskId}.`);
-    } else {
-      console.log(`issueService: Found ${querySnapshot.docs.length} open issues for task ${taskId}.`);
-    }
-    return !querySnapshot.empty; 
+    const snapshot = await getCountFromServer(q);
+    return snapshot.data().count;
   } catch (error: any) {
-    console.error('issueService: Error checking for open issues for task ID:', taskId, error.message, error.code ? `(${error.code})` : '', error.stack);
-    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-        console.error("Firestore query for checking open issues requires a composite index. Please create it in the Firebase console. Collection: 'issues', Fields: 'taskId' (ASC), 'status' (ASC).");
+    console.error(`issueService: Error counting open issues for task ${taskId}:`, error);
+    // Returning 0 on error is safer than breaking the UI.
+    // The index requirement is the same as hasOpenIssues.
+    if (error.message?.includes("index")) {
+        console.error("Firestore query for counting open issues requires a composite index. Collection: 'issues', Fields: 'taskId' (ASC), 'status' (ASC).");
     }
-    // Instead of throwing, which might break task completion flow, return true (safer default) or handle specific error
-    // For now, re-throw to make it visible that an index might be needed.
+    return 0;
+  }
+};
+
+
+// Checks if a specific sub-task has any open issues.
+export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
+  try {
+    const count = await countOpenIssuesForTask(taskId);
+    if (count > 0) {
+      console.log(`issueService: Found ${count} open issues for task ${taskId}.`);
+    } else {
+      console.log(`issueService: No open issues found for task ${taskId}.`);
+    }
+    return count > 0;
+  } catch (error: any) {
+    console.error(`issueService: Error checking for open issues for task ID: ${taskId} via count`, error);
+    // Re-throw to make it visible that an index might be needed or another error occurred.
     throw new Error(`Failed to check for open issues for task ${taskId}. ${error.message}`);
   }
 };

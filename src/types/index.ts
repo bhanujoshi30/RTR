@@ -46,6 +46,7 @@ export interface Task {
   assignedToNames?: string[] | null; // Array of names, applicable for sub-tasks
   updatedAt?: Date;
   progress?: number; // For main tasks: % completion based on sub-tasks
+  openIssueCount?: number;
 }
 
 export interface Issue {
