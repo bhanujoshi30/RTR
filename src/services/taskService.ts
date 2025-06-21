@@ -44,6 +44,7 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
     description: data.description || '',
     status: data.status as TaskStatus,
     ownerUid: data.ownerUid,
+    ownerName: data.ownerName || null,
     assignedToUids: data.assignedToUids || [],
     assignedToNames: data.assignedToNames || [],
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
@@ -57,6 +58,7 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
 export const createTask = async (
   projectId: string,
   userUid: string,
+  ownerName: string,
   taskData: CreateTaskData
 ): Promise<string> => {
   if (!userUid) throw new Error('User not authenticated for creating task');
@@ -79,6 +81,7 @@ export const createTask = async (
     projectId,
     projectOwnerUid: projectData.ownerUid, // Storing project owner UID for rules
     ownerUid: userUid,
+    ownerName: ownerName,
     name: taskData.name,
     parentId: taskData.parentId || null,
     createdAt: serverTimestamp() as Timestamp,

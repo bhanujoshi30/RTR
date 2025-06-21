@@ -41,6 +41,7 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
     projectOwnerUid: data.projectOwnerUid,
     taskId: data.taskId, 
     ownerUid: data.ownerUid,
+    ownerName: data.ownerName || null,
     title: data.title,
     description: data.description,
     severity: data.severity,
@@ -98,7 +99,7 @@ async function ensureAssigneesInParentTask(parentTaskId: string, issueAssigneeUi
 }
 
 
-export const createIssue = async (projectId: string, taskId: string, userUid: string, issueData: CreateIssueData): Promise<string> => {
+export const createIssue = async (projectId: string, taskId: string, userUid: string, ownerName: string, issueData: CreateIssueData): Promise<string> => {
   if (!userUid) throw new Error('User not authenticated');
 
   const taskDocRef = doc(db, 'tasks', taskId); 
@@ -128,7 +129,8 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
     projectId,
     projectOwnerUid: taskData.projectOwnerUid,
     taskId, 
-    ownerUid: userUid, 
+    ownerUid: userUid,
+    ownerName: ownerName,
     assignedToUids: issueData.assignedToUids || [],
     assignedToNames: issueData.assignedToNames || [],
     dueDate: Timestamp.fromDate(issueData.dueDate), 

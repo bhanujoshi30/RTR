@@ -4,7 +4,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getTaskById, deleteTask } from '@/services/taskService';
-import { getUserDisplayName } from '@/services/userService'; 
 import type { Task, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,22 +56,17 @@ export default function TaskDetailsPage() {
     if (authLoading || !user || !taskId) return;
     try {
       setLoading(true);
-      setError(null); // Reset error state on new fetch
-      setIsFetchingOwnerName(false);
+      setError(null);
       setOwnerDisplayName(null);
 
       const fetchedTask = await getTaskById(taskId, user.uid, user.role as UserRole);
       if (fetchedTask && fetchedTask.projectId === projectId) {
         setTask(fetchedTask);
-        if (fetchedTask.ownerUid) {
-          setIsFetchingOwnerName(true);
-          getUserDisplayName(fetchedTask.ownerUid)
-            .then(name => setOwnerDisplayName(name))
-            .catch(err => {
-              console.error("TaskDetailsPage: Failed to fetch owner display name:", err);
-              setOwnerDisplayName(fetchedTask.ownerUid); 
-            })
-            .finally(() => setIsFetchingOwnerName(false));
+        if (fetchedTask.ownerName) {
+          setOwnerDisplayName(fetchedTask.ownerName);
+        } else if (fetchedTask.ownerUid) {
+          setOwnerDisplayName(`User ID: ${fetchedTask.ownerUid}`);
+          console.warn(`Task ${fetchedTask.id} is missing ownerName. Displaying UID as fallback.`);
         }
       } else {
         setError(`Task not found (ID: ${taskId}) or it does not belong to this project.`);
@@ -357,7 +351,7 @@ export default function TaskDetailsPage() {
                   )}
                   <div>
                     <h4 className="font-semibold">Created By:</h4>
-                    <p>{isFetchingOwnerName ? 'Loading...' : (ownerDisplayName || task.ownerUid)}</p>
+                    <p>{ownerDisplayName || task.ownerUid}</p>
                   </div>
                   <div><h4 className="font-semibold">Created At:</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
                   {task.dueDate && (<div><h4 className="font-semibold">Due Date:</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}

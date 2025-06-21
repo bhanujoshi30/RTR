@@ -153,7 +153,8 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         await updateIssue(issue.id, user.uid, taskId, issueDataPayload);
         toast({ title: 'Issue Updated', description: `"${data.title}" has been updated.` });
       } else {
-        await createIssue(projectId, taskId, user.uid, issueDataPayload);
+        const ownerName = user.displayName || user.email || 'Unknown User';
+        await createIssue(projectId, taskId, user.uid, ownerName, issueDataPayload);
         toast({ title: 'Issue Created', description: `"${data.title}" has been added.` });
 
         // Side effect: If parent task was 'Completed', move it to 'In Progress'

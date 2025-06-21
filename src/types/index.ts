@@ -42,6 +42,7 @@ export interface Task {
   createdAt: Date;
   dueDate: Date; // Made mandatory from previous change for sub-tasks, optional for main tasks
   ownerUid: string;
+  ownerName?: string | null;
   assignedToUids?: string[] | null; // Array of UIDs, applicable for sub-tasks
   assignedToNames?: string[] | null; // Array of names, applicable for sub-tasks
   updatedAt?: Date;
@@ -55,6 +56,7 @@ export interface Issue {
   projectOwnerUid?: string;
   taskId: string; // This is the ID of the parent SubTask
   ownerUid: string;
+  ownerName?: string | null;
   title: string;
   description?: string;
   severity: IssueSeverity;

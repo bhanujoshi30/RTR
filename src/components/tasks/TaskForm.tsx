@@ -149,7 +149,8 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
         await updateTask(task.id, user.uid, taskPayload, user.role);
         toast({ title: 'Task Updated', description: `"${data.name}" has been updated.` });
       } else {
-        await createTask(projectId, user.uid, taskPayload);
+        const ownerName = user.displayName || user.email || 'Unknown User';
+        await createTask(projectId, user.uid, ownerName, taskPayload);
         toast({ title: 'Task Created', description: `"${data.name}" has been added.` });
       }
 
