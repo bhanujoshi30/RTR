@@ -6,7 +6,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 import { createContext, useEffect, useState, ReactNode } from 'react';
 import { auth, db } from '@/lib/firebase'; // Import db
 import { User, type UserRole } from '@/types';
-import { doc, getDoc, Timestamp } from 'firebase/firestore'; // Import doc and getDoc
+import { doc, getDoc, setDoc, Timestamp, collection, query, getDocs, limit, serverTimestamp } from 'firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -33,26 +33,54 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (firebaseUser) {
         try {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
-          const docSnap = await getDoc(userDocRef);
+          let docSnap = await getDoc(userDocRef);
 
-          let role: UserRole | undefined = undefined;
-          let createdAt: Date | undefined = undefined;
-          let updatedAt: Date | undefined = undefined;
+          // If user document doesn't exist, create it.
+          if (!docSnap.exists()) {
+            console.log(`AuthContext: User document for ${firebaseUser.uid} not found. Creating it...`);
+            
+            // Check if this is the very first user, to make them an admin.
+            const usersCollectionRef = collection(db, 'users');
+            const firstUserQuery = query(usersCollectionRef, limit(1));
+            const existingUsersSnapshot = await getDocs(firstUserQuery);
+            const isFirstUser = existingUsersSnapshot.empty;
+            const newRole: UserRole = isFirstUser ? 'admin' : 'member';
 
-          if (docSnap.exists()) {
-            const firestoreData = docSnap.data();
-            role = firestoreData.role as UserRole;
-            createdAt = firestoreData.createdAt ? (firestoreData.createdAt as Timestamp).toDate() : undefined;
-            updatedAt = firestoreData.updatedAt ? (firestoreData.updatedAt as Timestamp).toDate() : undefined;
-          } else {
-            console.warn(`AuthContext: User document not found in Firestore for UID: ${firebaseUser.uid}. Role will be undefined.`);
+            console.log(`AuthContext: Is first user? ${isFirstUser}. Assigning role: ${newRole}.`);
+
+            const newUserDocData = {
+                uid: firebaseUser.uid,
+                email: firebaseUser.email,
+                displayName: firebaseUser.displayName || firebaseUser.email,
+                photoURL: firebaseUser.photoURL || null,
+                role: newRole,
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp(),
+                emailVerified: firebaseUser.emailVerified,
+            };
+            
+            await setDoc(userDocRef, newUserDocData);
+            console.log(`AuthContext: User document created for ${firebaseUser.uid} with role ${newRole}.`);
+            
+            // Re-fetch the document to get the server-generated timestamps
+            docSnap = await getDoc(userDocRef); 
           }
+
+          // At this point, docSnap is guaranteed to exist.
+          const firestoreData = docSnap.data();
+          if (!firestoreData) {
+            throw new Error("Could not read created user document.");
+          }
+
+          const role = firestoreData.role as UserRole;
+          const createdAt = firestoreData.createdAt ? (firestoreData.createdAt as Timestamp).toDate() : undefined;
+          const updatedAt = firestoreData.updatedAt ? (firestoreData.updatedAt as Timestamp).toDate() : undefined;
           
           const appUser: User = {
             uid: firebaseUser.uid,
-            displayName: firebaseUser.displayName,
+            displayName: firestoreData.displayName || firebaseUser.displayName,
             email: firebaseUser.email,
-            photoURL: firebaseUser.photoURL,
+            photoURL: firestoreData.photoURL || firebaseUser.photoURL,
             emailVerified: firebaseUser.emailVerified,
             role: role,
             createdAt: createdAt,
@@ -61,7 +89,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           setUser(appUser);
 
         } catch (error) {
-          console.error("AuthContext: Error fetching user role from Firestore:", error);
+          console.error("AuthContext: Error fetching or creating user document:", error);
           // Fallback to user data without role from Firestore
           const appUserWithoutRole: User = {
             uid: firebaseUser.uid,
