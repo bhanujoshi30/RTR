@@ -176,10 +176,14 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         location: location || undefined,
       });
 
+      // --- SUCCESS PATH ---
       toast({ title: 'Success', description: 'Report submitted successfully.' });
-      onSuccess();
+      setIsUploading(false); // Reset state BEFORE calling onSuccess
+      setUploadProgress(null);
+      onSuccess(); // Now it is safe to unmount the component
 
     } catch (error: any) {
+      // --- FAILURE PATH ---
       console.error('Upload Error:', error);
       let description = 'An unexpected error occurred during the upload process.';
       if (error.message) {
@@ -190,7 +194,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
           'Upload failed due to a permission error. Please ensure Firebase Storage rules allow writes for authenticated users.';
       }
       toast({ title: 'Upload Failed', description, variant: 'destructive' });
-      setIsUploading(false);
+      setIsUploading(false); // Reset state on any error
       setUploadProgress(null);
     }
   };
