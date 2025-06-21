@@ -38,9 +38,16 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   const [locationError, setLocationError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isCameraInitializing, setIsCameraInitializing] = useState(false);
-  
+  const [isCameraReady, setIsCameraReady] = useState(false); // New state
+
   useEffect(() => {
     if (!open) {
+      // If dialog is closing, ensure we release the camera.
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
       return;
     }
 
@@ -52,6 +59,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       setLocation(null);
       setLocationError(null);
       setIsCameraInitializing(true);
+      setIsCameraReady(false);
 
       // Geolocation Permission
       if (navigator.geolocation) {
@@ -85,33 +93,39 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         localStream = cameraStream;
         if (videoRef.current) {
           videoRef.current.srcObject = localStream;
+          videoRef.current.onloadedmetadata = () => {
+            // This is the reliable signal that camera is ready
+            setIsCameraInitializing(false);
+            setIsCameraReady(true);
+          };
         }
         setHasPermission(true);
       } catch (error) {
         console.error('Error accessing camera:', error);
         setHasPermission(false);
-      } finally {
         setIsCameraInitializing(false);
       }
     };
     
     getPermissionsAndStream();
 
-    // Cleanup function when dialog closes or component unmounts
+    // Cleanup function when component unmounts
     return () => {
       if (localStream) {
         localStream.getTracks().forEach(track => track.stop());
       }
       if (videoRef.current) {
         videoRef.current.srcObject = null;
+        videoRef.current.onloadedmetadata = null;
       }
       setIsCameraInitializing(false);
+      setIsCameraReady(false);
     };
   }, [open]);
 
   const handleCaptureAndUpload = async () => {
-    if (!videoRef.current || !canvasRef.current || !user) {
-      toast({ title: "Error", description: "Component not ready or user not logged in.", variant: "destructive" });
+    if (!videoRef.current || !canvasRef.current || !user || !isCameraReady) {
+      toast({ title: "Error", description: "Component not ready, user not logged in, or camera not available.", variant: "destructive" });
       return;
     }
     setIsUploading(true);
@@ -125,17 +139,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       setIsUploading(false);
       return;
     }
-
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      toast({
-        title: "Camera Not Ready",
-        description: "The camera is still initializing. Please wait a moment and try again.",
-        variant: "destructive",
-      });
-      setIsUploading(false);
-      return;
-    }
-
+    
     // Set canvas dimensions
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -243,7 +247,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
                 <X className="mr-2 h-4 w-4" /> Cancel
             </Button>
-            <Button onClick={handleCaptureAndUpload} disabled={!hasPermission || isUploading || isCameraInitializing}>
+            <Button onClick={handleCaptureAndUpload} disabled={!isCameraReady || isUploading}>
                 {isUploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Camera className="mr-2 h-4 w-4" />}
                 Capture &amp; Submit
             </Button>
