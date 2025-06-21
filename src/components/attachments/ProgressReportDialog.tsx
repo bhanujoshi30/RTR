@@ -107,6 +107,8 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       // Step 1: Load image from preview URL
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
+        // This is crucial to prevent a "tainted canvas" error which blocks export
+        img.crossOrigin = 'anonymous';
         img.onload = () => resolve(img);
         img.onerror = () => reject(new Error('Failed to load selected image. It might be corrupt.'));
         img.src = previewUrl;
@@ -235,8 +237,8 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
                 <Image
                   src={previewUrl}
                   alt="Selected preview"
-                  layout="fill"
-                  objectFit="contain"
+                  fill
+                  className="object-contain"
                 />
               </div>
             )}
