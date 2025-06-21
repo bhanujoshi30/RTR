@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress'; 
 import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
-import { updateTaskStatus, deleteTask, getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
+import { updateTaskStatus, deleteTask, getSubTasks } from '@/services/taskService';
 import { hasOpenIssues } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
@@ -67,15 +67,16 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
         console.log(`[TaskCard Debug] fetchCountAndProgress called for main task '${task.name}' (ID: ${task.id}). Supervisor: ${isSupervisor}, Member: ${isMember}, Owner: ${isOwnerOfThisTask}`);
         setLoadingSubTaskCount(true); // Set loading true before fetch
         try {
+          const allSubtasks = await getSubTasks(task.id);
           const isNonOwnerSupervisorOrMember = !isOwnerOfThisTask && (isSupervisor || isMember);
 
           if (isNonOwnerSupervisorOrMember) {
-            const assignedSubtasks = await getAssignedSubTasksForUser(task.id, user.uid);
+            // Filter client-side to avoid composite index query
+            const assignedSubtasks = allSubtasks.filter(st => st.assignedToUids?.includes(user.uid));
             const count = assignedSubtasks.length;
             const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
             setSubTaskCountLabel(`${count} ${taskWord} (assigned to you)`);
           } else {
-            const allSubtasks = await getSubTasks(task.id);
             const count = allSubtasks.length;
             const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
             setSubTaskCountLabel(`${count} ${taskWord}`);

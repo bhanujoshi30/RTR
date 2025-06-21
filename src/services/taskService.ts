@@ -230,7 +230,7 @@ export const getSubTasks = async (parentId: string): Promise<Task[]> => {
   } catch (error: any) {
     console.error(`taskService: Error fetching sub-tasks for parentId: ${parentId}`, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-       const indexFields = "parentId (ASC), createdAt (ASC)";
+       const indexFields = "parentId (ASC)";
        console.error(`Firestore query for sub-tasks requires an index. Please create it in the Firebase console. Fields: ${indexFields}. The error message from Firebase usually provides a direct link to create it.`);
     }
     throw error;
@@ -257,35 +257,6 @@ export const getProjectSubTasksAssignedToUser = async (projectId: string, userUi
     console.error(`taskService: Error in getProjectSubTasksAssignedToUser for projectId: ${projectId}, userUid: ${userUid}`, error.message, error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
       console.error("Firestore query for getProjectSubTasksAssignedToUser requires a composite index. Fields: projectId (ASC), assignedToUids (ARRAY_CONTAINS), parentId (!= null). Check Firebase console.");
-    }
-    throw error;
-  }
-};
-
-export const getAssignedSubTasksForUser = async (mainTaskId: string, userUid: string): Promise<Task[]> => {
-  console.log(`taskService: getAssignedSubTasksForUser for mainTaskId: ${mainTaskId}, userUid: ${userUid}`);
-  if (!mainTaskId || !userUid) return [];
-
-  // Removed orderBy to prevent needing a composite index by default
-  const q = query(
-    tasksCollection,
-    where('parentId', '==', mainTaskId),
-    where('assignedToUids', 'array-contains', userUid)
-  );
-
-  try {
-    const querySnapshot = await getDocs(q);
-    const tasks = querySnapshot.docs.map(mapDocumentToTask);
-    
-    // Sort client-side
-    tasks.sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
-
-    console.log(`taskService: Fetched ${tasks.length} sub-tasks assigned to user ${userUid} under main task ${mainTaskId}.`);
-    return tasks;
-  } catch (error: any) {
-    console.error(`taskService: Error in getAssignedSubTasksForUser for mainTaskId: ${mainTaskId}, userUid: ${userUid}`, error.message, error.stack);
-    if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error("Firestore query for getAssignedSubTasksForUser requires an index. Fields (in order): parentId (ASC), assignedToUids (ARRAY_CONTAINS), createdAt (ASC). Check Firebase console. The error message from Firebase often provides a direct link to create the index.");
     }
     throw error;
   }
@@ -718,4 +689,3 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     return 0; 
   }
 };
-

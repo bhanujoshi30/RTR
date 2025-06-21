@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
+import { getSubTasks } from '@/services/taskService';
 import { countOpenIssuesForTask } from '@/services/issueService';
 import type { Task } from '@/types';
 import { TaskCard } from './TaskCard';
@@ -34,13 +34,20 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
     setLoading(true);
     setError(null);
     try {
+      // Fetch all sub-tasks for the main task. This query does not require a composite index.
+      const allSubTasksForParent = await getSubTasks(mainTaskId);
+      
       let fetchedSubTasks: Task[];
       if (isViewerMainTaskOwner) {
-        console.log(`[SubTaskList Debug] User ${user.uid} IS the main task owner. Fetching all sub-tasks for main task ${mainTaskId}.`);
-        fetchedSubTasks = await getSubTasks(mainTaskId);
+        console.log(`[SubTaskList Debug] User ${user.uid} IS the main task owner. Using all ${allSubTasksForParent.length} sub-tasks.`);
+        fetchedSubTasks = allSubTasksForParent;
       } else {
-        console.log(`[SubTaskList Debug] User ${user.uid} is NOT the main task owner. Fetching assigned sub-tasks only for main task ${mainTaskId}.`);
-        fetchedSubTasks = await getAssignedSubTasksForUser(mainTaskId, user.uid);
+        // Filter client-side to avoid composite index query.
+        console.log(`[SubTaskList Debug] User ${user.uid} is NOT main task owner. Filtering ${allSubTasksForParent.length} sub-tasks on client...`);
+        fetchedSubTasks = allSubTasksForParent.filter(task => 
+          task.assignedToUids?.includes(user.uid)
+        );
+        console.log(`[SubTaskList Debug] Client-side filter resulted in ${fetchedSubTasks.length} assigned sub-tasks.`);
       }
 
       const subTasksWithIssueCounts = await Promise.all(
