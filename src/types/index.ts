@@ -51,6 +51,7 @@ export interface Task {
 export interface Issue {
   id: string;
   projectId: string;
+  projectOwnerUid?: string;
   taskId: string; // This is the ID of the parent SubTask
   ownerUid: string;
   title: string;

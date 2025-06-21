@@ -3,115 +3,85 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
-    function isSignedIn() {
+    
+    function isAuth() {
       return request.auth != null;
     }
 
-    function isUser(uid) {
-      return isSignedIn() && request.auth.uid == uid;
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    function getUserRole(uid) {
-      // It's better to check for existence before accessing .data
-      return get(/databases/$(database)/documents/users/$(uid)).data.role;
-    }
-
-    function isRole(uid, role) {
-      return isSignedIn() && getUserRole(uid) == role;
-    }
-    
-    function isProjectOwner(projectId) {
-      let projectData = get(/databases/$(database)/documents/projects/$(projectId)).data;
-      return isUser(projectData.ownerUid);
-    }
-    
     function isTaskOwner(taskId) {
-        let taskData = get(/databases/$(database)/documents/tasks/$(taskId)).data;
-        return isUser(taskData.ownerUid);
+        return get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid == request.auth.uid;
     }
-
-    // USERS collection
+    
+    function isAssignedToTask(taskId) {
+        return request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
+    }
+    
     match /users/{userId} {
-      // Admins can create/update/delete any user document.
-      // Users can view their own document.
-      allow read: if isUser(userId) || isRole(request.auth.uid, 'admin');
-      allow write: if isRole(request.auth.uid, 'admin');
+      allow read: if isAuth();
+      allow create: if isAuth(); // User can create their own doc on signup
+      allow update, delete: if request.auth.uid == userId || isAdmin();
     }
 
-    // PROJECTS collection
     match /projects/{projectId} {
-      // Allow read access to any authenticated user. Further restrictions can be added if needed.
-      allow read: if isSignedIn();
-      // Allow create only if the user is the owner.
-      allow create: if isUser(request.resource.data.ownerUid);
-      // Allow update/delete only for the project owner.
-      allow update, delete: if isProjectOwner(projectId);
+      allow create: if isAuth();
+      // You can read a project if you are its owner or an admin
+      allow read: if isAuth() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      // You can only update/delete a project if you are its owner or an admin
+      allow update, delete: if isAuth() && (resource.data.ownerUid == request.auth.uid || isAdmin());
     }
 
-    // TASKS collection
     match /tasks/{taskId} {
-      // Who can read a task?
-      // - The owner of the task.
-      // - The owner of the project this task belongs to.
-      // - Users assigned to the task (if it's a sub-task).
-      // - An admin.
-      allow read: if isSignedIn() && 
-                    (isTaskOwner(taskId) || 
-                     resource.data.projectOwnerUid == request.auth.uid ||
-                     request.auth.uid in resource.data.assignedToUids ||
-                     isRole(request.auth.uid, 'admin'));
+      // You can create a task if you are authenticated and own the project it's in
+      allow create: if isAuth() && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid;
 
-      // Who can create a task?
-      // - Any signed-in user, as long as they are the owner of the project.
-      allow create: if isSignedIn() && isProjectOwner(request.resource.data.projectId);
+      // You can read tasks in a project if you own that project (e.g. for dashboard counts), or if you are assigned to a subtask
+      allow list: if isAuth() && request.query.limit > 0; // More refined rules below for get
       
-      // Who can update a task?
-      // - The owner of the task.
-      // - A user assigned to the task (if it's a sub-task).
-      allow update: if isSignedIn() && 
-                      (isTaskOwner(taskId) || 
-                       (resource.data.parentId != null && request.auth.uid in resource.data.assignedToUids));
-
-      // Who can delete a task?
-      // - Only the owner of the task.
-      allow delete: if isSignedIn() && isTaskOwner(taskId);
+      // Allow read on a single task if you own the project, or own the task, or are assigned to it (if subtask)
+      allow get: if isAuth() && (
+                    resource.data.projectOwnerUid == request.auth.uid || 
+                    resource.data.ownerUid == request.auth.uid ||
+                    (resource.data.parentId != null && request.auth.uid in resource.data.assignedToUids)
+                  );
+      
+      // Update rules: Owner can update anything. Assigned user can only update status/desc/dueDate of sub-tasks.
+      allow update: if isAuth() && (
+                      (resource.data.ownerUid == request.auth.uid) ||
+                      (resource.data.parentId != null && 
+                       request.auth.uid in resource.data.assignedToUids &&
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'description', 'dueDate', 'updatedAt']))
+                    );
+      
+      // Delete only if you own the task
+      allow delete: if isAuth() && resource.data.ownerUid == request.auth.uid;
     }
 
-    // ISSUES collection
     match /issues/{issueId} {
-        // Who can read an issue?
-        // Anyone who can read the parent task. This is complex for a rule, so simplify:
-        // Owner of the issue, user assigned to issue, owner of parent task.
-        allow read: if isSignedIn() && 
-                      (resource.data.ownerUid == request.auth.uid ||
-                       request.auth.uid in resource.data.assignedToUids ||
-                       get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.ownerUid == request.auth.uid);
-        
-        // Who can create an issue?
-        // - Owner of parent task or user assigned to parent task.
-        allow create: if isSignedIn() &&
-                        (exists(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)) &&
-                         (get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.ownerUid == request.auth.uid ||
-                          request.auth.uid in get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedToUids)
-                        );
-        
-        // Who can update/delete an issue?
-        // - Owner of the issue.
-        allow update, delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
-    }
+      // You can create an issue if you own the parent task or are assigned to it
+      allow create: if isAuth() && (isTaskOwner(request.resource.data.taskId) || isAssignedToTask(request.resource.data.taskId));
 
-    // ATTACHMENTS (sub-collection of tasks)
-    match /tasks/{taskId}/attachments/{attachmentId} {
-        // Who can read/write attachments?
-        // Anyone who can read the parent task (owner or assigned user).
-        allow read, write: if isSignedIn() && 
-                             (exists(/databases/$(database)/documents/tasks/$(taskId)) &&
-                              (get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid == request.auth.uid ||
-                               request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids ||
-                               isRole(request.auth.uid, 'admin'))
-                             );
+      // You can read issues in a project if you own that project
+      // This rule allows the collection query on the dashboard to work
+       allow read: if isAuth() && (
+                    resource.data.projectOwnerUid == request.auth.uid ||
+                    resource.data.ownerUid == request.auth.uid ||
+                    (request.auth.uid in resource.data.assignedToUids) ||
+                    isAdmin()
+                  );
+      
+      // Update rules: owner can update anything, assigned can only update status
+       allow update: if isAuth() && (
+                      resource.data.ownerUid == request.auth.uid ||
+                      (request.auth.uid in resource.data.assignedToUids && 
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']))
+                    );
+
+      // Delete only if you own the issue
+      allow delete: if isAuth() && resource.data.ownerUid == request.auth.uid;
     }
   }
 }

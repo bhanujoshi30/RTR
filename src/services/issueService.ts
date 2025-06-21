@@ -38,6 +38,7 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
   return {
     id: docSnapshot.id,
     projectId: data.projectId,
+    projectOwnerUid: data.projectOwnerUid,
     taskId: data.taskId, 
     ownerUid: data.ownerUid,
     title: data.title,
@@ -115,9 +116,18 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
      throw new Error('Access denied. You must own or be assigned to the parent sub-task to create an issue.');
   }
 
+  // Ensure the parent task has the projectOwnerUid before we use it
+  if (!taskData.projectOwnerUid) {
+      console.warn(`taskService: Parent task ${taskId} is missing projectOwnerUid. Fetching from project as a fallback.`);
+      const projectDoc = await getDoc(doc(db, 'projects', projectId));
+      if (!projectDoc.exists()) throw new Error('Project not found when creating issue.');
+      taskData.projectOwnerUid = projectDoc.data().ownerUid;
+  }
+
   const newIssuePayload = {
     ...issueData,
     projectId,
+    projectOwnerUid: taskData.projectOwnerUid,
     taskId, 
     ownerUid: userUid, 
     assignedToUids: issueData.assignedToUids || [],
