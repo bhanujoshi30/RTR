@@ -242,7 +242,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
             <input
               type="file"
               accept="image/*"
-              capture="user"
+              capture="environment"
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
