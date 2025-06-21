@@ -1,0 +1,23 @@
+
+[
+  {
+    "origin": [
+      "http://localhost:3000",
+      "http://localhost:9002",
+      "https://*.cloudworkstations.dev",
+      "https://*.googleusercontent.com"
+    ],
+    "method": [
+      "GET",
+      "POST",
+      "PUT",
+      "DELETE",
+      "OPTIONS"
+    ],
+    "responseHeader": [
+      "Content-Type",
+      "Authorization"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]
