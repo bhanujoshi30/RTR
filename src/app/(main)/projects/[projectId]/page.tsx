@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList'; 
-import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers } from 'lucide-react'; 
+import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock } from 'lucide-react'; 
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -28,6 +28,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ProjectForm } from '@/components/projects/ProjectForm'; 
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ProjectTimeline } from '@/components/timeline/ProjectTimeline';
 
 
 export default function ProjectDetailsPage() {
@@ -203,25 +205,42 @@ export default function ProjectDetailsPage() {
         </CardContent>
       </Card>
 
-      <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
-        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-          <h2 className="font-headline text-2xl font-semibold flex items-center">
-            <Layers className="mr-3 h-7 w-7 text-primary" /> 
-            Main Tasks
-          </h2>
-          {canManageProject && ( 
-            <Button asChild>
-              <Link href={`/projects/${projectId}/tasks/create`}> 
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Add New Main Task
-              </Link>
-            </Button>
-          )}
-        </div>
-        {user && <TaskList projectId={projectId} />} 
-      </div>
+      <Tabs defaultValue="tasks" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> Main Tasks</TabsTrigger>
+          <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Project Timeline</TabsTrigger>
+        </TabsList>
+        <TabsContent value="tasks" className="mt-6">
+            <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                    <h2 className="font-headline text-2xl font-semibold flex items-center">
+                        <Layers className="mr-3 h-7 w-7 text-primary" />
+                        Main Tasks
+                    </h2>
+                    {canManageProject && (
+                        <Button asChild>
+                            <Link href={`/projects/${projectId}/tasks/create`}>
+                                <PlusCircle className="mr-2 h-4 w-4" />
+                                Add New Main Task
+                            </Link>
+                        </Button>
+                    )}
+                </div>
+                {user && <TaskList projectId={projectId} />}
+            </div>
+        </TabsContent>
+        <TabsContent value="timeline" className="mt-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Project Timeline</CardTitle>
+                    <CardDescription>A complete history of all main tasks and sub-tasks within this project.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ProjectTimeline projectId={projectId} />
+                </CardContent>
+            </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
-
-    

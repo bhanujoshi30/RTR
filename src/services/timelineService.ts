@@ -1,9 +1,9 @@
 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, Timestamp } from 'firebase/firestore';
-import type { TimelineEvent, TimelineEventType, AggregatedEvent } from '@/types';
+import type { TimelineEvent, TimelineEventType, AggregatedEvent, ProjectAggregatedEvent } from '@/types';
 import { getUserDisplayName } from './userService';
-import { getSubTasks } from './taskService';
+import { getSubTasks, getProjectMainTasks } from './taskService';
 
 /**
  * Logs a new event to a sub-task's timeline.
@@ -114,6 +114,44 @@ export const getTimelineForMainTask = async (mainTaskId: string): Promise<Aggreg
     
   } catch (error) {
     console.error(`TimelineService: Failed to aggregate timeline for main task ${mainTaskId}`, error);
+    return [];
+  }
+};
+
+/**
+ * Fetches an aggregated timeline for a project, grouping events by main tasks.
+ * @param projectId The ID of the project.
+ * @returns A promise that resolves to an array of project-aggregated events.
+ */
+export const getTimelineForProject = async (projectId: string): Promise<ProjectAggregatedEvent[]> => {
+  try {
+    const mainTasks = await getProjectMainTasks(projectId);
+
+    const projectTimelinePromises = mainTasks.map(async (mainTask) => {
+      const events = await getTimelineForMainTask(mainTask.id);
+      if (events.length > 0) {
+        return {
+          id: mainTask.id,
+          timestamp: events[0].timestamp, // Latest event for sorting
+          type: 'mainTaskGroup' as const,
+          data: {
+            mainTaskInfo: { id: mainTask.id, name: mainTask.name },
+            events: events,
+          },
+        };
+      }
+      return null;
+    });
+
+    const projectEventGroupsWithNulls = await Promise.all(projectTimelinePromises);
+    const aggregatedProjectEvents = projectEventGroupsWithNulls.filter((group): group is ProjectAggregatedEvent => group !== null);
+
+    aggregatedProjectEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    return aggregatedProjectEvents;
+
+  } catch (error) {
+    console.error(`TimelineService: Failed to aggregate timeline for project ${projectId}`, error);
     return [];
   }
 };

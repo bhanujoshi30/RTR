@@ -118,3 +118,17 @@ export interface AggregatedEvent {
     events: TimelineEvent[];
   };
 }
+
+export interface ProjectAggregatedEvent {
+  id: string; // main task ID
+  timestamp: Date; // for sorting, latest event in the group
+  type: 'mainTaskGroup';
+  data: {
+    mainTaskInfo: {
+      id: string;
+      name: string;
+    };
+    // The events here are the ones from getTimelineForMainTask
+    events: AggregatedEvent[];
+  };
+}
