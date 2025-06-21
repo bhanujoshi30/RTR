@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getSubTasks } from '@/services/taskService';
+import { getSubTasks, getAssignedSubTasksForUser } from '@/services/taskService';
 import type { Task } from '@/types';
 import { TaskCard } from './TaskCard';
 import { Loader2, ListChecks } from 'lucide-react';
@@ -33,20 +33,17 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
     setLoading(true);
     setError(null);
     try {
-      const fetchedSubTasks = await getSubTasks(mainTaskId);
-      console.log('[SubTaskList Debug] Fetched all sub-tasks for mainTaskId', mainTaskId, ':', fetchedSubTasks.length > 0 ? fetchedSubTasks : 'None');
-
-      let finalSubTasks = fetchedSubTasks;
-      if (!isViewerMainTaskOwner) {
-        console.log(`[SubTaskList Debug] User ${user.uid} is NOT the main task owner (${mainTaskOwnerUid}). Filtering sub-tasks by assignment.`);
-        finalSubTasks = fetchedSubTasks.filter(st => 
-          st.assignedToUids?.includes(user.uid)
-        );
-        console.log(`[SubTaskList Debug] Original sub-task count: ${fetchedSubTasks.length}, Filtered sub-task count for user ${user.uid}: ${finalSubTasks.length}`);
+      let fetchedSubTasks: Task[];
+      if (isViewerMainTaskOwner) {
+        console.log(`[SubTaskList Debug] User ${user.uid} IS the main task owner. Fetching all sub-tasks for main task ${mainTaskId}.`);
+        fetchedSubTasks = await getSubTasks(mainTaskId);
       } else {
-        console.log(`[SubTaskList Debug] User ${user.uid} IS the main task owner. Displaying all ${fetchedSubTasks.length} sub-tasks.`);
+        console.log(`[SubTaskList Debug] User ${user.uid} is NOT the main task owner. Fetching assigned sub-tasks only for main task ${mainTaskId}.`);
+        fetchedSubTasks = await getAssignedSubTasksForUser(mainTaskId, user.uid);
       }
-      setSubTasks(finalSubTasks);
+
+      setSubTasks(fetchedSubTasks);
+      console.log(`[SubTaskList Debug] Set ${fetchedSubTasks.length} sub-tasks for display.`);
 
     } catch (err: any) {
       console.error('[SubTaskList Debug] Error fetching sub-tasks for mainTaskId', mainTaskId, ':', err);
