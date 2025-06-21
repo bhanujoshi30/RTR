@@ -94,7 +94,7 @@ export type TimelineEventType =
 
 export interface TimelineEvent {
   id: string;
-  taskId: string; // The ID of the task where the event is stored
+  taskId: string;
   timestamp: Date;
   type: TimelineEventType;
   description: string;
@@ -103,10 +103,17 @@ export interface TimelineEvent {
     name: string;
   };
   details: Record<string, any>;
-  // For aggregation on Main Task Timeline
-  source?: 'mainTask' | 'subTask';
-  subTaskInfo?: {
-    id: string;
-    name: string;
+}
+
+export interface AggregatedEvent {
+  id: string; // main event ID or subtask ID
+  timestamp: Date; // for sorting, usually the latest event in a group
+  type: 'mainTaskEvent' | 'subTaskEventGroup';
+  data: TimelineEvent | {
+    subTaskInfo: {
+      id: string;
+      name: string;
+    };
+    events: TimelineEvent[];
   };
 }

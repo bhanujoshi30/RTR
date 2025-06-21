@@ -1,7 +1,7 @@
 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, Timestamp } from 'firebase/firestore';
-import type { TimelineEvent, TimelineEventType, Task } from '@/types';
+import type { TimelineEvent, TimelineEventType, AggregatedEvent } from '@/types';
 import { getUserDisplayName } from './userService';
 import { getSubTasks } from './taskService';
 
@@ -70,45 +70,48 @@ export const getTimelineForTask = async (taskId: string): Promise<TimelineEvent[
 };
 
 /**
- * Fetches an aggregated timeline for a main task, including its own events and events from all its sub-tasks.
+ * Fetches an aggregated timeline for a main task, including its own events and grouped events from its sub-tasks.
  * @param mainTaskId The ID of the main task.
- * @returns A promise that resolves to an array of all relevant timeline events, sorted by timestamp.
+ * @returns A promise that resolves to an array of aggregated events, sorted by timestamp.
  */
-export const getTimelineForMainTask = async (mainTaskId: string): Promise<TimelineEvent[]> => {
+export const getTimelineForMainTask = async (mainTaskId: string): Promise<AggregatedEvent[]> => {
   try {
-    // 1. Fetch main task's own timeline
-    const mainTaskEventsPromise = getTimelineForTask(mainTaskId);
-    
-    // 2. Fetch all sub-tasks
-    const subTasksPromise = getSubTasks(mainTaskId);
+    // 1. Fetch main task's own timeline events
+    const mainTaskEvents = await getTimelineForTask(mainTaskId);
+    const aggregatedMainTaskEvents: AggregatedEvent[] = mainTaskEvents.map(event => ({
+      id: event.id,
+      timestamp: event.timestamp,
+      type: 'mainTaskEvent',
+      data: event,
+    }));
 
-    const [mainTaskEvents, subTasks] = await Promise.all([mainTaskEventsPromise, subTasksPromise]);
-
-    // Add source info to main task events
-    mainTaskEvents.forEach(event => {
-      event.source = 'mainTask';
+    // 2. Fetch sub-tasks and their timelines
+    const subTasks = await getSubTasks(mainTaskId);
+    const subTaskTimelinePromises = subTasks.map(async (subTask) => {
+      const events = await getTimelineForTask(subTask.id);
+      if (events.length > 0) {
+        return {
+          id: subTask.id,
+          timestamp: events[0].timestamp, // The latest event's timestamp for sorting
+          type: 'subTaskEventGroup' as const,
+          data: {
+            subTaskInfo: { id: subTask.id, name: subTask.name },
+            events: events,
+          },
+        };
+      }
+      return null;
     });
 
-    // 3. Fetch timelines for all sub-tasks
-    const subTaskTimelinePromises = subTasks.map(subTask => 
-      getTimelineForTask(subTask.id).then(events => 
-        events.map(event => ({
-          ...event,
-          source: 'subTask' as const,
-          subTaskInfo: { id: subTask.id, name: subTask.name }
-        }))
-      )
-    );
+    const subTaskEventGroupsWithNulls = await Promise.all(subTaskTimelinePromises);
+    const aggregatedSubTaskEvents = subTaskEventGroupsWithNulls.filter((group): group is AggregatedEvent => group !== null);
 
-    const subTaskTimelines = await Promise.all(subTaskTimelinePromises);
-    const allSubTaskEvents = subTaskTimelines.flat();
-
-    // 4. Combine and sort all events
-    const combinedEvents = [...mainTaskEvents, ...allSubTaskEvents];
+    // 3. Combine and sort
+    const combinedEvents = [...aggregatedMainTaskEvents, ...aggregatedSubTaskEvents];
     combinedEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
 
     return combinedEvents;
-
+    
   } catch (error) {
     console.error(`TimelineService: Failed to aggregate timeline for main task ${mainTaskId}`, error);
     return [];

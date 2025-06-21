@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import type { TimelineEvent } from '@/types';
+import type { AggregatedEvent } from '@/types';
 import { getTimelineForMainTask } from '@/services/timelineService';
 import { Loader2, History } from 'lucide-react';
 import { MainTaskTimelineEventCard } from './MainTaskTimelineEventCard';
@@ -12,7 +12,7 @@ interface MainTaskTimelineProps {
 }
 
 export function MainTaskTimeline({ mainTaskId }: MainTaskTimelineProps) {
-  const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const [events, setEvents] = useState<AggregatedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,8 +64,8 @@ export function MainTaskTimeline({ mainTaskId }: MainTaskTimelineProps) {
       {/* Vertical line */}
       <div className="absolute left-[35px] top-2 bottom-2 w-0.5 bg-border -translate-x-1/2"></div>
       <div className="space-y-2">
-        {events.map((event, index) => (
-          <MainTaskTimelineEventCard key={`${event.id}-${index}`} event={event} />
+        {events.map((event) => (
+          <MainTaskTimelineEventCard key={event.id} event={event} />
         ))}
       </div>
     </div>
