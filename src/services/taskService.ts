@@ -32,6 +32,7 @@ interface CreateTaskData {
   assignedToUids?: string[] | null;
   assignedToNames?: string[] | null;
   taskType?: 'standard' | 'collection';
+  reminderDays?: number | null;
 }
 
 const mapDocumentToTask = (docSnapshot: any): Task => {
@@ -45,12 +46,13 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
     description: data.description || '',
     status: data.status as TaskStatus,
     taskType: data.taskType || 'standard',
+    reminderDays: data.reminderDays || null,
     ownerUid: data.ownerUid,
     ownerName: data.ownerName || null,
     assignedToUids: data.assignedToUids || [],
     assignedToNames: data.assignedToNames || [],
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
-    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : (data.parentId ? new Date() : null)), // ensure subtask has date, main task can be null
+    dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : new Date()), // ensure subtask has date, main task can be null
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
     progress: data.progress, // Will be populated for main tasks by calling functions
     openIssueCount: data.openIssueCount, // Will be populated for main tasks
@@ -103,10 +105,14 @@ export const createTask = async (
   } else { 
     newTaskPayload.description = taskData.description || ''; 
     newTaskPayload.status = 'To Do'; 
-    newTaskPayload.dueDate = taskData.dueDate ? Timestamp.fromDate(taskData.dueDate) : null; 
+    if (taskData.dueDate === undefined || taskData.dueDate === null) {
+      throw new Error('Due date is required for main tasks.');
+    }
+    newTaskPayload.dueDate = Timestamp.fromDate(taskData.dueDate);
     newTaskPayload.assignedToUids = []; 
     newTaskPayload.assignedToNames = [];
     newTaskPayload.taskType = taskData.taskType || 'standard';
+    newTaskPayload.reminderDays = taskData.taskType === 'collection' ? (taskData.reminderDays || null) : null;
   }
 
   try {
@@ -336,12 +342,20 @@ export const getTasksByIds = async (taskIds: string[]): Promise<Task[]> => {
   return tasks;
 };
 
-export const getAllTasksForProject = async (projectId: string): Promise<Task[]> => {
+export const getAllProjectTasks = async (projectId: string): Promise<Task[]> => {
     if (!projectId) return [];
+    console.log(`taskService: getAllProjectTasks for projectId: ${projectId}`);
     const q = query(tasksCollection, where('projectId', '==', projectId));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(mapDocumentToTask);
-};
+    try {
+        const querySnapshot = await getDocs(q);
+        const tasks = querySnapshot.docs.map(mapDocumentToTask);
+        console.log(`taskService: Fetched ${tasks.length} total tasks for project ${projectId}.`);
+        return tasks;
+    } catch(e: any) {
+        console.error(`taskService: Error fetching all tasks for project ${projectId}`, e);
+        throw e;
+    }
+}
 
 interface UpdateTaskData {
     name?: string;
@@ -351,6 +365,7 @@ interface UpdateTaskData {
     assignedToUids?: string[] | null;
     assignedToNames?: string[] | null;
     taskType?: 'standard' | 'collection';
+    reminderDays?: number | null;
 }
 
 export const updateTask = async (
@@ -438,11 +453,17 @@ export const updateTask = async (
     }
     if (updates.taskType !== undefined && updates.taskType !== taskDataFromSnap.taskType) {
       updatePayload.taskType = updates.taskType;
+      updatePayload.reminderDays = updates.taskType === 'collection' ? (updates.reminderDays || null) : null;
+      detailsChanged = true;
+    } else if (updates.reminderDays !== undefined && updates.reminderDays !== taskDataFromSnap.reminderDays) {
+      updatePayload.reminderDays = taskDataFromSnap.taskType === 'collection' ? (updates.reminderDays || null) : null;
       detailsChanged = true;
     }
+
     if (updates.dueDate !== undefined) {
         const newDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
-        if (newDate?.toMillis() !== (taskDataFromSnap.dueDate ? Timestamp.fromDate(taskDataFromSnap.dueDate).toMillis() : null)) {
+        const oldDate = taskDataFromSnap.dueDate ? Timestamp.fromDate(taskDataFromSnap.dueDate) : null;
+        if (newDate?.toMillis() !== oldDate?.toMillis()) {
             updatePayload.dueDate = newDate;
             detailsChanged = true;
         }
@@ -457,7 +478,7 @@ export const updateTask = async (
         );
     }
     
-    const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt', 'taskType'];
+    const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt', 'taskType', 'reminderDays'];
     Object.keys(updatePayload).forEach(key => {
         if (!allowedMainTaskKeys.includes(key as string)) {
             delete updatePayload[key];

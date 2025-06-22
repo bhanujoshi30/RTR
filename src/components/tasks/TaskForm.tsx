@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from "@/components/ui/checkbox";
 import { CalendarIcon, Save, Loader2, Users, CircleDollarSign, Layers } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -41,9 +41,20 @@ const subTaskSchema = z.object({
 const mainTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
   description: z.string().max(1000).optional().nullable().default(null),
-  dueDate: z.date().optional().nullable().default(null),
+  dueDate: z.date({ required_error: "Due date is required." }),
   taskType: z.enum(taskTypes).default('standard'),
+  reminderDays: z.coerce.number().int().min(0).optional().nullable(),
+}).refine(data => {
+    if (data.taskType === 'collection' && data.dueDate && data.reminderDays) {
+        const daysUntilDue = differenceInDays(data.dueDate, new Date());
+        return data.reminderDays <= daysUntilDue;
+    }
+    return true;
+}, {
+    message: "Reminder days cannot be greater than days until the due date.",
+    path: ["reminderDays"],
 });
+
 
 type TaskFormValues = z.infer<typeof subTaskSchema> | z.infer<typeof mainTaskSchema>;
 
@@ -71,11 +82,14 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       name: task?.name || '',
       description: task?.description || (isSubTask ? '' : null),
       status: isSubTask ? (task?.status || 'To Do') : undefined, // status only for subTaskSchema
-      dueDate: task?.dueDate || (isSubTask ? undefined : null), // undefined for new sub-task to trigger validation
+      dueDate: task?.dueDate || undefined, 
       assignedToUids: isSubTask ? (task?.assignedToUids || []) : undefined, // assignedToUids only for subTaskSchema
       taskType: !isSubTask ? (task?.taskType || 'standard') : undefined,
+      reminderDays: !isSubTask ? (task?.reminderDays || null) : undefined,
     },
   });
+
+  const taskTypeWatcher = form.watch('taskType');
 
   useEffect(() => {
     if (isSubTask && user) {
@@ -126,14 +140,16 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       taskPayload.dueDate = subTaskData.dueDate; // Already a Date object
       taskPayload.assignedToUids = subTaskData.assignedToUids || [];
       taskPayload.assignedToNames = assignedToNamesForPayload || [];
+      taskPayload.taskType = 'standard';
     } else {
       const mainTaskData = data as z.infer<typeof mainTaskSchema>;
       taskPayload.description = mainTaskData.description || '';
-      taskPayload.dueDate = mainTaskData.dueDate || null;
+      taskPayload.dueDate = mainTaskData.dueDate;
       taskPayload.status = 'To Do';
       taskPayload.assignedToUids = []; 
       taskPayload.assignedToNames = [];
       taskPayload.taskType = mainTaskData.taskType;
+      taskPayload.reminderDays = (mainTaskData.taskType === 'collection' && mainTaskData.reminderDays) ? mainTaskData.reminderDays : null;
     }
 
 
@@ -341,13 +357,13 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 />
               </>
             )}
-            {!isSubTask && ( // Optional Due Date for Main Task
+            {!isSubTask && (
                 <FormField
                     control={form.control}
                     name="dueDate"
                     render={({ field }) => (
                     <FormItem className="flex flex-col">
-                        <FormLabel>Due Date (Optional)</FormLabel>
+                        <FormLabel>Due Date</FormLabel>
                         <Popover>
                         <PopoverTrigger asChild>
                             <FormControl>
@@ -376,6 +392,28 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                     </FormItem>
                     )}
                 />
+            )}
+             {taskTypeWatcher === 'collection' && !isSubTask && (
+              <FormField
+                control={form.control}
+                name="reminderDays"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Reminder (Days Before Due Date)</FormLabel>
+                    <FormControl>
+                      <Input 
+                        type="number" 
+                        placeholder="E.g., 7" 
+                        {...field} 
+                        value={field.value ?? ''}
+                        onChange={e => field.onChange(e.target.value === '' ? null : e.target.value)}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                    <p className="text-xs text-muted-foreground pt-1">Set how many days before the due date the reminder should start.</p>
+                  </FormItem>
+                )}
+              />
             )}
           </CardContent>
           <CardFooter>

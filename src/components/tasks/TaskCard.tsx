@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress'; 
 import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle, CircleDollarSign } from 'lucide-react';
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow, format, differenceInCalendarDays } from 'date-fns';
 import { updateTaskStatus, deleteTask, getSubTasks } from '@/services/taskService';
 import { hasOpenIssues } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
@@ -45,6 +45,15 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const [loadingSubTaskCount, setLoadingSubTaskCount] = useState(false);
   const [showProofDialog, setShowProofDialog] = useState(false);
   const { user } = useAuth();
+  const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (initialTask.taskType === 'collection' && initialTask.dueDate) {
+        const remaining = differenceInCalendarDays(initialTask.dueDate, new Date());
+        setDaysRemaining(remaining);
+    }
+  }, [initialTask.dueDate, initialTask.taskType]);
+
 
   const isActuallyMainTask = !task.parentId;
   const isCollectionTask = isActuallyMainTask && task.taskType === 'collection';
@@ -192,6 +201,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const showEditButton = isOwnerOfThisTask;
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
   const hasOpenIssuesForCard = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
+  const showReminder = task.taskType === 'collection' && daysRemaining !== null && task.reminderDays && daysRemaining >= 0 && daysRemaining <= task.reminderDays;
 
   return (
     <>
@@ -212,7 +222,12 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
               {cardIcon}
               <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {showReminder && (
+                <Badge variant="destructive" className="animate-pulse">
+                    Reminder: {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left
+                </Badge>
+              )}
               {hasOpenIssuesForCard && (
                 <Badge variant="outline" className="border-amber-500 text-amber-600 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />

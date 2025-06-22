@@ -43,6 +43,7 @@ export interface Task {
   description?: string;
   status: TaskStatus; // Status is user-editable only for sub-tasks
   taskType?: 'standard' | 'collection';
+  reminderDays?: number | null;
   createdAt: Date;
   dueDate: Date; // Made mandatory from previous change for sub-tasks, optional for main tasks
   ownerUid: string;

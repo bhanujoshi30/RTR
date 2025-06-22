@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList'; 
-import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User } from 'lucide-react'; 
+import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User, GanttChartSquare } from 'lucide-react'; 
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -30,6 +30,7 @@ import { ProjectForm } from '@/components/projects/ProjectForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectTimeline } from '@/components/timeline/ProjectTimeline';
+import { ProjectedTimeline } from '@/components/timeline/ProjectedTimeline';
 
 
 export default function ProjectDetailsPage() {
@@ -129,6 +130,7 @@ export default function ProjectDetailsPage() {
   
   const canManageProject = user && !isSupervisor && !isMember && !isClient;
   const displayProgress = project.progress !== undefined ? Math.round(project.progress) : 0;
+  const defaultTab = isClient ? "timeline" : "tasks";
 
   const ProjectDetailsCard = () => (
      <Card className="shadow-lg">
@@ -219,22 +221,14 @@ export default function ProjectDetailsPage() {
 
       <ProjectDetailsCard />
 
-      {isClient ? (
-        <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Project Timeline</CardTitle>
-                <CardDescription>A high-level history of all main tasks within this project.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <ProjectTimeline projectId={projectId} />
-            </CardContent>
-        </Card>
-      ) : (
-        <Tabs defaultValue="tasks" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> Main Tasks</TabsTrigger>
-            <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Project Timeline</TabsTrigger>
-            </TabsList>
+      <Tabs defaultValue={defaultTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
+            {!isClient && <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> Main Tasks</TabsTrigger>}
+            <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Activity Timeline</TabsTrigger>
+            <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> Projected Timeline</TabsTrigger>
+          </TabsList>
+          
+          {!isClient && (
             <TabsContent value="tasks" className="mt-6">
                 <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
                     <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -254,19 +248,37 @@ export default function ProjectDetailsPage() {
                     {user && <TaskList projectId={projectId} />}
                 </div>
             </TabsContent>
-            <TabsContent value="timeline" className="mt-6">
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Project Timeline</CardTitle>
-                        <CardDescription>A complete history of all main tasks and sub-tasks within this project.</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <ProjectTimeline projectId={projectId} />
-                    </CardContent>
-                </Card>
-            </TabsContent>
-        </Tabs>
-      )}
+          )}
+
+          <TabsContent value="timeline" className="mt-6">
+              <Card>
+                  <CardHeader>
+                      <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Activity Timeline</CardTitle>
+                      <CardDescription>
+                        {isClient
+                          ? "A high-level history of all main tasks within this project."
+                          : "A complete history of all main tasks and sub-tasks within this project."
+                        }
+                      </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      <ProjectTimeline projectId={projectId} />
+                  </CardContent>
+              </Card>
+          </TabsContent>
+          
+          <TabsContent value="projected" className="mt-6">
+              <Card>
+                  <CardHeader>
+                      <CardTitle className="flex items-center"><GanttChartSquare className="mr-2 h-5 w-5" /> Projected Timeline</CardTitle>
+                      <CardDescription>The planned schedule of all tasks and their due dates for this project.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                      <ProjectedTimeline projectId={projectId} />
+                  </CardContent>
+              </Card>
+          </TabsContent>
+      </Tabs>
     </div>
   );
 }
