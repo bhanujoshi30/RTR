@@ -23,8 +23,8 @@ export function ProjectList({ projects, isSupervisorView = false, isClientView =
     let message = "Get started by creating your first project.";
     
     if (isSupervisorView) {
-      title = "No Projects with Assigned Work";
-      message = "You currently have no tasks or issues assigned to you in any project.";
+      title = "Welcome to TaskFlow!";
+      message = "You are ready to go. Please contact your administrator to be assigned to projects and tasks.";
     } else if (isClientView) {
       title = "No Projects Assigned";
       message = "You have not been assigned to any projects yet.";
