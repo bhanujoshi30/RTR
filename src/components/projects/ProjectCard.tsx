@@ -19,6 +19,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
       case 'Not Started': return 'bg-gray-500 hover:bg-gray-500';
       case 'In Progress': return 'bg-blue-500 hover:bg-blue-500';
       case 'Completed': return 'bg-green-500 hover:bg-green-500';
+      case 'Payment Incomplete': return 'bg-amber-500 hover:bg-amber-500 text-white';
       default: return 'bg-primary';
     }
   };

@@ -1,18 +1,7 @@
 
 export type UserRole = 'admin' | 'supervisor' | 'member' | 'client';
 
-export interface User {
-  uid: string;
-  displayName: string | null;
-  email: string | null;
-  photoURL: string | null;
-  emailVerified?: boolean; 
-  role?: UserRole; 
-  createdAt?: Date; 
-  updatedAt?: Date; 
-}
-
-export type ProjectStatus = 'Not Started' | 'In Progress' | 'Completed';
+export type ProjectStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Payment Incomplete';
 export type TaskStatus = 'To Do' | 'In Progress' | 'Completed';
 
 export type IssueSeverity = 'Normal' | 'Critical';

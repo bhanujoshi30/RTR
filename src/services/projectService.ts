@@ -71,8 +71,14 @@ const mapDocumentToProject = (docSnapshot: any): Project => {
   };
 };
 
-const getDynamicStatusFromProgress = (progress: number): ProjectStatus => {
+const getDynamicStatusFromProgress = (progress: number, allMainTasks: Task[]): ProjectStatus => {
   if (progress >= 100) {
+    const hasIncompleteCollectionTasks = allMainTasks.some(
+      (task) => task.taskType === 'collection' && task.status !== 'Completed'
+    );
+    if (hasIncompleteCollectionTasks) {
+      return 'Payment Incomplete';
+    }
     return 'Completed';
   } else if (progress > 0) {
     return 'In Progress';
@@ -153,7 +159,7 @@ export const getUserProjects = async (userUid: string, userRole?: UserRole): Pro
     const projectsPromises = projectsFromDb.map(async (project) => {
       const mainTasks = await getProjectMainTasks(project.id);
       project.progress = await calculateProjectProgress(project.id, mainTasks);
-      project.status = getDynamicStatusFromProgress(project.progress);
+      project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
       return project;
     });
     const projects = await Promise.all(projectsPromises);
@@ -231,7 +237,7 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
         project.progress = 0;
       }
       
-      project.status = getDynamicStatusFromProgress(project.progress);
+      project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
 
       // Check for upcoming reminders
       const now = new Date();
@@ -300,7 +306,7 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       // If we passed the security checks, proceed to calculate progress and status
       const mainTasks = await getProjectMainTasks(projectId);
       projectData.progress = await calculateProjectProgress(projectId, mainTasks);
-      projectData.status = getDynamicStatusFromProgress(projectData.progress);
+      projectData.status = getDynamicStatusFromProgress(projectData.progress, mainTasks);
       return projectData;
       
     } else {
@@ -348,7 +354,7 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
   const projectsWithProgressAndStatusPromises = fetchedProjectsMapped.map(async (project) => {
     const mainTasks = await getProjectMainTasks(project.id);
     project.progress = await calculateProjectProgress(project.id, mainTasks);
-    project.status = getDynamicStatusFromProgress(project.progress);
+    project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
     return project;
   });
   const fetchedProjects = await Promise.all(projectsWithProgressAndStatusPromises);
