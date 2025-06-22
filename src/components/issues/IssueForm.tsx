@@ -32,9 +32,6 @@ interface Location {
   address?: string;
 }
 
-const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
-const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
-
 const issueSchema = z.object({
   title: z.string().min(3, { message: 'Issue title must be at least 3 characters' }).max(150),
   description: z.string().max(1000).optional(),
@@ -45,6 +42,9 @@ const issueSchema = z.object({
 });
 
 type IssueFormValues = z.infer<typeof issueSchema>;
+
+const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
+const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
 
 interface IssueFormProps {
   projectId: string;
@@ -305,7 +305,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           <FormField control={form.control} name="severity" render={({ field }) => ( <FormItem> <FormLabel>Severity</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select severity" /> </SelectTrigger> </FormControl> <SelectContent> {issueSeverities.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
           <FormField control={form.control} name="status" render={({ field }) => ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select status" /> </SelectTrigger> </FormControl> <SelectContent> {issueProgressStatuses.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
         </div>
-        <Controller control={form.control} name="assignedToUids" render={({ field }) => (
+        <FormField control={form.control} name="assignedToUids" render={({ field }) => (
           <FormItem>
             <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To (Team Members)</FormLabel>
             {loadingAssignableUsers && <p className="text-sm text-muted-foreground">Loading assignable users...</p>}
@@ -316,7 +316,17 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                 {assignableUsersForIssue.map(assignableUser => (
                   <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
-                    <FormControl> <Checkbox checked={field.value?.includes(assignableUser.uid)} onCheckedChange={(checked) => { const currentUids = field.value || []; return checked ? field.onChange([...currentUids, assignableUser.uid]) : field.onChange(currentUids.filter((uid) => uid !== assignableUser.uid)); }} /> </FormControl>
+                    <FormControl> 
+                      <Checkbox 
+                        checked={(field.value || []).includes(assignableUser.uid)} 
+                        onCheckedChange={(checked) => { 
+                          const currentUids = field.value || []; 
+                          return checked 
+                            ? field.onChange([...currentUids, assignableUser.uid]) 
+                            : field.onChange(currentUids.filter((uid) => uid !== assignableUser.uid)); 
+                        }} 
+                      /> 
+                    </FormControl>
                     <FormLabel className="font-normal"> {assignableUser.displayName || assignableUser.email} </FormLabel>
                   </FormItem>
                 ))}
