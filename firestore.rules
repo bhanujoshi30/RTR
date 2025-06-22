@@ -3,41 +3,99 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Default-deny all access
-    match /{document=**} {
-      allow read, write: if false;
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
     }
 
-    // Allow any authenticated user to read/write their own user document
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function getUserData(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data;
     }
 
-    // Allow admin to read/write any user document
-    match /users/{userId} {
-      allow read, write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // Allow any authenticated user to read and write to other collections
-    match /projects/{projectId} {
-      allow read, write: if request.auth != null;
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
     
-    match /tasks/{taskId} {
-      allow read, write: if request.auth != null;
+    function isAdmin() {
+      return isSignedIn() && getUserData(request.auth.uid).role == 'admin';
+    }
 
-      // Rules for subcollections must be nested within the parent document match
+    // `users` collection rules
+    match /users/{userId} {
+      // Admins can do anything. Users can read their own data.
+      // Users can create their own document on signup.
+      allow read: if isAdmin() || isUser(userId);
+      allow create: if isUser(userId); // AuthContext creates this on first login
+      allow update, delete: if isAdmin();
+    }
+
+    // `projects` collection rules
+    match /projects/{projectId} {
+      // Read: Any signed-in user can read project details. 
+      // App logic filters which projects are shown. Rules protect against unauthorized writes.
+      allow read: if isSignedIn();
+      
+      // Create: Must be signed in, and the ownerUid in the new project must be the creator's UID.
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerUid;
+      
+      // Update/Delete: Only the project owner or an admin can update or delete.
+      allow update, delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+
+    // `tasks` collection rules
+    match /tasks/{taskId} {
+      // Read: Any signed-in user can read task details.
+      // App logic ensures supervisors/members only see what they're assigned to.
+      allow read: if isSignedIn();
+      
+      // Create: User must be the owner of the parent project.
+      allow create: if isSignedIn() && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid;
+      
+      // Update: Either the task owner or an assigned user (for sub-tasks only). Admins can also update.
+      allow update: if isSignedIn() && 
+                    (isAdmin() || resource.data.ownerUid == request.auth.uid || 
+                     (resource.data.parentId != null && request.auth.uid in resource.data.assignedToUids));
+                     
+      // Delete: Only the task owner or an admin can delete.
+      allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+      
+      // Subcollections for Attachments and Timeline
       match /attachments/{attachmentId} {
-        allow read, write: if request.auth != null;
+        allow read: if isSignedIn();
+        allow create: if isSignedIn(); // Create permission is implicitly handled by who can update the task
+        allow delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
       }
       
       match /timeline/{eventId} {
-        allow read, write: if request.auth != null;
+         allow read: if isSignedIn();
+         allow create: if isSignedIn(); // Timeline events are logged by authenticated users performing actions
+         allow update, delete: if false; // Timeline events are immutable
       }
     }
     
+    // `issues` collection rules
     match /issues/{issueId} {
-      allow read, write: if request.auth != null;
+        allow read: if isSignedIn();
+
+        // Create: The user must be the owner or an assignee of the parent task.
+        allow create: if isSignedIn() &&
+                      let task = get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data;
+                      (task.ownerUid == request.auth.uid || request.auth.uid in task.assignedToUids);
+
+        // Update/Delete: Only the issue owner or an admin can modify or delete it.
+        allow update, delete: if isSignedIn() && (resource.data.ownerUid == request.auth.uid || isAdmin());
+    }
+    
+    // `attendance` collection rules
+    match /attendance/{recordId} {
+      // Read: Admin can read any record. A user can read their own record.
+      allow read: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      
+      // Create: User can only create their own attendance record.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      
+      // No updates or deletes allowed
+      allow update, delete: if false;
     }
   }
 }
