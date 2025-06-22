@@ -319,38 +319,25 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               </div>
               <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                 {assignableUsersForIssue.map((item) => (
-                  <FormField
-                    key={item.uid}
-                    control={form.control}
-                    name="assignedToUids"
-                    render={({ field }) => {
-                      return (
-                        <FormItem
-                          key={item.uid}
-                          className="flex flex-row items-center space-x-3 space-y-0"
-                        >
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value?.includes(item.uid)}
-                              onCheckedChange={(checked) => {
-                                const currentUids = field.value || [];
-                                return checked
-                                  ? field.onChange([...currentUids, item.uid])
-                                  : field.onChange(
-                                      currentUids.filter(
-                                        (value) => value !== item.uid
-                                      )
-                                    );
-                              }}
-                            />
-                          </FormControl>
-                          <FormLabel className="text-sm font-normal">
-                            {item.displayName || item.email} ({item.role})
-                          </FormLabel>
-                        </FormItem>
-                      );
-                    }}
-                  />
+                  <div key={item.uid} className="flex items-center space-x-3">
+                    <Checkbox
+                      id={`assignee-${item.uid}`}
+                      checked={field.value?.includes(item.uid)}
+                      onCheckedChange={(checked) => {
+                        const currentUids = field.value || [];
+                        const newUids = checked
+                          ? [...currentUids, item.uid]
+                          : currentUids.filter((value) => value !== item.uid);
+                        field.onChange(newUids);
+                      }}
+                    />
+                    <label
+                      htmlFor={`assignee-${item.uid}`}
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      {item.displayName || item.email} ({item.role})
+                    </label>
+                  </div>
                 ))}
               </div>
               <FormMessage />
@@ -396,5 +383,3 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Form>
   );
 }
-
-    
