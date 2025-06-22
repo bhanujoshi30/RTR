@@ -57,10 +57,10 @@ export function MainTaskTimelineEventCard({ event }: MainTaskTimelineEventCardPr
           </div>
           <div className="flex-1 space-y-1 pl-8 py-3">
              <p className="font-semibold text-sm">
-                {events.length} event{events.length > 1 ? 's' : ''} on sub-task: <span className="text-primary">{subTaskInfo.name}</span>
+                Sub-task: <span className="text-primary">{subTaskInfo.name}</span>
              </p>
              <p className="text-xs text-muted-foreground">
-                (Details hidden for client view)
+                Last updated {formatDistanceToNow(event.timestamp, { addSuffix: true })}
              </p>
           </div>
         </div>
