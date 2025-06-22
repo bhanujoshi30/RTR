@@ -99,6 +99,7 @@ export type TimelineEventType =
   | 'ISSUE_CREATED'
   | 'ISSUE_STATUS_CHANGED'
   | 'ATTACHMENT_DELETED'
+  | 'ISSUE_DELETED'
   | 'ATTACHMENT_ADDED';
 
 export interface TimelineEvent {
@@ -138,5 +139,19 @@ export interface ProjectAggregatedEvent {
     };
     // The events here are the ones from getTimelineForMainTask
     events: AggregatedEvent[];
+  };
+}
+
+export interface AttendanceRecord {
+  id: string;
+  userId: string;
+  userName: string;
+  date: string; // YYYY-MM-DD for easy querying
+  timestamp: Date;
+  photoUrl: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+    address?: string;
   };
 }

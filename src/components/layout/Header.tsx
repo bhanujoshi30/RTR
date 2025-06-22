@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users, CalendarCheck } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 
@@ -31,7 +31,6 @@ export function Header() {
       router.push('/login');
     } catch (error) {
       console.error('Logout failed:', error);
-      // Handle logout error (e.g., show toast)
     }
   };
 
@@ -45,12 +44,12 @@ export function Header() {
   ];
 
   const conditionalNavLinks = [];
-  // "New Project" link hidden for supervisors, members, and clients
   if (user && !isSupervisor && !isMember && !isClient) { 
     conditionalNavLinks.push({ href: '/projects/create', label: 'New Project', icon: <FolderPlus className="mr-2 h-4 w-4" /> });
   }
-  if (isAdmin) { // "Users" tab only for admin
+  if (isAdmin) {
     conditionalNavLinks.push({ href: '/users', label: 'Users', icon: <Users className="mr-2 h-4 w-4" /> });
+    conditionalNavLinks.push({ href: '/attendance', label: 'Attendance', icon: <CalendarCheck className="mr-2 h-4 w-4" /> });
   }
   
   const navLinks = [...baseNavLinks, ...conditionalNavLinks];

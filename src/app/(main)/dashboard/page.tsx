@@ -3,22 +3,51 @@
 
 import { ProjectList } from '@/components/projects/ProjectList';
 import { Button } from '@/components/ui/button';
-import { FolderPlus } from 'lucide-react';
+import { FolderPlus, Camera } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project, Task as AppTask } from '@/types'; // Task aliased as AppTask if needed, but direct use is fine if no conflict
+import type { Project, Task as AppTask } from '@/types';
 import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects, getClientProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
-// Firestore functions are not directly used here for counts anymore due to service layer abstraction
+import { hasUserSubmittedAttendanceToday } from '@/services/attendanceService';
+import { AttendanceDialog } from '@/components/attendance/AttendanceDialog';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const [projectsToDisplay, setProjectsToDisplay] = useState<Project[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+
+  // Attendance state
+  const [showAttendanceDialog, setShowAttendanceDialog] = useState(false);
+  const [checkingAttendance, setCheckingAttendance] = useState(true);
+
+  useEffect(() => {
+    if (authLoading || !user) {
+        if(!authLoading) setCheckingAttendance(false);
+        return;
+    }
+
+    const checkAttendance = async () => {
+        setCheckingAttendance(true);
+        if (user.role === 'member' || user.role === 'supervisor') {
+            const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+            try {
+                const submitted = await hasUserSubmittedAttendanceToday(user.uid, today);
+                if (!submitted) {
+                    setShowAttendanceDialog(true);
+                }
+            } catch (e) {
+                console.error("Failed to check attendance status", e);
+            }
+        }
+        setCheckingAttendance(false);
+    };
+    checkAttendance();
+  }, [user, authLoading]);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -65,7 +94,6 @@ export default function DashboardPage() {
           console.log(`DashboardPage: ${userRoleForLog} - Combined ${allRelevantProjectIds.length} unique projectIds from user's work:`, allRelevantProjectIds);
 
           if (allRelevantProjectIds.length > 0) {
-            // getProjectsByIds now calculates progress dynamically
             const baseProjectsForUser = await getProjectsByIds(allRelevantProjectIds, user.uid, user.role);
             console.log(`DashboardPage: ${userRoleForLog} - Fetched ${baseProjectsForUser.length} base projects for user-specific counts.`);
 
@@ -85,7 +113,7 @@ export default function DashboardPage() {
               console.log(`DashboardPage: [${userRoleForLog} View][Project: ${project.id}] User-involved main task count (via assigned sub-tasks): ${countMainTasksForUser}`);
 
               return {
-                ...project, // project already has calculated progress
+                ...project,
                 totalMainTasks: countMainTasksForUser,
                 totalSubTasks: countSubTasksForUser,
                 totalOpenIssues: countOpenIssuesForUser,
@@ -96,7 +124,6 @@ export default function DashboardPage() {
           }
         } else if (isAdminOrOwner) {
           console.log(`DashboardPage: User is admin/owner (UID: ${user.uid}). Fetching owned projects and project-wide counts.`);
-          // getUserProjects now calculates progress dynamically
           const baseProjectsAdmin = await getUserProjects(user.uid, user.role);
           console.log(`DashboardPage: Admin/Owner - Fetched ${baseProjectsAdmin.length} base projects. IDs: ${baseProjectsAdmin.map(p=>p.id).join(', ')}`);
 
@@ -126,14 +153,14 @@ export default function DashboardPage() {
                   console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved openIssueCount: ${openIssueCount}`);
                   
                   return {
-                    ...project, // project already has calculated progress
+                    ...project,
                     totalMainTasks: mainTaskCount,
                     totalSubTasks: subTaskCount,
                     totalOpenIssues: openIssueCount,
                   };
                 } catch (err) {
                   console.error(`DashboardPage: Failed to get counts for project ${project.id}. Returning project with zero counts.`, err);
-                  return { // Return gracefully on error for one project
+                  return {
                     ...project,
                     totalMainTasks: 0,
                     totalSubTasks: 0,
@@ -175,8 +202,9 @@ export default function DashboardPage() {
   }
 
   const canCreateProject = user && !isSupervisor && !isMember && !isClient;
+  const canSubmitAttendance = user?.role === 'member' || user?.role === 'supervisor';
 
-  if (authLoading || dashboardLoading) {
+  if (authLoading || dashboardLoading || checkingAttendance) {
     return (
       <div className="flex h-[calc(100vh-10rem)] items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -186,20 +214,37 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-        <h1 className="font-headline text-3xl font-semibold tracking-tight">{pageTitle}</h1>
-        {canCreateProject && (
-          <Button asChild>
-            <Link href="/projects/create">
-              <FolderPlus className="mr-2 h-4 w-4" />
-              New Project
-            </Link>
-          </Button>
+    <>
+       {canSubmitAttendance && (
+          <AttendanceDialog
+              open={showAttendanceDialog}
+              onOpenChange={setShowAttendanceDialog}
+              onSuccess={() => setShowAttendanceDialog(false)}
+          />
         )}
+      <div className="space-y-8">
+        <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <h1 className="font-headline text-3xl font-semibold tracking-tight">{pageTitle}</h1>
+          <div className="flex items-center gap-2">
+            {canSubmitAttendance && (
+                <Button variant="outline" onClick={() => setShowAttendanceDialog(true)}>
+                    <Camera className="mr-2 h-4 w-4" />
+                    Submit Attendance
+                </Button>
+            )}
+            {canCreateProject && (
+              <Button asChild>
+                <Link href="/projects/create">
+                  <FolderPlus className="mr-2 h-4 w-4" />
+                  New Project
+                </Link>
+              </Button>
+            )}
+          </div>
+        </div>
+        {dashboardError && <p className="text-center text-destructive py-4">{dashboardError}</p>}
+        {!dashboardError && <ProjectList projects={projectsToDisplay} isSupervisorView={isSupervisor || isMember} isClientView={isClient} />}
       </div>
-      {dashboardError && <p className="text-center text-destructive py-4">{dashboardError}</p>}
-      {!dashboardError && <ProjectList projects={projectsToDisplay} isSupervisorView={isSupervisor || isMember} isClientView={isClient} />}
-    </div>
+    </>
   );
 }
