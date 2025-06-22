@@ -325,34 +325,25 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               {!loadingAssignableUsers && assignableUsersForIssue.length > 0 && (
                 <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                   {assignableUsersForIssue.map((assignableUser) => (
-                    <FormField
-                      key={assignableUser.uid}
-                      control={form.control}
-                      name="assignedToUids"
-                      render={({ field }) => {
-                        return (
-                          <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                              <Checkbox
-                                checked={field.value?.includes(assignableUser.uid)}
-                                onCheckedChange={(checked) => {
-                                  return checked
-                                    ? field.onChange([...(field.value || []), assignableUser.uid])
-                                    : field.onChange(
-                                        (field.value || []).filter(
-                                          (value) => value !== assignableUser.uid
-                                        )
-                                      )
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              {assignableUser.displayName || assignableUser.email}
-                            </FormLabel>
-                          </FormItem>
-                        )
-                      }}
-                    />
+                    <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value?.includes(assignableUser.uid)}
+                          onCheckedChange={(checked) => {
+                            return checked
+                              ? field.onChange([...(field.value || []), assignableUser.uid])
+                              : field.onChange(
+                                  (field.value || []).filter(
+                                    (value) => value !== assignableUser.uid
+                                  )
+                                );
+                          }}
+                        />
+                      </FormControl>
+                      <FormLabel className="font-normal">
+                        {assignableUser.displayName || assignableUser.email}
+                      </FormLabel>
+                    </FormItem>
                   ))}
                 </div>
               )}
