@@ -16,14 +16,14 @@ import {
 import { ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { logTimelineEvent } from './timelineService';
 
-interface AttachmentMetadata {
+export interface AttachmentMetadata {
   projectId: string;
   taskId: string;
   ownerUid: string;
   ownerName: string;
   url: string;
   filename: string;
-  reportType: 'daily-progress' | 'completion-proof';
+  reportType: 'daily-progress' | 'completion-proof' | 'issue-update-proof';
   location?: {
     latitude: number;
     longitude: number;

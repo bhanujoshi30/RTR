@@ -158,9 +158,10 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       const userStamp = user.displayName || user.email || 'Unknown User';
       
       const infoLine1 = `${userStamp} | ${timeStamp}`;
-      const infoLine2 = location?.address || (location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Location N/A');
+      const coords = location ? `(Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)})` : '';
+      const infoLine2 = `${location?.address || 'Location data unavailable.'} ${coords}`.trim();
 
-      const fontSize = Math.max(20, Math.round(canvas.width / 75)); // Made font smaller to fit address
+      const fontSize = Math.max(20, Math.round(canvas.width / 75)); 
       context.font = `bold ${fontSize}px Arial`;
       context.textAlign = 'right';
       context.textBaseline = 'bottom';

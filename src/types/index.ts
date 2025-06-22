@@ -76,7 +76,7 @@ export interface Attachment {
   ownerName: string;
   url: string;
   filename: string;
-  reportType: 'daily-progress' | 'completion-proof';
+  reportType: 'daily-progress' | 'completion-proof' | 'issue-update-proof';
   location?: {
     latitude: number;
     longitude: number;

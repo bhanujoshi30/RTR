@@ -19,7 +19,8 @@ import {
   runTransaction,
   getCountFromServer,
 } from 'firebase/firestore';
-import { logTimelineEvent } from '@/services/timelineService';
+import { addAttachmentMetadata, type AttachmentMetadata } from './attachmentService';
+import { logTimelineEvent } from './timelineService';
 
 const issuesCollection = collection(db, 'issues');
 
@@ -120,7 +121,6 @@ export const getTaskIssues = async (taskId: string, userUid: string, isSuperviso
     return [];
   }
 
-  // Query without ordering to avoid composite index requirement.
   const q = query(
     issuesCollection,
     where('taskId', '==', taskId)
@@ -130,7 +130,6 @@ export const getTaskIssues = async (taskId: string, userUid: string, isSuperviso
     const querySnapshot = await getDocs(q);
     const issues = querySnapshot.docs.map(mapDocumentToIssue);
     
-    // Sort in application code to avoid index dependency.
     issues.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
     return issues;
@@ -145,7 +144,6 @@ export const getOpenIssuesForTaskIds = async (taskIds: string[]): Promise<Issue[
     return [];
   }
   const issues: Issue[] = [];
-  // Firestore 'in' query limit is 30
   for (let i = 0; i < taskIds.length; i += 30) {
     const chunk = taskIds.slice(i, i + 30);
     const q = query(
@@ -163,7 +161,6 @@ export const getOpenIssuesForTaskIds = async (taskIds: string[]): Promise<Issue[
         if (error.message?.includes("index")) {
             console.error("Firestore query requires an index for issues. Fields: 'taskId' (IN), 'status' (==).");
         }
-        // Continue to next chunk on error
     }
   }
   return issues;
@@ -173,7 +170,6 @@ export const getAllIssuesAssignedToUser = async (userUid: string): Promise<Issue
   if (!userUid) return [];
   console.log(`issueService: getAllIssuesAssignedToUser for userUid: ${userUid}`);
 
-  // Query without ordering to avoid composite index requirement.
   const q = query(
     issuesCollection,
     where('assignedToUids', 'array-contains', userUid)
@@ -183,7 +179,6 @@ export const getAllIssuesAssignedToUser = async (userUid: string): Promise<Issue
     const querySnapshot = await getDocs(q);
     const issues = querySnapshot.docs.map(mapDocumentToIssue);
 
-    // Sort in application code.
     issues.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
     if (issues.length === 0) {
@@ -261,8 +256,6 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
 
   try {
     await updateDoc(issueDocRef, updatePayload as any);
-    
-    // Logic to update parent task is now in the component layer (IssueForm)
 
     if (updates.status && updates.status !== issueData.status) {
         await logTimelineEvent(
@@ -272,7 +265,6 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
             `changed status of issue "${issueData.title}" to '${updates.status}'.`,
             { issueId, oldStatus: issueData.status, newStatus: updates.status, title: issueData.title }
         );
-        // Note: Logic to reopen parent task is now in component
     }
 
   } catch (error: any) {
@@ -281,11 +273,17 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
   }
 };
 
+interface IssueProof {
+  comments: string;
+  attachment: Omit<AttachmentMetadata, 'projectId' | 'taskId' | 'ownerUid' | 'ownerName'>;
+}
+
 export const updateIssueStatus = async (
   issueId: string, 
   userUid: string, 
   newStatus: IssueProgressStatus, 
-  userRole?: UserRole
+  userRole?: UserRole,
+  proof?: IssueProof
 ): Promise<void> => {
   if (!userUid) throw new Error('User not authenticated');
 
@@ -302,17 +300,49 @@ export const updateIssueStatus = async (
   }
 
   try {
-    if (oldStatus !== newStatus) {
-        await updateDoc(issueDocRef, { status: newStatus, updatedAt: serverTimestamp() as Timestamp });
-        await logTimelineEvent(
-            issueData.taskId,
-            userUid,
-            'ISSUE_STATUS_CHANGED',
-            `changed status of issue "${issueData.title}" to '${newStatus}'.`,
-            { issueId, oldStatus, newStatus, title: issueData.title }
-        );
+    if (oldStatus === newStatus) return; // No change needed
+
+    if (proof) {
+      // Create attachment and update issue status in a transaction/batch
+      const ownerName = (await getDoc(doc(db, 'users', userUid))).data()?.displayName || 'Unknown User';
+      
+      await addAttachmentMetadata({
+        projectId: issueData.projectId,
+        taskId: issueData.taskId,
+        ownerUid: userUid,
+        ownerName: ownerName,
+        ...proof.attachment
+      });
+
+      await updateDoc(issueDocRef, { status: newStatus, updatedAt: serverTimestamp() as Timestamp });
+      
+      await logTimelineEvent(
+          issueData.taskId,
+          userUid,
+          'ISSUE_STATUS_CHANGED',
+          `changed status of issue "${issueData.title}" to '${newStatus}' with comments and proof.`,
+          { 
+            issueId, 
+            oldStatus, 
+            newStatus, 
+            title: issueData.title,
+            comments: proof.comments,
+            attachmentUrl: proof.attachment.url,
+          }
+      );
+
+    } else {
+      // This path is for future use if some status changes don't require proof.
+      // Currently, UI forces proof.
+      await updateDoc(issueDocRef, { status: newStatus, updatedAt: serverTimestamp() as Timestamp });
+      await logTimelineEvent(
+          issueData.taskId,
+          userUid,
+          'ISSUE_STATUS_CHANGED',
+          `changed status of issue "${issueData.title}" to '${newStatus}'.`,
+          { issueId, oldStatus, newStatus, title: issueData.title }
+      );
     }
-    // Note: Logic to reopen parent task is now in component
   } catch (error: any) {
      console.error('issueService: Error updating issue status for ID:', issueId, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;

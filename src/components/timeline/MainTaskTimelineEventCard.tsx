@@ -11,6 +11,31 @@ interface MainTaskTimelineEventCardProps {
   event: AggregatedEvent;
 }
 
+const renderDescriptionWithLink = (event: TimelineEvent) => {
+  if (event.type === 'ATTACHMENT_ADDED' && event.details?.url && event.details?.filename) {
+    const filename = event.details.filename as string;
+    // Ensure description is a string before splitting
+    const description = typeof event.description === 'string' ? event.description : '';
+    const parts = description.split(`"${filename}"`);
+    return (
+      <p className="text-sm text-foreground">
+        <span className="font-semibold">{event.author.name}</span>
+        {parts[0]}
+        <a href={event.details.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+          "{filename}"
+        </a>
+        {parts[1]}
+      </p>
+    );
+  }
+  return (
+    <p className="text-sm text-foreground">
+      <span className="font-semibold">{event.author.name}</span> {event.description}
+    </p>
+  );
+};
+
+
 export function MainTaskTimelineEventCard({ event }: MainTaskTimelineEventCardProps) {
   // Case 1: It's a group of sub-task events
   if (event.type === 'subTaskEventGroup') {
@@ -45,9 +70,7 @@ export function MainTaskTimelineEventCard({ event }: MainTaskTimelineEventCardPr
                       <div key={subEvent.id} className="relative">
                         {/* Dot for each sub-event */}
                         <div className="absolute -left-1.5 top-2 h-1.5 w-1.5 rounded-full bg-border" />
-                        <p className="text-sm text-foreground">
-                          <span className="font-semibold">{subEvent.author.name}</span> {subEvent.description}
-                        </p>
+                        {renderDescriptionWithLink(subEvent)}
                         <p className="text-xs text-muted-foreground">
                           {formatDistanceToNow(subEvent.timestamp, { addSuffix: true })}
                         </p>
