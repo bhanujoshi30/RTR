@@ -1,5 +1,6 @@
 
 
+
 import { db } from '@/lib/firebase';
 import type { Task, TaskStatus, UserRole, AggregatedEvent, ProjectAggregatedEvent, TimelineEvent } from '@/types';
 import {
@@ -581,6 +582,27 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
         `changed status from '${oldStatus}' to '${status}'.`,
         { oldStatus, newStatus: status }
       );
+
+      if (status === 'Completed' && taskData.parentId) {
+        const subTasks = await getSubTasks(taskData.parentId);
+        const allComplete = subTasks.every(st => {
+            if (st.id === taskId) return true; // The one we just updated
+            return st.status === 'Completed';
+        });
+
+        if (allComplete) {
+            const mainTaskDocRef = doc(db, 'tasks', taskData.parentId);
+            const mainTaskSnap = await getDoc(mainTaskDocRef);
+            if (mainTaskSnap.exists()) {
+                await logTimelineEvent(
+                    taskData.parentId,
+                    userUid,
+                    'MAIN_TASK_COMPLETED',
+                    `completed the main task.`
+                );
+            }
+        }
+      }
     }
   } else {
     console.warn(`taskService: Attempted to update status for standard main task ${taskId} via updateTaskStatus, which is not directly applicable. Status is derived from sub-tasks.`);

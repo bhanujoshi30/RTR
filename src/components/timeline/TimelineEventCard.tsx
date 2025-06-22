@@ -30,9 +30,10 @@ const eventIcons: Record<TimelineEventType, React.ElementType> = {
   ASSIGNMENT_CHANGED: UserPlus,
   ISSUE_CREATED: Bug,
   ISSUE_STATUS_CHANGED: AlertCircle,
-  ATTACHMENT_ADDED: Paperclip,
-  ISSUE_DELETED: Trash2,
   ATTACHMENT_DELETED: FileX,
+  ISSUE_DELETED: Trash2,
+  ATTACHMENT_ADDED: Paperclip,
+  MAIN_TASK_COMPLETED: CheckCircle2,
 };
 
 const renderDescription = (event: TimelineEvent) => {
