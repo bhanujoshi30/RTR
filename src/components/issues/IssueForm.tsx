@@ -309,7 +309,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         <FormField
           control={form.control}
           name="assignedToUids"
-          render={() => (
+          render={({ field }) => (
             <FormItem>
               <div className="mb-2">
                 <FormLabel className="flex items-center">
@@ -332,37 +332,26 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               {!loadingAssignableUsers && assignableUsersForIssue.length > 0 && (
                 <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                     {assignableUsersForIssue.map((item) => (
-                      <FormField
+                       <FormItem
                         key={item.uid}
-                        control={form.control}
-                        name="assignedToUids"
-                        render={({ field }) => {
-                          return (
-                            <FormItem
-                              key={item.uid}
-                              className="flex flex-row items-start space-x-3 space-y-0"
-                            >
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(item.uid)}
-                                  onCheckedChange={(checked) => {
-                                    return checked
-                                      ? field.onChange([...(field.value || []), item.uid])
-                                      : field.onChange(
-                                          field.value?.filter(
-                                            (value) => value !== item.uid
-                                          )
-                                        )
-                                  }}
-                                />
-                              </FormControl>
-                              <FormLabel className="font-normal text-sm cursor-pointer">
-                                {item.displayName || item.email} ({item.role})
-                              </FormLabel>
-                            </FormItem>
-                          )
-                        }}
-                      />
+                        className="flex flex-row items-start space-x-3 space-y-0"
+                      >
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value?.includes(item.uid)}
+                            onCheckedChange={(checked) => {
+                              const currentUids = field.value || [];
+                              const newUids = checked
+                                ? [...currentUids, item.uid]
+                                : currentUids.filter((value) => value !== item.uid);
+                              field.onChange(newUids);
+                            }}
+                          />
+                        </FormControl>
+                        <FormLabel className="font-normal text-sm cursor-pointer">
+                          {item.displayName || item.email} ({item.role})
+                        </FormLabel>
+                      </FormItem>
                     ))}
                 </div>
               )}
@@ -407,5 +396,4 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         </div>
       </form>
     </Form>
-  );
-}
+  )
