@@ -3,8 +3,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getTaskById, deleteTask } from '@/services/taskService';
-import type { Task, UserRole } from '@/types';
+import { getTaskById, deleteTask, updateTaskStatus } from '@/services/taskService';
+import type { Task, UserRole, TaskStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -14,7 +14,7 @@ import { SubTaskList } from '@/components/tasks/SubTaskList';
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, Users, Camera, CircleDollarSign } from 'lucide-react';
+import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, Users, Camera, CheckCircle, RotateCcw } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -52,6 +52,8 @@ export default function TaskDetailsPage() {
   const canEditCurrentTask = isOwner;
   const canDeleteCurrentTask = isOwner; 
   const canAddSubTask = isOwner && isMainTask && !isCollectionTask;
+  const canChangeCollectionStatus = isOwner && isCollectionTask;
+
 
   const fetchTaskDetails = async () => {
     if (authLoading || !user || !taskId) return;
@@ -127,6 +129,21 @@ export default function TaskDetailsPage() {
     }
   };
 
+  const handleCollectionStatusChange = async (newStatus: TaskStatus) => {
+    if (!task || !user || !canChangeCollectionStatus) return;
+    try {
+      await updateTaskStatus(task.id, user.uid, newStatus, user.role);
+      toast({ title: 'Task Updated', description: `"${task.name}" has been marked as ${newStatus}.` });
+      fetchTaskDetails(); // Refetch to update UI
+    } catch (error: any) {
+      toast({
+        title: 'Update Failed',
+        description: error.message || 'Could not update the task status.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const getStatusColor = (status: Task['status']) => {
     switch (status) {
       case 'To Do': return 'bg-amber-500 hover:bg-amber-500';
@@ -182,11 +199,11 @@ export default function TaskDetailsPage() {
           <CardHeader>
             <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
               <div className="flex items-center gap-2">
-                  {isCollectionTask ? <CircleDollarSign className="h-7 w-7 text-primary" /> : (isMainTask ? <Layers className="h-7 w-7 text-primary" /> : <ListChecks className="h-7 w-7 text-primary" />)}
+                  {isCollectionTask ? <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-7 w-7 text-primary"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg> : (isMainTask ? <Layers className="h-7 w-7 text-primary" /> : <ListChecks className="h-7 w-7 text-primary" />)}
                   <CardTitle className="font-headline text-3xl tracking-tight">{task.name}</CardTitle>
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                {isSubTask && task.status && (
+                {task.status && (isSubTask || isCollectionTask) && (
                   <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground text-base px-3 py-1`}>
                     {task.status}
                   </Badge>
@@ -196,6 +213,16 @@ export default function TaskDetailsPage() {
                     <Button variant="outline" size="sm" onClick={() => setShowDailyReportDialog(true)}>
                         <Camera className="mr-2 h-4 w-4" /> Daily Progress
                     </Button>
+                )}
+                {isCollectionTask && canChangeCollectionStatus && task.status !== 'Completed' && (
+                  <Button variant="outline" size="sm" onClick={() => handleCollectionStatusChange('Completed')}>
+                      <CheckCircle className="mr-2 h-4 w-4" /> Mark as Complete
+                  </Button>
+                )}
+                {isCollectionTask && canChangeCollectionStatus && task.status === 'Completed' && (
+                  <Button variant="outline" size="sm" onClick={() => handleCollectionStatusChange('To Do')}>
+                      <RotateCcw className="mr-2 h-4 w-4" /> Reopen Task
+                  </Button>
                 )}
                 {canEditCurrentTask && (
                   <Dialog open={showAddEditTaskModal && !!editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen);}}>

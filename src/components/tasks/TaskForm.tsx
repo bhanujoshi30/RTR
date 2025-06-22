@@ -18,7 +18,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarIcon, Save, Loader2, Users, CircleDollarSign, Layers } from 'lucide-react';
+import { CalendarIcon, Save, Loader2, Users, Layers } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -44,15 +44,6 @@ const mainTaskSchema = z.object({
   dueDate: z.date({ required_error: "Due date is required." }),
   taskType: z.enum(taskTypes).default('standard'),
   reminderDays: z.coerce.number().int().min(0).optional().nullable(),
-}).refine(data => {
-    if (data.taskType === 'collection' && data.dueDate && data.reminderDays) {
-        const daysUntilDue = differenceInDays(data.dueDate, new Date());
-        return data.reminderDays <= daysUntilDue;
-    }
-    return true;
-}, {
-    message: "Reminder days cannot be greater than days until the due date.",
-    path: ["reminderDays"],
 });
 
 
@@ -222,7 +213,8 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                               <RadioGroupItem value="collection" />
                             </FormControl>
                             <FormLabel className="font-normal flex items-center gap-2">
-                                <CircleDollarSign className="h-4 w-4 text-muted-foreground" /> Collection Task (payment reminder)
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
+                                Collection Task (payment reminder)
                             </FormLabel>
                           </FormItem>
                         </RadioGroup>

@@ -3,15 +3,17 @@
 
 import type { Task } from '@/types';
 import { format } from 'date-fns';
-import { Layers, ListChecks, CircleDollarSign } from 'lucide-react';
+import { Layers, ListChecks } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface ProjectedTimelineItemProps {
   task: Task;
 }
 
+const RupeeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
+
 const getTaskType = (task: Task) => {
-  if (task.taskType === 'collection') return { icon: CircleDollarSign, label: 'Collection' };
+  if (task.taskType === 'collection') return { icon: RupeeIcon, label: 'Collection' };
   if (task.parentId) return { icon: ListChecks, label: 'Sub-task' };
   return { icon: Layers, label: 'Main Task' };
 };

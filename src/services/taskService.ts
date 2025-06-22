@@ -526,33 +526,35 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
   const taskData = mapDocumentToTask(taskSnap);
   const isOwner = taskData.ownerUid === userUid;
   const isAssignedUser = !!taskData.parentId && (taskData.assignedToUids?.includes(userUid) ?? false);
+  const isCollectionTask = !taskData.parentId && taskData.taskType === 'collection';
 
-  if (taskData.parentId) { 
-    if (isOwner || isAssignedUser) { 
-      if (status === 'Completed') {
+  if (taskData.parentId || isCollectionTask) {
+    if (!isOwner && !isAssignedUser) {
+      throw new Error('Access denied for status update. Task not owned by you, or you are not assigned to it.');
+    }
+
+    if (status === 'Completed') {
+      if (taskData.parentId) {
         const openIssuesExist = await hasOpenIssues(taskId);
         if (openIssuesExist) {
           throw new Error('Cannot complete sub-task: There are still open issues associated with it.');
         }
       }
-      
-      const oldStatus = taskData.status;
-      if (oldStatus !== status) {
-        await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
-        await logTimelineEvent(
-          taskId,
-          userUid,
-          'STATUS_CHANGED',
-          `changed status from '${oldStatus}' to '${status}'.`,
-          { oldStatus, newStatus: status }
-        );
-      }
+    }
 
-    } else {
-      throw new Error('Access denied for status update. Task not owned by you, or you are not assigned to it.');
+    const oldStatus = taskData.status;
+    if (oldStatus !== status) {
+      await updateDoc(taskDocRef, { status, updatedAt: serverTimestamp() as Timestamp });
+      await logTimelineEvent(
+        taskId,
+        userUid,
+        'STATUS_CHANGED',
+        `changed status from '${oldStatus}' to '${status}'.`,
+        { oldStatus, newStatus: status }
+      );
     }
   } else {
-    console.warn(`taskService: Attempted to update status for main task ${taskId} via updateTaskStatus, which is not directly applicable. Main task status is derived or not set this way.`);
+    console.warn(`taskService: Attempted to update status for standard main task ${taskId} via updateTaskStatus, which is not directly applicable. Status is derived from sub-tasks.`);
   }
 };
 

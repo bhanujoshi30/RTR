@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress'; 
-import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle, CircleDollarSign } from 'lucide-react';
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react';
 import { formatDistanceToNow, format, differenceInCalendarDays } from 'date-fns';
 import { updateTaskStatus, deleteTask, getSubTasks } from '@/services/taskService';
 import { hasOpenIssues } from '@/services/issueService';
@@ -157,6 +157,17 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
       }
     }
   };
+  
+  const handleCollectionStatusChange = async (newStatus: TaskStatus) => {
+    if (!user || !isOwnerOfThisTask || !isCollectionTask) return;
+    try {
+      await updateTaskStatus(task.id, user.uid, newStatus, user.role);
+      toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
+      onTaskUpdated();
+    } catch (error: any) {
+      toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
+    }
+  };
 
   const handleDeleteTask = async () => {
     if (!user || !task.id || !canFullyEditOrDeleteThisTask) {
@@ -197,7 +208,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
     router.push(`/projects/${task.projectId}/tasks/${task.id}/edit`);
   };
 
-  const cardIcon = isCollectionTask ? <CircleDollarSign className="h-6 w-6 text-primary" /> : (isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />);
+  const RupeeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>;
+  const cardIcon = isCollectionTask ? <RupeeIcon /> : (isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />);
   const showEditButton = isOwnerOfThisTask;
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
   const hasOpenIssuesForCard = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
@@ -234,7 +246,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   {task.openIssueCount} Open Issue{task.openIssueCount !== 1 ? 's' : ''}
                 </Badge>
               )}
-              {!isActuallyMainTask && task.status && (
+              {(isCollectionTask || !isActuallyMainTask) && task.status && (
                 <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
                   {task.status}
                 </Badge>
@@ -285,6 +297,16 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
           )}
 
           <div className="flex items-center justify-end gap-2 pt-2">
+              {isCollectionTask && isOwnerOfThisTask && task.status !== 'Completed' && (
+                <Button size="sm" variant="outline" onClick={() => handleCollectionStatusChange('Completed')}>
+                    <CheckCircle className="mr-2 h-4 w-4" /> Mark Complete
+                </Button>
+              )}
+              {isCollectionTask && isOwnerOfThisTask && task.status === 'Completed' && (
+                <Button size="sm" variant="outline" onClick={() => handleCollectionStatusChange('To Do')}>
+                    <RotateCcw className="mr-2 h-4 w-4" /> Reopen
+                </Button>
+              )}
               {!isActuallyMainTask && (
                 <Select
                   value={task.status}
