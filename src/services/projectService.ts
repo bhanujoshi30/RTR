@@ -271,8 +271,9 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       const isOwner = projectData.ownerUid === userUid;
       const isClient = projectData.clientUid === userUid;
       const isAdmin = userRole === 'admin';
-      
-      if (!isOwner && !isClient && !isAdmin) {
+      const isServiceCall = userUid === 'dpr-service-call';
+
+      if (!isOwner && !isClient && !isAdmin && !isServiceCall) {
         // For other roles, check if they are assigned to any task in this project.
         if (userRole === 'supervisor' || userRole === 'member') {
           const tasksQuery = query(
