@@ -26,6 +26,7 @@ import { useAuth } from '@/hooks/useAuth';
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
 
+// Schema no longer includes assignedToUids as it's managed separately
 const issueSchema = z.object({
   title: z.string().min(3, { message: 'Issue title must be at least 3 characters' }).max(150),
   description: z.string().max(1000).optional(),
@@ -51,6 +52,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   const [parentSubTask, setParentSubTask] = useState<Task | null>(null);
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
   
+  // NEW LOGIC: Manage selected UIDs with simple React state
   const [selectedUids, setSelectedUids] = useState<string[]>(issue?.assignedToUids || []);
 
   const form = useForm<IssueFormValues>({
@@ -109,6 +111,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
     setLoading(true);
 
+    // NEW LOGIC: Manually get assigned users from local state
     const assignedToNamesForPayload = selectedUids.map(uid => {
       const assignedUser = assignableUsersForIssue.find(u => u.uid === uid);
       return assignedUser?.displayName || uid;
@@ -160,30 +163,17 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField control={form.control} name="title" render={({ field }) => {
-          console.log('[IssueForm] Rendering field: title');
-          return ( <FormItem> <FormLabel>Title</FormLabel> <FormControl> <Input placeholder="Describe the issue" {...field} /> </FormControl> <FormMessage /> </FormItem> )
-        }} />
-        <FormField control={form.control} name="description" render={({ field }) => {
-          console.log('[IssueForm] Rendering field: description');
-          return ( <FormItem> <FormLabel>Description (Optional)</FormLabel> <FormControl> <Textarea placeholder="More details about the issue" {...field} value={field.value ?? ''} rows={3} /> </FormControl> <FormMessage /> </FormItem> )
-        }} />
+        <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel>Title</FormLabel> <FormControl> <Input placeholder="Describe the issue" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
+        <FormField control={form.control} name="description" render={({ field }) => ( <FormItem> <FormLabel>Description (Optional)</FormLabel> <FormControl> <Textarea placeholder="More details about the issue" {...field} value={field.value ?? ''} rows={3} /> </FormControl> <FormMessage /> </FormItem> )} />
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <FormField control={form.control} name="severity" render={({ field }) => {
-            console.log('[IssueForm] Rendering field: severity');
-            return ( <FormItem> <FormLabel>Severity</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value as string}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select severity" /> </SelectTrigger> </FormControl> <SelectContent> {issueSeverities.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )
-          }} />
-          <FormField control={form.control} name="status" render={({ field }) => {
-            console.log('[IssueForm] Rendering field: status');
-            return ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value as string}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select status" /> </SelectTrigger> </FormControl> <SelectContent> {issueProgressStatuses.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )
-          }} />
+          <FormField control={form.control} name="severity" render={({ field }) => ( <FormItem> <FormLabel>Severity</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value as string}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select severity" /> </SelectTrigger> </FormControl> <SelectContent> {issueSeverities.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
+          <FormField control={form.control} name="status" render={({ field }) => ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value as string}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select status" /> </SelectTrigger> </FormControl> <SelectContent> {issueProgressStatuses.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
         </div>
         
-        <FormItem>
-            <div className="mb-2">
-                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
-                <FormDescription>Select team members to assign this issue to.</FormDescription>
-            </div>
+        {/* REWRITTEN CHECKBOX LOGIC - NO LONGER A FORM FIELD */}
+        <div className="space-y-2">
+            <Label className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</Label>
+            <p className="text-sm text-muted-foreground">Select team members to assign this issue to.</p>
             <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                 {loadingAssignableUsers ? (
                     <p className="text-sm text-muted-foreground">Loading users...</p>
@@ -212,12 +202,10 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                     ))
                 )}
             </div>
-        </FormItem>
+        </div>
 
 
-        <FormField control={form.control} name="dueDate" render={({ field }) => {
-          console.log('[IssueForm] Rendering field: dueDate');
-          return (
+        <FormField control={form.control} name="dueDate" render={({ field }) => (
           <FormItem className="flex flex-col">
             <FormLabel>Due Date</FormLabel>
             <Popover>
@@ -226,7 +214,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             </Popover>
             <FormMessage />
           </FormItem>
-        )}} />
+        )} />
 
         <div className="flex justify-end">
           <Button type="submit" disabled={loading || !user || loadingAssignableUsers}>

@@ -29,6 +29,7 @@ import { getAllUsers } from '@/services/userService';
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 const taskTypes = ['standard', 'collection'] as const;
 
+// Schemas no longer include assignedToUids
 const subTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
   description: z.string().max(1000).optional(),
@@ -74,6 +75,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const isSubTask = !!(parentId || task?.parentId);
   const currentSchema = isSubTask ? subTaskSchema : mainTaskSchema;
 
+  // NEW LOGIC: Manage selected UIDs with simple React state
   const [selectedUids, setSelectedUids] = useState<string[]>(isSubTask ? (task?.assignedToUids || []) : []);
 
   const form = useForm<TaskFormValues>({
@@ -127,6 +129,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
 
     if (isSubTask) {
       const subTaskData = data as z.infer<typeof subTaskSchema>;
+      // NEW LOGIC: Manually get assigned users from local state
       const assignedToNamesForPayload = selectedUids.map(uid => {
         const assignedUser = assignableUsers.find(u => u.uid === uid);
         return assignedUser?.displayName || uid; 
@@ -198,9 +201,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 <FormField
                   control={form.control}
                   name="taskType"
-                  render={({ field }) => {
-                    console.log('[TaskForm] Rendering field: taskType');
-                    return (
+                  render={({ field }) => (
                     <FormItem className="space-y-3">
                       <FormLabel>Main Task Type</FormLabel>
                       <FormControl>
@@ -230,15 +231,13 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                       </FormControl>
                       <FormMessage />
                     </FormItem>
-                  )}}
+                  )}
                 />
              )}
             <FormField
               control={form.control}
               name="name"
-              render={({ field }) => {
-                console.log('[TaskForm] Rendering field: name');
-                return (
+              render={({ field }) => (
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
@@ -246,14 +245,12 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   </FormControl>
                   <FormMessage />
                 </FormItem>
-              )}}
+              )}
             />
              <FormField
                 control={form.control}
                 name="description"
-                render={({ field }) => {
-                  console.log('[TaskForm] Rendering field: description');
-                  return (
+                render={({ field }) => (
                   <FormItem>
                     <FormLabel>Description (Optional)</FormLabel>
                     <FormControl>
@@ -266,7 +263,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}}
+                )}
               />
 
             {isSubTask && (
@@ -275,9 +272,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   <FormField
                     control={form.control}
                     name="status"
-                    render={({ field }) => {
-                      console.log('[TaskForm] Rendering field: status');
-                      return (
+                    render={({ field }) => (
                       <FormItem>
                         <FormLabel>Status</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value as TaskStatus}>
@@ -294,14 +289,12 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                         </Select>
                         <FormMessage />
                       </FormItem>
-                    )}}
+                    )}
                   />
                   <FormField
                     control={form.control}
                     name="dueDate"
-                    render={({ field }) => {
-                      console.log('[TaskForm] Rendering field: dueDate (sub-task)');
-                      return (
+                    render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Due Date</FormLabel>
                         <Popover>
@@ -330,14 +323,13 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                         </Popover>
                         <FormMessage />
                       </FormItem>
-                    )}}
+                    )}
                   />
                 </div>
-                <FormItem>
-                     <div className="mb-2">
-                        <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
-                        <FormDescription>Select team members to assign this sub-task to.</FormDescription>
-                    </div>
+                {/* REWRITTEN CHECKBOX LOGIC - NO LONGER A FORM FIELD */}
+                <div className="space-y-2">
+                    <Label className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</Label>
+                    <p className="text-sm text-muted-foreground">Select team members to assign this sub-task to.</p>
                     <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                         {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
                         {assignableUsers.map((assignableUser) => (
@@ -361,16 +353,14 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                             </div>
                         ))}
                     </div>
-                </FormItem>
+                </div>
               </>
             )}
             {!isSubTask && (
                 <FormField
                     control={form.control}
                     name="dueDate"
-                    render={({ field }) => {
-                      console.log('[TaskForm] Rendering field: dueDate (main task)');
-                      return (
+                    render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>Due Date</FormLabel>
                         <Popover>
@@ -399,7 +389,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                         </Popover>
                         <FormMessage />
                       </FormItem>
-                    )}}
+                    )}
                 />
             )}
              {taskTypeWatcher === 'collection' && !isSubTask && (
@@ -407,9 +397,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 <FormField
                   control={form.control}
                   name="cost"
-                  render={({ field }) => {
-                    console.log('[TaskForm] Rendering field: cost');
-                    return (
+                  render={({ field }) => (
                     <FormItem>
                       <FormLabel>Cost Amount (INR)</FormLabel>
                       <FormControl>
@@ -423,14 +411,12 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                       </FormControl>
                       <FormMessage />
                     </FormItem>
-                  )}}
+                  )}
                 />
                 <FormField
                   control={form.control}
                   name="reminderDays"
-                  render={({ field }) => {
-                    console.log('[TaskForm] Rendering field: reminderDays');
-                    return (
+                  render={({ field }) => (
                     <FormItem>
                       <FormLabel>Reminder (Days Before Due)</FormLabel>
                       <FormControl>
@@ -444,7 +430,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                       </FormControl>
                       <FormMessage />
                     </FormItem>
-                  )}}
+                  )}
                 />
               </div>
             )}
