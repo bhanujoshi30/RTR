@@ -32,6 +32,7 @@ const issueSchema = z.object({
   severity: z.enum(issueSeverities),
   status: z.enum(issueProgressStatuses),
   dueDate: z.date({ required_error: "Due date is required." }),
+  assignedToUids: z.array(z.string()).optional(),
 });
 
 type IssueFormValues = z.infer<typeof issueSchema>;
@@ -51,10 +52,6 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   const [parentSubTask, setParentSubTask] = useState<Task | null>(null);
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
 
-  // NEW: Local state for managing selected user IDs
-  const [selectedUserUids, setSelectedUserUids] = useState<string[]>(issue?.assignedToUids || []);
-
-
   const form = useForm<IssueFormValues>({
     resolver: zodResolver(issueSchema),
     defaultValues: {
@@ -63,6 +60,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       severity: issue?.severity || 'Normal',
       status: issue?.status || 'Open',
       dueDate: issue?.dueDate || undefined,
+      assignedToUids: issue?.assignedToUids || [],
     },
   });
 
@@ -104,16 +102,6 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, user, authLoading, toast]);
 
-
-  const handleUserSelectionChange = (uid: string, isSelected: boolean) => {
-    if (isSelected) {
-      setSelectedUserUids(prev => [...prev, uid]);
-    } else {
-      setSelectedUserUids(prev => prev.filter(id => id !== uid));
-    }
-  };
-
-
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
     if (!user || !parentSubTask) {
       toast({ title: 'Error', description: 'User or parent task details are missing. Cannot proceed.', variant: 'destructive' });
@@ -122,14 +110,18 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
     setLoading(true);
 
-    const assignedToNamesForPayload = selectedUserUids.map(uid => {
+    const assignedToNamesForPayload = data.assignedToUids?.map(uid => {
       const assignedUser = assignableUsersForIssue.find(u => u.uid === uid);
       return assignedUser?.displayName || uid;
-    });
+    }) || [];
 
     const issueDataPayload = { 
-        ...data, 
-        assignedToUids: selectedUserUids, 
+        title: data.title,
+        description: data.description,
+        severity: data.severity,
+        status: data.status,
+        dueDate: data.dueDate,
+        assignedToUids: data.assignedToUids || [], 
         assignedToNames: assignedToNamesForPayload, 
     };
 
@@ -180,30 +172,57 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           <FormField control={form.control} name="status" render={({ field }) => ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select status" /> </SelectTrigger> </FormControl> <SelectContent> {issueProgressStatuses.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
         </div>
         
-         <div className="space-y-2">
-            <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
-            <FormDescription>Select team members to assign this issue to.</FormDescription>
-            <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-              {loadingAssignableUsers ? (
-                <p className="text-sm text-muted-foreground">Loading users...</p>
-              ) : assignableUsersForIssue.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No assignable users found for the parent task.</p>
-              ) : (
-                assignableUsersForIssue.map((item) => (
-                  <div key={item.uid} className="flex flex-row items-start space-x-3 space-y-0">
-                    <Checkbox
-                      id={`user-${item.uid}`}
-                      checked={selectedUserUids.includes(item.uid)}
-                      onCheckedChange={(checked) => handleUserSelectionChange(item.uid, !!checked)}
-                    />
-                    <Label htmlFor={`user-${item.uid}`} className="font-normal cursor-pointer">
-                      {item.displayName || item.email}
-                    </Label>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+         <FormField
+            control={form.control}
+            name="assignedToUids"
+            render={() => (
+                <FormItem>
+                    <div className="mb-2">
+                        <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
+                        <FormDescription>Select team members to assign this issue to.</FormDescription>
+                    </div>
+                    <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                        {loadingAssignableUsers ? (
+                            <p className="text-sm text-muted-foreground">Loading users...</p>
+                        ) : assignableUsersForIssue.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No assignable users found for the parent task.</p>
+                        ) : (
+                            assignableUsersForIssue.map((item) => (
+                                <FormField
+                                    key={item.uid}
+                                    control={form.control}
+                                    name="assignedToUids"
+                                    render={({ field }) => {
+                                        return (
+                                            <FormItem
+                                                key={item.uid}
+                                                className="flex flex-row items-start space-x-3 space-y-0"
+                                            >
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={field.value?.includes(item.uid)}
+                                                        onCheckedChange={(checked) => {
+                                                            const currentUids = field.value || [];
+                                                            return checked
+                                                                ? field.onChange([...currentUids, item.uid])
+                                                                : field.onChange(currentUids.filter((value) => value !== item.uid));
+                                                        }}
+                                                    />
+                                                </FormControl>
+                                                <FormLabel className="font-normal cursor-pointer">
+                                                    {item.displayName || item.email}
+                                                </FormLabel>
+                                            </FormItem>
+                                        );
+                                    }}
+                                />
+                            ))
+                        )}
+                    </div>
+                    <FormMessage />
+                </FormItem>
+            )}
+        />
 
 
         <FormField control={form.control} name="dueDate" render={({ field }) => (
