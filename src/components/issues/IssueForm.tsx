@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { useForm, type SubmitHandler } from 'react-hook-form';
+import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
@@ -331,26 +331,28 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               
               <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                 {assignableUsersForIssue.map((item) => (
-                  <div key={item.uid} className="flex items-center space-x-3">
-                    <Checkbox
-                      id={`assignee-${item.uid}`}
-                      checked={(field.value || []).includes(item.uid)}
-                      onCheckedChange={(checked) => {
-                        const currentUids = field.value || [];
-                        if (checked) {
-                          field.onChange([...currentUids, item.uid]);
-                        } else {
-                          field.onChange(currentUids.filter((uid) => uid !== item.uid));
-                        }
-                      }}
-                    />
-                    <label
-                      htmlFor={`assignee-${item.uid}`}
-                      className="text-sm font-normal cursor-pointer"
-                    >
+                  <FormItem
+                    key={item.uid}
+                    className="flex flex-row items-start space-x-3 space-y-0"
+                  >
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value?.includes(item.uid)}
+                        onCheckedChange={(checked) => {
+                          return checked
+                            ? field.onChange([...(field.value || []), item.uid])
+                            : field.onChange(
+                                (field.value || []).filter(
+                                  (value) => value !== item.uid
+                                )
+                              )
+                        }}
+                      />
+                    </FormControl>
+                    <FormLabel className="text-sm font-normal">
                       {item.displayName || item.email} ({item.role})
-                    </label>
-                  </div>
+                    </FormLabel>
+                  </FormItem>
                 ))}
               </div>
               <FormMessage />
@@ -396,4 +398,3 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Form>
   );
 }
-
