@@ -308,56 +308,44 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         <FormField
           control={form.control}
           name="assignedToUids"
-          render={() => (
+          render={({ field }) => (
             <FormItem>
               <FormLabel className="flex items-center">
                 <Users className="mr-2 h-4 w-4 text-muted-foreground" />
                 Assign To (Team Members)
               </FormLabel>
-              {loadingAssignableUsers && (
-                <p className="text-sm text-muted-foreground">Loading assignable users...</p>
-              )}
+              {loadingAssignableUsers && ( <p className="text-sm text-muted-foreground">Loading assignable users...</p> )}
               {!loadingAssignableUsers && assignableUsersForIssue.length === 0 && (
                 <div className="p-3 text-sm text-muted-foreground border rounded-md flex items-center gap-2">
                   <AlertCircle className="h-5 w-5 text-amber-500" /> No assignable team members found for this task.
                 </div>
               )}
               {!loadingAssignableUsers && assignableUsersForIssue.length > 0 && (
-                <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                  {assignableUsersForIssue.map((assignableUser) => (
-                    <FormField
-                      key={assignableUser.uid}
-                      control={form.control}
-                      name="assignedToUids"
-                      render={({ field }) => {
-                        return (
-                          <FormItem
+                 <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                    {assignableUsersForIssue.map((assignableUser) => (
+                        <FormItem
                             key={assignableUser.uid}
                             className="flex flex-row items-start space-x-3 space-y-0"
-                          >
+                        >
                             <FormControl>
-                              <Checkbox
-                                checked={(field.value as string[])?.includes(assignableUser.uid)}
+                            <Checkbox
+                                checked={field.value?.includes(assignableUser.uid)}
                                 onCheckedChange={(checked) => {
-                                  const currentUids = (field.value as string[]) || [];
-                                  return checked
-                                    ? field.onChange([...currentUids, assignableUser.uid])
+                                return checked
+                                    ? field.onChange([...(field.value || []), assignableUser.uid])
                                     : field.onChange(
-                                        currentUids.filter(
-                                          (value) => value !== assignableUser.uid
+                                        (field.value || []).filter(
+                                        (value) => value !== assignableUser.uid
                                         )
-                                      );
+                                    );
                                 }}
-                              />
+                            />
                             </FormControl>
                             <FormLabel className="font-normal">
-                              {assignableUser.displayName || assignableUser.email}
+                                {assignableUser.displayName || assignableUser.email}
                             </FormLabel>
-                          </FormItem>
-                        );
-                      }}
-                    />
-                  ))}
+                        </FormItem>
+                    ))}
                 </div>
               )}
               <FormMessage />
@@ -382,8 +370,8 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                 {locationError && ( <Alert variant="destructive"> <MapPin className="h-4 w-4" /> <AlertTitle>Location Access Denied</AlertTitle> <AlertDescription> {locationError} Stamping will proceed without location data. </AlertDescription> </Alert> )}
                 <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleFileChange} className="hidden" disabled={loading} />
                 <Button type="button" variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()} disabled={loading}> <Camera className="mr-2 h-4 w-4" /> {selectedFile ? 'Change Photo' : 'Select Photo'} </Button>
-                {previewUrl && ( <div className="relative w-full aspect-square bg-muted rounded-md overflow-hidden flex items-center justify-center border"> <Image src={previewUrl} alt="Selected preview" fill className="object-contain" /> </div> )}
-                {!previewUrl && ( <div className="w-full aspect-square bg-muted rounded-md flex flex-col items-center justify-center border border-dashed"> <ImagePlus className="h-12 w-12 text-muted-foreground" /> <p className="text-sm text-muted-foreground mt-2">Image preview will appear here</p> </div> )}
+                {previewUrl && ( <div className="relative w-full aspect-video bg-muted rounded-md overflow-hidden flex items-center justify-center border"> <Image src={previewUrl} alt="Selected preview" fill className="object-contain" /> </div> )}
+                {!previewUrl && ( <div className="w-full aspect-video bg-muted rounded-md flex flex-col items-center justify-center border border-dashed"> <ImagePlus className="h-12 w-12 text-muted-foreground" /> <p className="text-sm text-muted-foreground mt-2">Image preview will appear here</p> </div> )}
               </div>
                {loading && uploadProgress !== null && ( <div className="space-y-1 pt-2"> <p className="text-sm text-center text-muted-foreground">Uploading... {Math.round(uploadProgress)}%</p> <Progress value={uploadProgress} className="w-full" /> </div> )}
             </FormItem>
