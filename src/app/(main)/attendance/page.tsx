@@ -122,7 +122,6 @@ export default function AttendancePage() {
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
-  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
   const [month, setMonth] = useState<Date>(new Date());
   
   const [error, setError] = useState<string | null>(null);
@@ -159,12 +158,9 @@ export default function AttendancePage() {
   
   // Fetch attendance records when a user is selected
   useEffect(() => {
-    // Reset states when user changes
+    // Reset attendance data when user changes
     setUserAttendance([]);
-    setSelectedRecord(null);
-    setSelectedDate(undefined);
-    setMonth(new Date());
-
+    
     if (!selectedUserId) return;
 
     const fetchRecords = async () => {
@@ -183,16 +179,6 @@ export default function AttendancePage() {
     fetchRecords();
   }, [selectedUserId]);
 
-  // This effect ensures the detail card updates when the user changes, even if the date doesn't.
-  useEffect(() => {
-    if (!selectedDate) {
-      setSelectedRecord(null);
-      return;
-    }
-    const dateString = format(selectedDate, 'yyyy-MM-dd');
-    const recordForDay = userAttendance.find(rec => rec.date === dateString);
-    setSelectedRecord(recordForDay || null);
-  }, [selectedDate, userAttendance]);
 
   const handleDateSelect = (date: Date | undefined) => {
     setSelectedDate(date);
@@ -200,6 +186,12 @@ export default function AttendancePage() {
   
   const attendedDays = useMemo(() => userAttendance.map(record => record.timestamp), [userAttendance]);
   
+  const selectedRecord = useMemo(() => {
+    if (!selectedDate) return null;
+    const dateString = format(selectedDate, 'yyyy-MM-dd');
+    return userAttendance.find(rec => rec.date === dateString) || null;
+  }, [selectedDate, userAttendance]);
+
   const missedDays = useMemo(() => {
     if (!selectedUserId) return [];
     
@@ -307,7 +299,6 @@ export default function AttendancePage() {
                             attended: {
                                 backgroundColor: 'hsl(var(--primary))',
                                 color: 'hsl(var(--primary-foreground))',
-                                opacity: 0.9,
                             },
                             missed: {
                                 backgroundColor: 'hsl(var(--destructive) / 0.15)',
@@ -331,4 +322,3 @@ export default function AttendancePage() {
     </div>
   );
 }
-
