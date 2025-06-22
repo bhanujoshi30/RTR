@@ -11,7 +11,7 @@ import { Loader2, CalendarCheck, User, Camera, MapPin, Search, BarChart, XCircle
 import type { AttendanceRecord, User as AppUser } from '@/types';
 import { getAttendanceForUser } from '@/services/attendanceService';
 import { getAllUsers } from '@/services/userService';
-import { format, isSameMonth, isPast, isWeekend, addDays, isBefore } from 'date-fns';
+import { format, isSameMonth, isWeekend, addDays, isBefore, startOfToday } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
@@ -66,9 +66,14 @@ const AttendanceDetailCard = ({ record, selectedDate }: { record: AttendanceReco
                     <p className="whitespace-normal break-words text-foreground">
                     {record.location.address || 'Address not available'}
                     </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                    {`Lat: ${record.location.latitude.toFixed(4)}, Lon: ${record.location.longitude.toFixed(4)}`}
-                    </p>
+                    <a
+                        href={`https://www.google.com/maps?q=${record.location.latitude},${record.location.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-muted-foreground mt-1 hover:text-primary hover:underline block"
+                    >
+                        {`Lat: ${record.location.latitude.toFixed(4)}, Lon: ${record.location.longitude.toFixed(4)}`}
+                    </a>
                 </div>
             ) : (
                 <p className="text-sm text-muted-foreground pl-6">Not available</p>
@@ -178,15 +183,19 @@ export default function AttendancePage() {
     fetchRecords();
   }, [selectedUserId]);
 
-  const handleDateSelect = (date: Date | undefined) => {
-    setSelectedDate(date);
-    if (!date) {
-        setSelectedRecord(null);
-        return;
+  // This effect ensures the detail card updates when the user changes, even if the date doesn't.
+  useEffect(() => {
+    if (!selectedDate) {
+      setSelectedRecord(null);
+      return;
     }
-    const dateString = format(date, 'yyyy-MM-dd');
+    const dateString = format(selectedDate, 'yyyy-MM-dd');
     const recordForDay = userAttendance.find(rec => rec.date === dateString);
     setSelectedRecord(recordForDay || null);
+  }, [selectedDate, userAttendance]);
+
+  const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
   };
   
   const attendedDays = useMemo(() => userAttendance.map(record => record.timestamp), [userAttendance]);
@@ -194,7 +203,7 @@ export default function AttendancePage() {
   const missedDays = useMemo(() => {
     if (!selectedUserId) return [];
     
-    const today = new Date();
+    const today = startOfToday();
     const attendedDates = new Set(userAttendance.map(rec => rec.date)); // 'YYYY-MM-DD' format
     
     const missed: Date[] = [];
@@ -289,7 +298,11 @@ export default function AttendancePage() {
                         month={month}
                         onMonthChange={setMonth}
                         className="rounded-md border p-0"
-                        modifiers={{ attended: attendedDays, missed: missedDays }}
+                        modifiers={{ 
+                            attended: attendedDays, 
+                            missed: missedDays,
+                            weekend: isWeekend
+                        }}
                         modifiersStyles={{ 
                             attended: {
                                 backgroundColor: 'hsl(var(--primary))',
@@ -298,6 +311,10 @@ export default function AttendancePage() {
                             },
                             missed: {
                                 backgroundColor: 'hsl(var(--destructive) / 0.15)',
+                            },
+                            weekend: {
+                                color: 'hsl(var(--muted-foreground))',
+                                opacity: 0.6,
                             }
                         }}
                         disabled={!selectedUserId || loadingAttendance}
