@@ -27,6 +27,7 @@ interface AttachmentMetadata {
   location?: {
     latitude: number;
     longitude: number;
+    address?: string;
   };
 }
 

@@ -26,6 +26,7 @@ interface ProgressReportDialogProps {
 interface Location {
   latitude: number;
   longitude: number;
+  address?: string;
 }
 
 export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, reportType, onSuccess }: ProgressReportDialogProps) {
@@ -53,13 +54,32 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       setIsUploading(false);
       setUploadProgress(null); 
 
-      // Fetch location
+      // Fetch location and address
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
-          (position) => {
+          async (position) => {
+            const { latitude, longitude } = position.coords;
+            let fetchedAddress = 'Address lookup failed.';
+            try {
+              // Using OpenStreetMap's free Nominatim service for reverse geocoding
+              const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`);
+              if (!response.ok) {
+                  throw new Error(`Geocoding service returned status ${response.status}`);
+              }
+              const data = await response.json();
+              if (data && data.display_name) {
+                fetchedAddress = data.display_name;
+              } else {
+                fetchedAddress = 'No address found for these coordinates.';
+              }
+            } catch (error) {
+              console.error("Reverse geocoding failed:", error);
+            }
+
             setLocation({
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
+              latitude,
+              longitude,
+              address: fetchedAddress,
             });
             setLocationError(null);
           },
@@ -135,26 +155,36 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
 
       const now = new Date();
       const timeStamp = now.toLocaleString();
-      const locationStamp = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Location N/A';
       const userStamp = user.displayName || user.email || 'Unknown User';
-      const fullStamp = `${userStamp} | ${timeStamp} | ${locationStamp}`;
+      
+      const infoLine1 = `${userStamp} | ${timeStamp}`;
+      const infoLine2 = location?.address || (location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Location N/A');
 
-      const fontSize = Math.max(24, Math.round(canvas.width / 50));
+      const fontSize = Math.max(20, Math.round(canvas.width / 75)); // Made font smaller to fit address
       context.font = `bold ${fontSize}px Arial`;
       context.textAlign = 'right';
       context.textBaseline = 'bottom';
-      const textMetrics = context.measureText(fullStamp);
-      const padding = Math.round(fontSize * 0.75);
       
+      const padding = Math.round(fontSize * 0.75);
+      const lineHeight = fontSize * 1.2;
+
+      const textMetrics1 = context.measureText(infoLine1);
+      const textMetrics2 = context.measureText(infoLine2);
+      const maxWidth = Math.max(textMetrics1.width, textMetrics2.width);
+      
+      // Draw background
       context.fillStyle = 'rgba(0, 0, 0, 0.6)';
       context.fillRect(
-        canvas.width - textMetrics.width - padding * 2,
-        canvas.height - fontSize - padding * 2,
-        textMetrics.width + padding * 2,
-        fontSize + padding * 2
+        canvas.width - maxWidth - padding * 2,
+        canvas.height - (lineHeight * 2) - (padding * 1.5),
+        maxWidth + padding * 2,
+        (lineHeight * 2) + padding
       );
+
+      // Draw text
       context.fillStyle = 'white';
-      context.fillText(fullStamp, canvas.width - padding, canvas.height - padding);
+      context.fillText(infoLine2, canvas.width - padding, canvas.height - padding);
+      context.fillText(infoLine1, canvas.width - padding, canvas.height - padding - lineHeight);
       console.log("Upload Step 6: Stamped metadata onto canvas.");
 
       // Step 3: Get stamped image as a Blob

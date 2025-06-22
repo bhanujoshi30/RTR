@@ -80,6 +80,7 @@ export interface Attachment {
   location?: {
     latitude: number;
     longitude: number;
+    address?: string;
   };
   createdAt: Date;
 }
