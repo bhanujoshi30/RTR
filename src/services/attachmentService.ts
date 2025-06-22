@@ -23,7 +23,7 @@ export interface AttachmentMetadata {
   ownerName: string;
   url: string;
   filename: string;
-  reportType: 'daily-progress' | 'completion-proof' | 'issue-update-proof';
+  reportType: 'daily-progress' | 'completion-proof' | 'issue-update-proof' | 'issue-report';
   location?: {
     latitude: number;
     longitude: number;
