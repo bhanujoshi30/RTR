@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers, Wallet } from 'lucide-react'; 
+import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers, Wallet, IndianRupee } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 import { numberToWordsInr } from '@/lib/currencyUtils';
 
@@ -95,8 +95,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
             {project.totalCost && project.totalCost > 0 && (
                 <div className="pt-1">
                     <div className="flex items-center text-sm">
-                        <Wallet className="mr-2 h-4 w-4 text-green-600" />
-                        <span className="text-foreground font-medium">Est. Cost: {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(project.totalCost)}</span>
+                        <IndianRupee className="mr-2 h-4 w-4 text-green-600" />
+                        <span className="text-foreground font-medium">Est. Cost: {new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(project.totalCost)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost)}</p>
                 </div>
