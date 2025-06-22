@@ -246,7 +246,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   {task.openIssueCount} Open Issue{task.openIssueCount !== 1 ? 's' : ''}
                 </Badge>
               )}
-              {(isCollectionTask || !isActuallyMainTask) && task.status && (
+              {task.status && (
                 <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
                   {task.status}
                 </Badge>

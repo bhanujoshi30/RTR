@@ -1,4 +1,5 @@
 
+
 import { db } from '@/lib/firebase';
 import type { Task, TaskStatus, UserRole, AggregatedEvent, ProjectAggregatedEvent, TimelineEvent } from '@/types';
 import {
@@ -214,6 +215,7 @@ export const getProjectMainTasks = async (projectId: string, filterByIds?: strin
         if (mainTask.taskType === 'collection') {
             mainTask.progress = 0;
             mainTask.openIssueCount = 0;
+            // Do not derive status for collection tasks
             return;
         }
 
@@ -226,6 +228,19 @@ export const getProjectMainTasks = async (projectId: string, filterByIds?: strin
 
         const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
         mainTask.progress = relatedSubTasks.length > 0 ? Math.round((completedSubTasks / relatedSubTasks.length) * 100) : 0;
+        
+        // Derive status from progress for standard main tasks
+        if (relatedSubTasks.length > 0) {
+            if (mainTask.progress === 100) {
+                mainTask.status = 'Completed';
+            } else if (mainTask.progress > 0 || relatedSubTasks.some(st => st.status === 'In Progress')) {
+                mainTask.status = 'In Progress';
+            } else {
+                mainTask.status = 'To Do';
+            }
+        } else {
+            mainTask.status = 'To Do';
+        }
     });
 
     mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));

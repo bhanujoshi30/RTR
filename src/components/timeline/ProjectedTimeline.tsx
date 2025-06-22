@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -38,14 +39,25 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
         mainTasks.forEach(mainTask => {
             if (mainTask.taskType === 'collection') {
                 mainTask.progress = 0;
+                // Do not override status for collection tasks, it's independent
                 return;
             }
             const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
             if (relatedSubTasks.length > 0) {
                 const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
                 mainTask.progress = Math.round((completedSubTasks / relatedSubTasks.length) * 100);
+
+                // Derive status for the timeline view
+                if (mainTask.progress === 100) {
+                    mainTask.status = 'Completed';
+                } else if (mainTask.progress > 0 || relatedSubTasks.some(st => st.status === 'In Progress')) {
+                    mainTask.status = 'In Progress';
+                } else {
+                    mainTask.status = 'To Do';
+                }
             } else {
                 mainTask.progress = 0;
+                mainTask.status = 'To Do'; // Default for main task with no sub-tasks
             }
         });
         
