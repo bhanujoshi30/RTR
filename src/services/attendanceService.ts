@@ -129,7 +129,7 @@ export const getAttendanceForUser = async (userId: string): Promise<AttendanceRe
     } as AttendanceRecord;
   });
 
-  const projectIds = [...new Set(records.map(rec => rec.projectId))];
+  const projectIds = [...new Set(records.map(rec => rec.projectId))].filter(Boolean) as string[];
 
   if (projectIds.length === 0) {
     records.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
