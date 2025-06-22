@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import type { ProjectAggregatedEvent } from '@/types';
-import { getTimelineForProject } from '@/services/timelineService';
+import { getTimelineForProject } from '@/services/taskService';
 import { Loader2, History } from 'lucide-react';
 import { ProjectTimelineEventCard } from './ProjectTimelineEventCard';
 

@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import type { AggregatedEvent } from '@/types';
-import { getTimelineForMainTask } from '@/services/timelineService';
+import { getTimelineForMainTask } from '@/services/taskService';
 import { Loader2, History } from 'lucide-react';
 import { MainTaskTimelineEventCard } from './MainTaskTimelineEventCard';
 

@@ -1,9 +1,8 @@
 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp, query, orderBy, getDocs, Timestamp } from 'firebase/firestore';
-import type { TimelineEvent, TimelineEventType, AggregatedEvent, ProjectAggregatedEvent } from '@/types';
+import type { TimelineEvent, TimelineEventType } from '@/types';
 import { getUserDisplayName } from '@/services/userService';
-import { getSubTasks, getProjectMainTasks } from '@/services/taskService';
 
 /**
  * Logs a new event to a sub-task's timeline.
@@ -69,92 +68,5 @@ export const getTimelineForTask = async (taskId: string): Promise<TimelineEvent[
   } catch (error: any) {
     console.error(`TimelineService: Failed to fetch timeline for task ${taskId}`, error);
     return []; // Return empty on error
-  }
-};
-
-/**
- * Fetches an aggregated timeline for a main task, including its own events and grouped events from its sub-tasks.
- * @param mainTaskId The ID of the main task.
- * @returns A promise that resolves to an array of aggregated events, sorted by timestamp.
- */
-export const getTimelineForMainTask = async (mainTaskId: string): Promise<AggregatedEvent[]> => {
-  try {
-    // 1. Fetch main task's own timeline events
-    const mainTaskEvents = await getTimelineForTask(mainTaskId);
-    const aggregatedMainTaskEvents: AggregatedEvent[] = mainTaskEvents.map(event => ({
-      id: event.id,
-      timestamp: event.timestamp,
-      type: 'mainTaskEvent',
-      data: event,
-    }));
-
-    // 2. Fetch sub-tasks and their timelines
-    const subTasks = await getSubTasks(mainTaskId);
-    const subTaskTimelinePromises = subTasks.map(async (subTask) => {
-      const events = await getTimelineForTask(subTask.id);
-      if (events.length > 0) {
-        return {
-          id: subTask.id,
-          timestamp: events[0].timestamp, // The latest event's timestamp for sorting
-          type: 'subTaskEventGroup' as const,
-          data: {
-            subTaskInfo: { id: subTask.id, name: subTask.name },
-            events: events,
-          },
-        };
-      }
-      return null;
-    });
-
-    const subTaskEventGroupsWithNulls = await Promise.all(subTaskTimelinePromises);
-    const aggregatedSubTaskEvents = subTaskEventGroupsWithNulls.filter((group): group is AggregatedEvent => group !== null);
-
-    // 3. Combine and sort
-    const combinedEvents = [...aggregatedMainTaskEvents, ...aggregatedSubTaskEvents];
-    combinedEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-    return combinedEvents;
-    
-  } catch (error) {
-    console.error(`TimelineService: Failed to aggregate timeline for main task ${mainTaskId}`, error);
-    return [];
-  }
-};
-
-/**
- * Fetches an aggregated timeline for a project, grouping events by main tasks.
- * @param projectId The ID of the project.
- * @returns A promise that resolves to an array of project-aggregated events.
- */
-export const getTimelineForProject = async (projectId: string): Promise<ProjectAggregatedEvent[]> => {
-  try {
-    const mainTasks = await getProjectMainTasks(projectId);
-
-    const projectTimelinePromises = mainTasks.map(async (mainTask) => {
-      const events = await getTimelineForMainTask(mainTask.id);
-      if (events.length > 0) {
-        return {
-          id: mainTask.id,
-          timestamp: events[0].timestamp, // Latest event for sorting
-          type: 'mainTaskGroup' as const,
-          data: {
-            mainTaskInfo: { id: mainTask.id, name: mainTask.name },
-            events: events,
-          },
-        };
-      }
-      return null;
-    });
-
-    const projectEventGroupsWithNulls = await Promise.all(projectTimelinePromises);
-    const aggregatedProjectEvents = projectEventGroupsWithNulls.filter((group): group is ProjectAggregatedEvent => group !== null);
-
-    aggregatedProjectEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-    
-    return aggregatedProjectEvents;
-
-  } catch (error) {
-    console.error(`TimelineService: Failed to aggregate timeline for project ${projectId}`, error);
-    return [];
   }
 };
