@@ -2,7 +2,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from 'react';
-import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
+import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createIssue, updateIssue } from '@/services/issueService';
@@ -306,60 +306,56 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           <FormField control={form.control} name="status" render={({ field }) => ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select status" /> </SelectTrigger> </FormControl> <SelectContent> {issueProgressStatuses.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
         </div>
         
-         <FormField
+        <FormField
           control={form.control}
           name="assignedToUids"
-          render={({ field }) => (
+          render={() => (
             <FormItem>
-              <div className="mb-2">
-                <FormLabel className="flex items-center">
-                  <Users className="mr-2 h-4 w-4 text-muted-foreground" />
-                  Assign To (Team Members)
-                </FormLabel>
+              <div className="mb-4">
+                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
                 <FormDescription>
                   Select team members to assign this issue to.
                 </FormDescription>
               </div>
-
-              {loadingAssignableUsers && ( <p className="text-sm text-muted-foreground">Loading...</p> )}
-
-              {!loadingAssignableUsers && assignableUsersForIssue.length === 0 && (
-                <div className="p-3 text-sm text-muted-foreground border rounded-md flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-amber-500" /> No assignable team members found.
-                </div>
-              )}
-              
               <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                 {assignableUsersForIssue.map((item) => (
-                  <FormItem
+                  <FormField
                     key={item.uid}
-                    className="flex flex-row items-start space-x-3 space-y-0"
-                  >
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value?.includes(item.uid)}
-                        onCheckedChange={(checked) => {
-                          return checked
-                            ? field.onChange([...(field.value || []), item.uid])
-                            : field.onChange(
-                                (field.value || []).filter(
-                                  (value) => value !== item.uid
-                                )
-                              )
-                        }}
-                      />
-                    </FormControl>
-                    <FormLabel className="text-sm font-normal">
-                      {item.displayName || item.email} ({item.role})
-                    </FormLabel>
-                  </FormItem>
+                    control={form.control}
+                    name="assignedToUids"
+                    render={({ field }) => {
+                      return (
+                        <FormItem
+                          key={item.uid}
+                          className="flex flex-row items-start space-x-3 space-y-0"
+                        >
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value?.includes(item.uid)}
+                              onCheckedChange={(checked) => {
+                                return checked
+                                  ? field.onChange([...(field.value || []), item.uid])
+                                  : field.onChange(
+                                      (field.value || []).filter(
+                                        (value) => value !== item.uid
+                                      )
+                                    );
+                              }}
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-normal">
+                            {item.displayName || item.email} ({item.role})
+                          </FormLabel>
+                        </FormItem>
+                      );
+                    }}
+                  />
                 ))}
               </div>
               <FormMessage />
             </FormItem>
           )}
         />
-
 
         <FormField control={form.control} name="dueDate" render={({ field }) => (
           <FormItem className="flex flex-col">
