@@ -82,13 +82,18 @@ const getDynamicStatusFromProgress = (progress: number): ProjectStatus => {
 };
 
 const calculateProjectProgress = async (projectId: string, mainTasks?: Task[]): Promise<number> => {
-  const tasksToProcess = mainTasks || await getProjectMainTasks(projectId);
-  if (tasksToProcess.length === 0) {
+  const allMainTasks = mainTasks || await getProjectMainTasks(projectId);
+  
+  // Filter out collection tasks from the progress calculation
+  const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
+
+  if (standardMainTasks.length === 0) {
+    // If there are no standard tasks, project is 0% complete (or 100% if you only have collection tasks that are all complete, but let's stick to 0 for simplicity)
     return 0;
   }
   
-  const totalProgressSum = tasksToProcess.reduce((sum, task) => sum + (task.progress || 0), 0);
-  return Math.round(totalProgressSum / tasksToProcess.length);
+  const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+  return Math.round(totalProgressSum / standardMainTasks.length);
 };
 
 
