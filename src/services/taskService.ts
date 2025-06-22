@@ -107,6 +107,7 @@ export const createTask = async (
     newTaskPayload.assignedToUids = taskData.assignedToUids || [];
     newTaskPayload.assignedToNames = taskData.assignedToNames || [];
     newTaskPayload.taskType = 'standard'; // Sub-tasks are always standard
+    newTaskPayload.cost = null;
   } else { 
     newTaskPayload.description = taskData.description || ''; 
     newTaskPayload.status = 'To Do'; 
@@ -475,14 +476,17 @@ export const updateTask = async (
     if (updates.taskType !== undefined && updates.taskType !== taskDataFromSnap.taskType) {
       updatePayload.taskType = updates.taskType;
       updatePayload.reminderDays = updates.taskType === 'collection' ? (updates.reminderDays || null) : null;
+      updatePayload.cost = updates.taskType === 'collection' ? (updates.cost || null) : null;
       detailsChanged = true;
-    } else if (updates.reminderDays !== undefined && updates.reminderDays !== taskDataFromSnap.reminderDays) {
-      updatePayload.reminderDays = taskDataFromSnap.taskType === 'collection' ? (updates.reminderDays || null) : null;
-      detailsChanged = true;
-    }
-    if (updates.cost !== undefined && updates.cost !== taskDataFromSnap.cost) {
-      updatePayload.cost = taskDataFromSnap.taskType === 'collection' ? (updates.cost || null) : null;
-      detailsChanged = true;
+    } else {
+        if (updates.reminderDays !== undefined && updates.reminderDays !== taskDataFromSnap.reminderDays) {
+          updatePayload.reminderDays = taskDataFromSnap.taskType === 'collection' ? (updates.reminderDays || null) : null;
+          detailsChanged = true;
+        }
+        if (updates.cost !== undefined && updates.cost !== taskDataFromSnap.cost) {
+          updatePayload.cost = taskDataFromSnap.taskType === 'collection' ? (updates.cost || null) : null;
+          detailsChanged = true;
+        }
     }
 
     if (updates.dueDate !== undefined) {
