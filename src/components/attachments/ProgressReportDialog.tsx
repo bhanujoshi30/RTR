@@ -153,15 +153,35 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       canvas.height = image.naturalHeight;
       context.drawImage(image, 0, 0);
 
-      const now = new Date();
-      const timeStamp = now.toLocaleString();
+      // --- New Stamping Logic Start ---
       const userStamp = user.displayName || user.email || 'Unknown User';
-      
-      const infoLine1 = `${userStamp} | ${timeStamp}`;
-      const coords = location ? `(Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)})` : '';
-      const infoLine2 = `${location?.address || 'Location data unavailable.'} ${coords}`.trim();
+      const timeStamp = new Date().toLocaleString();
+      const coords = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Coordinates unavailable';
+      const fullAddress = location?.address || 'Address data unavailable.';
 
-      const fontSize = Math.max(20, Math.round(canvas.width / 75)); 
+      let addressLine1 = fullAddress;
+      let addressLine2 = '';
+      
+      // Split address logic: find the first comma after the halfway point.
+      const midPoint = Math.floor(fullAddress.length / 2);
+      const splitIndex = fullAddress.indexOf(',', midPoint);
+
+      if (splitIndex !== -1) {
+        addressLine1 = fullAddress.substring(0, splitIndex);
+        addressLine2 = fullAddress.substring(splitIndex + 1).trim();
+      }
+
+      const textLines = [
+        userStamp,
+        timeStamp,
+        coords,
+        addressLine1,
+      ];
+      if (addressLine2) {
+        textLines.push(addressLine2);
+      }
+
+      const fontSize = Math.max(20, Math.round(canvas.width / 80)); // Slightly smaller font for more lines
       context.font = `bold ${fontSize}px Arial`;
       context.textAlign = 'right';
       context.textBaseline = 'bottom';
@@ -169,23 +189,32 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       const padding = Math.round(fontSize * 0.75);
       const lineHeight = fontSize * 1.2;
 
-      const textMetrics1 = context.measureText(infoLine1);
-      const textMetrics2 = context.measureText(infoLine2);
-      const maxWidth = Math.max(textMetrics1.width, textMetrics2.width);
+      let maxWidth = 0;
+      textLines.forEach(line => {
+        const metrics = context.measureText(line);
+        if (metrics.width > maxWidth) {
+          maxWidth = metrics.width;
+        }
+      });
       
       // Draw background
+      const totalTextHeight = lineHeight * textLines.length;
       context.fillStyle = 'rgba(0, 0, 0, 0.6)';
       context.fillRect(
         canvas.width - maxWidth - padding * 2,
-        canvas.height - (lineHeight * 2) - (padding * 1.5),
+        canvas.height - totalTextHeight - (padding * 1.5),
         maxWidth + padding * 2,
-        (lineHeight * 2) + padding
+        totalTextHeight + padding
       );
 
-      // Draw text
+      // Draw text from bottom up
       context.fillStyle = 'white';
-      context.fillText(infoLine2, canvas.width - padding, canvas.height - padding);
-      context.fillText(infoLine1, canvas.width - padding, canvas.height - padding - lineHeight);
+      let currentY = canvas.height - padding;
+      for (let i = textLines.length - 1; i >= 0; i--) {
+        context.fillText(textLines[i], canvas.width - padding, currentY);
+        currentY -= lineHeight;
+      }
+      // --- New Stamping Logic End ---
       console.log("Upload Step 6: Stamped metadata onto canvas.");
 
       // Step 3: Get stamped image as a Blob

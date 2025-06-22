@@ -120,24 +120,65 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
       canvas.height = image.naturalHeight;
       context.drawImage(image, 0, 0);
 
-      const now = new Date();
-      const timeStamp = now.toLocaleString();
+      // --- New Stamping Logic Start ---
       const userStamp = user.displayName || user.email || 'Unknown User';
-      const infoLine1 = `${userStamp} | ${timeStamp}`;
-      const coords = location ? `(Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)})` : '';
-      const infoLine2 = `${location?.address || 'Location N/A'} ${coords}`.trim();
-      const fontSize = Math.max(20, Math.round(canvas.width / 75));
+      const timeStamp = new Date().toLocaleString();
+      const coords = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Coordinates unavailable';
+      const fullAddress = location?.address || 'Address data unavailable.';
+
+      let addressLine1 = fullAddress;
+      let addressLine2 = '';
+      
+      const midPoint = Math.floor(fullAddress.length / 2);
+      const splitIndex = fullAddress.indexOf(',', midPoint);
+
+      if (splitIndex !== -1) {
+        addressLine1 = fullAddress.substring(0, splitIndex);
+        addressLine2 = fullAddress.substring(splitIndex + 1).trim();
+      }
+
+      const textLines = [
+        userStamp,
+        timeStamp,
+        coords,
+        addressLine1,
+      ];
+      if (addressLine2) {
+        textLines.push(addressLine2);
+      }
+
+      const fontSize = Math.max(20, Math.round(canvas.width / 80));
       context.font = `bold ${fontSize}px Arial`;
       context.textAlign = 'right';
       context.textBaseline = 'bottom';
+      
       const padding = Math.round(fontSize * 0.75);
       const lineHeight = fontSize * 1.2;
-      const maxWidth = Math.max(context.measureText(infoLine1).width, context.measureText(infoLine2).width);
+
+      let maxWidth = 0;
+      textLines.forEach(line => {
+        const metrics = context.measureText(line);
+        if (metrics.width > maxWidth) {
+          maxWidth = metrics.width;
+        }
+      });
+      
+      const totalTextHeight = lineHeight * textLines.length;
       context.fillStyle = 'rgba(0, 0, 0, 0.6)';
-      context.fillRect(canvas.width - maxWidth - padding * 2, canvas.height - (lineHeight * 2) - (padding * 1.5), maxWidth + padding * 2, (lineHeight * 2) + padding);
+      context.fillRect(
+        canvas.width - maxWidth - padding * 2,
+        canvas.height - totalTextHeight - (padding * 1.5),
+        maxWidth + padding * 2,
+        totalTextHeight + padding
+      );
+
       context.fillStyle = 'white';
-      context.fillText(infoLine2, canvas.width - padding, canvas.height - padding);
-      context.fillText(infoLine1, canvas.width - padding, canvas.height - padding - lineHeight);
+      let currentY = canvas.height - padding;
+      for (let i = textLines.length - 1; i >= 0; i--) {
+        context.fillText(textLines[i], canvas.width - padding, currentY);
+        currentY -= lineHeight;
+      }
+      // --- New Stamping Logic End ---
       
       const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.9));
       const filename = `issue-proof-${Date.now()}.jpg`;
