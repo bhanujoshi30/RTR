@@ -3,136 +3,105 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper Functions
-    function isSignedIn() {
+    // HELPER FUNCTIONS
+    function isUserAuthenticated() {
       return request.auth != null;
     }
 
-    // Checks a user's role. This performs a single document read.
-    function isUserRole(uid, role) {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(uid)).data.role == role;
+    function isOwner(userId) {
+      return request.auth.uid == userId;
     }
-    
-    // Checks if the user is an admin.
+
     function isAdmin() {
-        return isUserRole(request.auth.uid, 'admin');
+      // Use exists() to avoid errors on non-existent user docs (e.g. during signup).
+      return isUserAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // --- Collections ---
-
-    // Users Collection
+    // COLLECTION RULES
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin() && request.auth.uid != userId; // Admins can't delete themselves
+      allow read: if isUserAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin() && !isOwner(userId);
     }
 
-    // Projects Collection
     match /projects/{projectId} {
-      // Any authenticated user can read project details.
-      // App logic ensures users only query for projects they are involved in.
-      allow read: if isSignedIn();
-      
-      // Only authenticated users who are not supervisors or members can create projects.
-      allow create: if isSignedIn() &&
-                    !isUserRole(request.auth.uid, 'supervisor') &&
-                    !isUserRole(request.auth.uid, 'member');
-                    
-      // Only the project owner can update or delete a project.
-      allow update, delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      // Any authenticated user can read project data.
+      // The application logic is responsible for querying only relevant projects.
+      // This is necessary to allow list queries to succeed for all roles.
+      allow read: if isUserAuthenticated();
+      allow create: if isOwner(request.resource.data.ownerUid);
+      allow update, delete: if isOwner(resource.data.ownerUid);
     }
 
-    // Tasks Collection
     match /tasks/{taskId} {
-      // This rule is designed to be efficient for list queries.
-      // It does NOT use get() and relies on denormalized data on the task document.
-      allow read: if isSignedIn() &&
-                    (
-                      // Main tasks are readable by any auth'd user. App filters relevance.
-                      resource.data.parentId == null ||
-                      
-                      // Sub-tasks are readable by...
-                      resource.data.projectOwnerUid == request.auth.uid || // Project Owner
-                      (resource.data.clientUid != null && resource.data.clientUid == request.auth.uid) || // Assigned Client
-                      resource.data.ownerUid == request.auth.uid || // Task Creator
-                      request.auth.uid in resource.data.assignedToUids // Assigned User
-                    );
+      // Main tasks are readable by any authenticated user.
+      // Sub-tasks are readable by project owner/client, assigned users, or admins.
+      // This structure avoids using get() and allows list queries to succeed.
+      allow read: if isUserAuthenticated() &&
+                   (resource.data.parentId == null ||
+                    (request.auth.uid == resource.data.projectOwnerUid ||
+                     request.auth.uid == resource.data.clientUid ||
+                     request.auth.uid in resource.data.assignedToUids ||
+                     isAdmin()));
 
-      allow create: if isSignedIn(); // Logic is checked in the service layer before creation
+      // Only the project owner can create tasks. This get() on a single doc is fine for a single write op.
+      allow create: if get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid;
 
-      allow update: if isSignedIn() && 
-                    ( 
-                      // Project owner can update anything
-                      resource.data.ownerUid == request.auth.uid ||
-                      // Assigned users can update their own sub-tasks
-                      (resource.data.parentId != null && request.auth.uid in resource.data.assignedToUids)
-                    );
-                    
-      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+      // Task owner can update. Assigned users can also update.
+      allow update: if isOwner(resource.data.ownerUid) || (request.auth.uid in resource.data.assignedToUids);
 
-      // --- Sub-collections ---
+      // Only the task owner can delete.
+      allow delete: if isOwner(resource.data.ownerUid);
 
+      // Subcollection rules
       match /attachments/{attachmentId} {
-        // Here, a get() is acceptable because the parent taskId is known for the query path
-        let task = get(/databases/$(database)/documents/tasks/$(taskId)).data;
-        
-        allow read: if isSignedIn() &&
-                      (
-                        task.projectOwnerUid == request.auth.uid ||
-                        (task.clientUid != null && task.clientUid == request.auth.uid) ||
-                        task.ownerUid == request.auth.uid ||
-                        request.auth.uid in task.assignedToUids
-                      );
-
-        allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerUid;
-        allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid;
+        // Read permission inherits from the parent task. This get() is acceptable
+        // because it's only evaluated when accessing a specific subcollection, not querying the parent.
+        allow read: if isUserAuthenticated() &&
+                     (get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid == request.auth.uid ||
+                      request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids ||
+                      isAdmin());
+        // Only the user who created the attachment can write or delete it.
+        allow create, delete: if request.resource.data.ownerUid == request.auth.uid || resource.data.ownerUid == request.auth.uid;
       }
-      
-      match /timeline/{eventId} {
-        let task = get(/databases/$(database)/documents/tasks/$(taskId)).data;
-        
-        allow read: if isSignedIn() &&
-                        (
-                          task.projectOwnerUid == request.auth.uid ||
-                          (task.clientUid != null && task.clientUid == request.auth.uid) ||
-                          task.ownerUid == request.auth.uid ||
-                          request.auth.uid in task.assignedToUids
-                        );
 
-        allow create: if isSignedIn(); // Logged by trusted server-side logic/user action
+      match /timeline/{timelineId} {
+         // Read permission inherits from the parent task.
+         allow read: if isUserAuthenticated() &&
+                     (get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid == request.auth.uid ||
+                      request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids ||
+                      isAdmin());
+        // Timeline is log-only from backend, no client writes.
+        allow write: if false;
       }
     }
-    
-    // Issues Collection
+
     match /issues/{issueId} {
-      // This rule is designed to be efficient for list queries.
-      // It does NOT use get() and relies on denormalized data on the issue document.
-      allow read: if isSignedIn() &&
-              (
-                resource.data.projectOwnerUid == request.auth.uid ||
-                (resource.data.clientUid != null && resource.data.clientUid == request.auth.uid) ||
-                resource.data.ownerUid == request.auth.uid ||
-                request.auth.uid in resource.data.assignedToUids
-              );
-              
-      allow create: if isSignedIn(); // Logic checked in service layer
+      // Readable by project owner/client or assigned users.
+      allow read: if isUserAuthenticated() &&
+                   (request.auth.uid == resource.data.projectOwnerUid ||
+                    request.auth.uid == resource.data.clientUid ||
+                    request.auth.uid in resource.data.assignedToUids ||
+                    isAdmin());
 
-      allow update: if isSignedIn() && 
-                    (
-                      resource.data.ownerUid == request.auth.uid || // Issue creator
-                      request.auth.uid in resource.data.assignedToUids // Assigned users
-                    );
-                    
-      allow delete: if isSignedIn() && resource.data.ownerUid == request.auth.uid; // Only creator can delete
+      // Creatable by the task owner or someone assigned to the parent task.
+      allow create: if isUserAuthenticated() &&
+                     (get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.ownerUid == request.auth.uid ||
+                      request.auth.uid in get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedToUids);
+
+      // Updatable by the issue owner or someone assigned to it.
+      allow update: if isOwner(resource.data.ownerUid) || (request.auth.uid in resource.data.assignedToUids);
+
+      // Deletable only by the issue owner.
+      allow delete: if isOwner(resource.data.ownerUid);
     }
 
-    // Attendance Collection
-    match /attendance/{recordId} {
-      // Admins can read all records.
+    match /attendance/{attendanceId} {
       allow read: if isAdmin();
-      // Users can only create their own attendance records.
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      // No updates or deletes allowed.
+      allow create: if isOwner(request.resource.data.userId);
       allow update, delete: if false;
     }
   }
