@@ -157,3 +157,27 @@ export interface AttendanceRecord {
     address?: string;
   };
 }
+
+export interface DprData {
+  projectId: string;
+  projectName: string;
+  date: string; // YYYY-MM-DD
+  tasksCreated: Pick<Task, 'id' | 'name' | 'parentId'>[];
+  tasksCompleted: Pick<Task, 'id' | 'name' | 'parentId'>[];
+  issuesOpened: Pick<Issue, 'id' | 'title' | 'severity'>[];
+  issuesClosed: Pick<Issue, 'id' | 'title'>[];
+  teamAttendance: {
+    present: { uid: string; name: string; }[];
+    absent: { uid: string; name: string; }[];
+    total: number;
+  };
+  attachments: Pick<Attachment, 'id' | 'url' | 'filename' | 'ownerName'>[];
+}
+
+export interface DprSummary {
+  executiveSummary: string;
+  keyAchievements: string[];
+  newIssues: string[];
+  attendanceSummary: string;
+  outlook: string;
+}

@@ -138,6 +138,21 @@ export const getTaskIssues = async (taskId: string, userUid: string, isSuperviso
   }
 };
 
+export const getProjectIssues = async (projectId: string): Promise<Issue[]> => {
+    if (!projectId) return [];
+    console.log(`issueService: getProjectIssues for projectId: ${projectId}`);
+    const q = query(issuesCollection, where('projectId', '==', projectId));
+    try {
+        const querySnapshot = await getDocs(q);
+        const issues = querySnapshot.docs.map(mapDocumentToIssue);
+        console.log(`issueService: Fetched ${issues.length} issues for project ${projectId}.`);
+        return issues;
+    } catch(e: any) {
+        console.error(`issueService: Error fetching issues for project ${projectId}`, e);
+        throw e;
+    }
+};
+
 export const getOpenIssuesForTaskIds = async (taskIds: string[]): Promise<Issue[]> => {
   if (taskIds.length === 0) {
     return [];
