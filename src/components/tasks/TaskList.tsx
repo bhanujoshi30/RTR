@@ -10,9 +10,10 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface TaskListProps {
   projectId: string;
+  onTasksUpdated?: () => void;
 }
 
-export function TaskList({ projectId }: TaskListProps) {
+export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
   const [tasks, setTasks] = useState<Task[]>([]); // Will hold main tasks
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +90,9 @@ export function TaskList({ projectId }: TaskListProps) {
   const onTaskUpdated = () => {
     console.log('TaskList: onTaskUpdated called, re-fetching main tasks.');
     fetchMainTasks();
+    if(onTasksUpdated) {
+        onTasksUpdated();
+    }
   }
 
   if (loading) {

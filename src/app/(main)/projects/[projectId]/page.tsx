@@ -322,7 +322,7 @@ export default function ProjectDetailsPage() {
                               </Button>
                           )}
                       </div>
-                      {user && <TaskList projectId={projectId} />}
+                      {user && <TaskList projectId={projectId} onTasksUpdated={fetchProjectDetails} />}
                   </div>
               </TabsContent>
             )}
