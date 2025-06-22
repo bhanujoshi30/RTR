@@ -170,7 +170,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         <FormField
           control={form.control}
           name="assignedToUids"
-          render={() => (
+          render={({ field }) => (
             <FormItem>
               <div className="mb-4">
                 <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
@@ -189,24 +189,24 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                     render={({ field }) => {
                       return (
                         <FormItem
-                          className="flex flex-row items-center space-x-3 space-y-0"
+                          key={item.uid}
+                          className="flex flex-row items-start space-x-3 space-y-0"
                         >
                           <FormControl>
                             <Checkbox
                               checked={field.value?.includes(item.uid)}
                               onCheckedChange={(checked) => {
-                                const currentUids = field.value || [];
                                 return checked
-                                  ? field.onChange([...currentUids, item.uid])
+                                  ? field.onChange([...(field.value || []), item.uid])
                                   : field.onChange(
-                                      currentUids.filter(
+                                      (field.value || []).filter(
                                         (value) => value !== item.uid
                                       )
                                     )
                               }}
                             />
                           </FormControl>
-                          <FormLabel className="font-normal cursor-pointer">
+                          <FormLabel className="font-normal">
                             {item.displayName || item.email}
                           </FormLabel>
                         </FormItem>
@@ -219,6 +219,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             </FormItem>
           )}
         />
+
 
         <FormField control={form.control} name="dueDate" render={({ field }) => (
           <FormItem className="flex flex-col">
