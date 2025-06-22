@@ -36,7 +36,7 @@ interface CreateTaskData {
   reminderDays?: number | null;
 }
 
-const mapDocumentToTask = (docSnapshot: any): Task => {
+export const mapDocumentToTask = (docSnapshot: any): Task => {
   const data = docSnapshot.data();
   return {
     id: docSnapshot.id,

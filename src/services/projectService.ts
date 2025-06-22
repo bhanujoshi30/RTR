@@ -18,7 +18,7 @@ import {
   limit,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { deleteAllTasksForProject, getProjectMainTasks, getAllProjectTasks } from '@/services/taskService';
+import { deleteAllTasksForProject, getProjectMainTasks, getAllProjectTasks, mapDocumentToTask } from '@/services/taskService';
 import { differenceInCalendarDays } from 'date-fns';
 
 const projectsCollection = collection(db, 'projects');
@@ -193,7 +193,7 @@ const processProjectList = async (projectsFromDb: Project[]): Promise<Project[]>
       project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
 
       const now = new Date();
-      project.hasUpcomingReminder = projectTasks.some(task => {
+      project.hasUpcomingReminder = mainTasks.some(task => {
         if (task.taskType !== 'collection' || task.status === 'Completed' || !task.dueDate || !task.reminderDays) {
           return false;
         }
