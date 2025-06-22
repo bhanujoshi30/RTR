@@ -68,28 +68,36 @@ export function ProjectCard({ project }: ProjectCardProps) {
           </div>
           <Progress value={project.progress} className="h-2 w-full" aria-label={`Project progress: ${project.progress}%`} />
         </div>
-        {(project.totalMainTasks !== undefined || project.totalSubTasks !== undefined || project.totalOpenIssues !== undefined) && (
-          <div className="space-y-1 text-sm text-muted-foreground">
-            {project.totalMainTasks !== undefined && (
-              <div className="flex items-center">
-                <Layers className="mr-2 h-4 w-4 text-indigo-600" />
-                <span>{project.totalMainTasks} Main Task{project.totalMainTasks !== 1 ? 's' : ''}</span>
-              </div>
+        <div className="space-y-1 text-sm text-muted-foreground">
+            {(project.totalMainTasks !== undefined || project.totalSubTasks !== undefined || project.totalOpenIssues !== undefined) && (
+            <>
+                {project.totalMainTasks !== undefined && (
+                <div className="flex items-center">
+                    <Layers className="mr-2 h-4 w-4 text-indigo-600" />
+                    <span>{project.totalMainTasks} Main Task{project.totalMainTasks !== 1 ? 's' : ''}</span>
+                </div>
+                )}
+                {project.totalSubTasks !== undefined && (
+                <div className="flex items-center">
+                    <ListChecks className="mr-2 h-4 w-4 text-sky-600" />
+                    <span>{project.totalSubTasks} Sub-task{project.totalSubTasks !== 1 ? 's' : ''}</span>
+                </div>
+                )}
+                {project.totalOpenIssues !== undefined && (
+                <div className="flex items-center">
+                    <AlertTriangle className="mr-2 h-4 w-4 text-amber-600" />
+                    <span>{project.totalOpenIssues} Open Issue{project.totalOpenIssues !== 1 ? 's' : ''}</span>
+                </div>
+                )}
+            </>
             )}
-            {project.totalSubTasks !== undefined && (
-              <div className="flex items-center">
-                <ListChecks className="mr-2 h-4 w-4 text-sky-600" />
-                <span>{project.totalSubTasks} Sub-task{project.totalSubTasks !== 1 ? 's' : ''}</span>
-              </div>
+            {project.totalCost && project.totalCost > 0 && (
+                <div className="flex items-center pt-1">
+                    <Wallet className="mr-2 h-4 w-4 text-green-600" />
+                    <span className="text-foreground font-medium">Est. Cost: {new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(project.totalCost)}</span>
+                </div>
             )}
-            {project.totalOpenIssues !== undefined && (
-              <div className="flex items-center">
-                <AlertTriangle className="mr-2 h-4 w-4 text-amber-600" />
-                <span>{project.totalOpenIssues} Open Issue{project.totalOpenIssues !== 1 ? 's' : ''}</span>
-              </div>
-            )}
-          </div>
-        )}
+        </div>
       </CardContent>
       <CardFooter className="flex flex-col items-start gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
          <div className="flex items-center text-xs text-muted-foreground">

@@ -44,6 +44,15 @@ const mainTaskSchema = z.object({
   dueDate: z.date({ required_error: "Due date is required." }),
   taskType: z.enum(taskTypes).default('standard'),
   reminderDays: z.coerce.number().int().min(0).optional().nullable(),
+  cost: z.coerce.number().positive({ message: "Cost must be a positive number"}).optional().nullable(),
+}).superRefine((data, ctx) => {
+    if (data.taskType === 'collection' && (data.cost === undefined || data.cost === null || data.cost <= 0)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "A positive cost amount is required for collection tasks.",
+            path: ["cost"],
+        });
+    }
 });
 
 
@@ -77,6 +86,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       assignedToUids: isSubTask ? (task?.assignedToUids || []) : undefined, // assignedToUids only for subTaskSchema
       taskType: !isSubTask ? (task?.taskType || 'standard') : undefined,
       reminderDays: !isSubTask ? (task?.reminderDays || null) : undefined,
+      cost: !isSubTask ? (task?.cost || null) : undefined,
     },
   });
 
@@ -132,6 +142,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       taskPayload.assignedToUids = subTaskData.assignedToUids || [];
       taskPayload.assignedToNames = assignedToNamesForPayload || [];
       taskPayload.taskType = 'standard';
+      taskPayload.cost = null;
     } else {
       const mainTaskData = data as z.infer<typeof mainTaskSchema>;
       taskPayload.description = mainTaskData.description || '';
@@ -141,6 +152,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       taskPayload.assignedToNames = [];
       taskPayload.taskType = mainTaskData.taskType;
       taskPayload.reminderDays = (mainTaskData.taskType === 'collection' && mainTaskData.reminderDays) ? mainTaskData.reminderDays : null;
+      taskPayload.cost = (mainTaskData.taskType === 'collection' && mainTaskData.cost) ? mainTaskData.cost : null;
     }
 
 
@@ -386,26 +398,46 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 />
             )}
              {taskTypeWatcher === 'collection' && !isSubTask && (
-              <FormField
-                control={form.control}
-                name="reminderDays"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Reminder (Days Before Due Date)</FormLabel>
-                    <FormControl>
-                      <Input 
-                        type="number" 
-                        placeholder="E.g., 7" 
-                        {...field} 
-                        value={field.value ?? ''}
-                        onChange={e => field.onChange(e.target.value === '' ? null : e.target.value)}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                    <p className="text-xs text-muted-foreground pt-1">Set how many days before the due date the reminder should start.</p>
-                  </FormItem>
-                )}
-              />
+              <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="cost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Cost Amount (INR)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="E.g., 10000" 
+                          {...field} 
+                          value={(field.value as number) ?? ''}
+                          onChange={e => field.onChange(e.target.value === '' ? null : e.target.value)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="reminderDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Reminder (Days Before Due)</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="number" 
+                          placeholder="E.g., 7" 
+                          {...field} 
+                          value={(field.value as number) ?? ''}
+                          onChange={e => field.onChange(e.target.value === '' ? null : e.target.value)}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
             )}
           </CardContent>
           <CardFooter>

@@ -68,6 +68,7 @@ const mapDocumentToProject = (docSnapshot: any): Project => {
     progress: data.progress || 0,
     photoURL: data.photoURL || null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
+    totalCost: data.totalCost || 0,
   };
 };
 
@@ -95,7 +96,6 @@ const calculateProjectProgress = async (projectId: string, mainTasks?: Task[]): 
   const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
 
   if (standardMainTasks.length === 0) {
-    // If there are no standard tasks, project is 0% complete (or 100% if you only have collection tasks that are all complete, but let's stick to 0 for simplicity)
     return 0;
   }
   
@@ -181,7 +181,7 @@ const processProjectList = async (projectsFromDb: Project[]): Promise<Project[]>
         }, 0);
         project.progress = Math.round(totalProgressSum / standardMainTasks.length);
       } else {
-        project.progress = standardMainTasks.length > 0 ? 100 : 0; // If there are standard tasks but no subtasks, assume 100%? Or 0? Let's say 0. If all standard tasks are done, progress is 100.
+        project.progress = standardMainTasks.length > 0 ? 100 : 0;
         const allStandardTasksDone = standardMainTasks.every(t => t.status === 'Completed');
         if(standardMainTasks.length > 0 && allStandardTasksDone) {
             project.progress = 100;
@@ -191,6 +191,7 @@ const processProjectList = async (projectsFromDb: Project[]): Promise<Project[]>
       }
       
       project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
+      project.totalCost = mainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
 
       const now = new Date();
       project.hasUpcomingReminder = mainTasks.some(task => {
@@ -283,6 +284,7 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       const mainTasks = await getProjectMainTasks(projectId);
       projectData.progress = await calculateProjectProgress(projectId, mainTasks);
       projectData.status = getDynamicStatusFromProgress(projectData.progress, mainTasks);
+      projectData.totalCost = mainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
       return projectData;
       
     } else {
@@ -326,13 +328,14 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
     }
   }
   
-  const projectsWithProgressAndStatusPromises = fetchedProjectsMapped.map(async (project) => {
+  const projectsWithDetailsPromises = fetchedProjectsMapped.map(async (project) => {
     const mainTasks = await getProjectMainTasks(project.id);
     project.progress = await calculateProjectProgress(project.id, mainTasks);
     project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
+    project.totalCost = mainTasks.filter(task => task.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
     return project;
   });
-  const fetchedProjects = await Promise.all(projectsWithProgressAndStatusPromises);
+  const fetchedProjects = await Promise.all(projectsWithDetailsPromises);
 
 
   fetchedProjects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));

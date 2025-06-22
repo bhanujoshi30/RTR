@@ -34,6 +34,7 @@ interface CreateTaskData {
   assignedToNames?: string[] | null;
   taskType?: 'standard' | 'collection';
   reminderDays?: number | null;
+  cost?: number | null;
 }
 
 export const mapDocumentToTask = (docSnapshot: any): Task => {
@@ -49,6 +50,7 @@ export const mapDocumentToTask = (docSnapshot: any): Task => {
     status: data.status as TaskStatus,
     taskType: data.taskType || 'standard',
     reminderDays: data.reminderDays || null,
+    cost: data.cost || null,
     ownerUid: data.ownerUid,
     ownerName: data.ownerName || null,
     assignedToUids: data.assignedToUids || [],
@@ -116,6 +118,7 @@ export const createTask = async (
     newTaskPayload.assignedToNames = [];
     newTaskPayload.taskType = taskData.taskType || 'standard';
     newTaskPayload.reminderDays = taskData.taskType === 'collection' ? (taskData.reminderDays || null) : null;
+    newTaskPayload.cost = taskData.taskType === 'collection' ? (taskData.cost || null) : null;
   }
 
   try {
@@ -383,6 +386,7 @@ interface UpdateTaskData {
     assignedToNames?: string[] | null;
     taskType?: 'standard' | 'collection';
     reminderDays?: number | null;
+    cost?: number | null;
 }
 
 export const updateTask = async (
@@ -476,6 +480,10 @@ export const updateTask = async (
       updatePayload.reminderDays = taskDataFromSnap.taskType === 'collection' ? (updates.reminderDays || null) : null;
       detailsChanged = true;
     }
+    if (updates.cost !== undefined && updates.cost !== taskDataFromSnap.cost) {
+      updatePayload.cost = taskDataFromSnap.taskType === 'collection' ? (updates.cost || null) : null;
+      detailsChanged = true;
+    }
 
     if (updates.dueDate !== undefined) {
         const newDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
@@ -495,7 +503,7 @@ export const updateTask = async (
         );
     }
     
-    const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt', 'taskType', 'reminderDays'];
+    const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt', 'taskType', 'reminderDays', 'cost'];
     Object.keys(updatePayload).forEach(key => {
         if (!allowedMainTaskKeys.includes(key as string)) {
             delete updatePayload[key];

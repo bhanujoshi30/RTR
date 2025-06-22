@@ -22,6 +22,7 @@ export interface Project {
   totalSubTasks?: number;
   totalOpenIssues?: number;
   hasUpcomingReminder?: boolean;
+  totalCost?: number;
 }
 
 export interface Task {
@@ -35,6 +36,7 @@ export interface Task {
   status: TaskStatus; // Status is user-editable only for sub-tasks
   taskType?: 'standard' | 'collection';
   reminderDays?: number | null;
+  cost?: number | null;
   createdAt: Date;
   dueDate: Date; // Made mandatory from previous change for sub-tasks, optional for main tasks
   ownerUid: string;
