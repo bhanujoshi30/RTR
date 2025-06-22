@@ -1,95 +1,64 @@
 
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // =================================
-    // Helper Functions
-    // =================================
-    function isOwner(uid) {
-      return request.auth.uid == uid;
-    }
-    
-    function isSignedIn() {
-      return request.auth.uid != null;
-    }
 
-    function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // This function robustly checks if the requesting user is the owner of the project
-    // associated with a given issue. It first checks for a denormalized `projectOwnerUid`
-    // on the issue itself. If that's missing (e.g., for older data), it falls back
-    // to fetching the parent task to get the `projectOwnerUid`. This is safe for single-document
-    // operations like get, update, and delete.
-    function isProjectOwnerForIssue(issueData) {
-      if (issueData.projectOwnerUid != null) {
-        return request.auth.uid == issueData.projectOwnerUid;
-      }
-      let parentTask = get(/databases/$(database)/documents/tasks/$(issueData.taskId)).data;
-      return request.auth.uid == parentTask.projectOwnerUid;
-    }
-
-    // =================================
-    // Collection Rules
-    // =================================
-
+    // PROJECTS Collection
     match /projects/{projectId} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isOwner(resource.data.ownerUid);
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.ownerUid;
+      allow update: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
     }
-    
+
+    // TASKS Collection
     match /tasks/{taskId} {
-      allow read: if isSignedIn();
-      allow create: if isOwner(request.resource.data.projectOwnerUid);
-      allow delete: if isOwner(resource.data.projectOwnerUid);
+      allow read: if request.auth != null;
+      
+      allow create: if request.auth != null && request.auth.uid == get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid;
+      
+      allow update: if request.auth != null && (request.auth.uid == resource.data.ownerUid || request.auth.uid in resource.data.assignedToUids);
+      
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
 
-      // Updates are more complex:
-      // - The project owner can update any field.
-      // - An assigned supervisor/member can only update specific fields (status, description, dueDate).
-      allow update: if isOwner(resource.data.projectOwnerUid) || 
-                       (request.auth.uid in resource.data.assignedToUids &&
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'description', 'dueDate', 'updatedAt']));
-      
-      // Subcollections
-      match /timeline/{eventId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-      }
-      
+      // Sub-collections of Tasks
       match /attachments/{attachmentId} {
-        allow read: if isSignedIn();
-        allow create: if isOwner(request.resource.data.ownerUid);
-        allow delete: if isOwner(resource.data.ownerUid);
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && (request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid || request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids);
+        allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
+      }
+
+      match /timeline/{eventId} {
+        allow read: if request.auth != null;
+        allow create: if request.auth != null && (request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid || request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids);
+        allow delete: if request.auth != null && request.auth.uid == resource.data.author.uid; 
       }
     }
-
+    
+    // ISSUES Collection
     match /issues/{issueId} {
-        allow read: if isSignedIn();
-
-        allow create: if isOwner(request.resource.data.projectOwnerUid) ||
-                         (request.auth.uid in request.resource.data.assignedToUids);
-
-        // Use the helper function to ensure the project owner can always update/delete,
-        // even if the issue document is missing the denormalized projectOwnerUid.
-        allow delete: if isProjectOwnerForIssue(resource.data) || isOwner(resource.data.ownerUid);
+        allow read: if request.auth != null;
         
-        allow update: if isProjectOwnerForIssue(resource.data) || 
-                         isOwner(resource.data.ownerUid) ||
-                         (request.auth.uid in resource.data.assignedToUids);
+        allow create: if request.auth != null && (request.auth.uid == get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.ownerUid || request.auth.uid in get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedToUids);
+        
+        allow update: if request.auth != null && (request.auth.uid == resource.data.ownerUid || request.auth.uid in resource.data.assignedToUids);
+        
+        // This rule allows the issue creator OR the overall project owner to delete the issue.
+        // This is crucial for allowing a project owner to clean up all sub-data when deleting a project.
+        allow delete: if request.auth != null && (request.auth.uid == resource.data.ownerUid || request.auth.uid == resource.data.projectOwnerUid);
     }
-    
+
+    // USERS Collection
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
+      allow read: if request.auth != null;
+      // Only admins can create, update, or delete user documents
+      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
-    match /attendance/{recordId} {
-       allow read: if isAdmin() || isOwner(resource.data.userId);
-       allow create: if isOwner(request.resource.data.userId);
-       allow update, delete: if false;
+    // ATTENDANCE Collection
+    match /attendance/{attendanceId} {
+        allow read: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+        allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
     }
   }
 }
