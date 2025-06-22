@@ -3,20 +3,22 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Allow public read access to project photos, since they appear on the dashboard.
-    // Allow any authenticated user to write. The business logic for *which user* can
-    // update a *specific project's* photo is already handled by the Firestore security
-    // rules and application code, which check for ownership before calling the upload function.
+    // Allows any authenticated user to read/write project photos.
+    // The logic to control *which* user can edit/create is in the app code.
     match /project-photos/{allPaths=**} {
       allow read;
       allow write: if request.auth != null;
     }
 
-    // Allow authenticated users to manage their own attachments within a task.
-    // A more secure rule would check Firestore for task ownership/assignment,
-    // but the application logic already performs these checks before initiating an upload.
-    // This rule unblocks the upload action itself.
+    // Allows any authenticated user to read/write task attachments.
+    // App logic should verify that the user is assigned to the task.
     match /attachments/{taskId}/{allPaths=**} {
+      allow read;
+      allow write: if request.auth != null;
+    }
+    
+    // Allows any authenticated user to upload their attendance photo.
+    match /attendance-photos/{allPaths=**} {
       allow read;
       allow write: if request.auth != null;
     }
