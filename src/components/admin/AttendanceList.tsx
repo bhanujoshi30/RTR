@@ -40,7 +40,7 @@ export function AttendanceList({ records }: AttendanceListProps) {
         <TableBody>
           {records.map((record) => (
             <TableRow key={record.id}>
-              <TableCell className="font-medium">
+              <TableCell className="font-medium align-top">
                 <div className="flex items-center gap-2">
                   <Avatar className="h-8 w-8">
                     {/* Assuming user might have a photoURL, otherwise fallback */}
@@ -49,11 +49,22 @@ export function AttendanceList({ records }: AttendanceListProps) {
                   <span>{record.userName}</span>
                 </div>
               </TableCell>
-              <TableCell>{format(record.timestamp, 'p')}</TableCell>
-              <TableCell className="max-w-xs truncate text-muted-foreground text-xs">
-                {record.location?.address || 'Not available'}
+              <TableCell className="align-top">{format(record.timestamp, 'p')}</TableCell>
+              <TableCell className="max-w-xs align-top">
+                {record.location ? (
+                  <div>
+                    <p className="whitespace-normal break-words text-sm text-foreground">
+                      {record.location.address || 'Address not available'}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {`Lat: ${record.location.latitude.toFixed(4)}, Lon: ${record.location.longitude.toFixed(4)}`}
+                    </p>
+                  </div>
+                ) : (
+                  <span className="text-sm text-muted-foreground">Not available</span>
+                )}
               </TableCell>
-              <TableCell className="text-right">
+              <TableCell className="text-right align-top">
                 <Button variant="outline" size="sm" asChild>
                   <Link href={record.photoUrl} target="_blank" rel="noopener noreferrer">
                     <Camera className="mr-2 h-4 w-4" />
