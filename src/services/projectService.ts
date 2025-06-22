@@ -15,6 +15,7 @@ import {
   Timestamp,
   orderBy,
   documentId,
+  limit,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { deleteAllTasksForProject, getProjectMainTasks, getAllProjectTasks } from '@/services/taskService';
@@ -265,17 +266,37 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
 
     if (projectSnap.exists()) {
       const projectData = mapDocumentToProject(projectSnap);
-      // Security check: Allow access if user is owner or assigned client
+      
+      // Security check: Allow access if user is owner, admin, assigned client, or a member/supervisor assigned to a task in this project.
       const isOwner = projectData.ownerUid === userUid;
       const isClient = projectData.clientUid === userUid;
-      if (!isOwner && !isClient && userRole !== 'admin') {
-         throw new Error(`Access denied to project ${projectId}. User is not owner or client.`);
+      const isAdmin = userRole === 'admin';
+      
+      if (!isOwner && !isClient && !isAdmin) {
+        // For other roles, check if they are assigned to any task in this project.
+        if (userRole === 'supervisor' || userRole === 'member') {
+          const tasksQuery = query(
+            collection(db, 'tasks'),
+            where('projectId', '==', projectId),
+            where('assignedToUids', 'array-contains', userUid),
+            limit(1) // We only need to know if at least one exists.
+          );
+          const tasksSnapshot = await getDocs(tasksQuery);
+          if (tasksSnapshot.empty) {
+            throw new Error(`Access denied to project ${projectId}. User is not owner, client, or assigned to any tasks in it.`);
+          }
+        } else {
+            // Deny by default for any other unhandled case
+            throw new Error(`Access denied to project ${projectId}. User role is not authorized.`);
+        }
       }
-
+      
+      // If we passed the security checks, proceed to calculate progress and status
       const mainTasks = await getProjectMainTasks(projectId);
       projectData.progress = await calculateProjectProgress(projectId, mainTasks);
       projectData.status = getDynamicStatusFromProgress(projectData.progress);
       return projectData;
+      
     } else {
       console.warn('projectService: Project not found for ID:', projectId);
       return null;
@@ -285,6 +306,7 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
     if ((error as any)?.code === 'permission-denied') {
         throw new Error(`Access denied to project ${projectId}. Check Firestore security rules.`);
     }
+    // Re-throw other errors, including our custom access denied ones
     throw error;
   }
 };
@@ -376,3 +398,5 @@ export const deleteProject = async (projectId: string, userUid: string): Promise
     throw error;
   }
 };
+
+    
