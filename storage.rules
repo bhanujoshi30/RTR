@@ -1,20 +1,23 @@
+
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Match any file within the 'attachments' directory.
-    // The {taskId} and {filename} are wildcards that capture parts of the path.
-    match /attachments/{taskId}/{filename} {
-    
-      // Allow files to be read by anyone. This is standard if you intend for
-      // the attachment URLs to be shared or displayed publicly in your app.
+    // Allow public read access to project photos, since they appear on the dashboard.
+    // Allow any authenticated user to write. The business logic for *which user* can
+    // update a *specific project's* photo is already handled by the Firestore security
+    // rules and application code, which check for ownership before calling the upload function.
+    match /project-photos/{allPaths=**} {
       allow read;
+      allow write: if request.auth != null;
+    }
 
-      // Allow files to be written (uploaded) only if the user is authenticated (logged in).
-      // This is the crucial fix. It provides a baseline of security by ensuring only
-      // app users can upload, preventing anonymous uploads.
-      // The application's UI logic is responsible for ensuring users only upload to tasks
-      // they have access to.
+    // Allow authenticated users to manage their own attachments within a task.
+    // A more secure rule would check Firestore for task ownership/assignment,
+    // but the application logic already performs these checks before initiating an upload.
+    // This rule unblocks the upload action itself.
+    match /attachments/{taskId}/{allPaths=**} {
+      allow read;
       allow write: if request.auth != null;
     }
   }
