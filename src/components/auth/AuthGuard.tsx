@@ -27,6 +27,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     }
   }, [user, loading, router, pathname]);
 
+  // Show loader while auth state is being determined.
   if (loading) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -35,8 +36,12 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
 
-  // This condition handles the state where a redirect might be pending for an unauthenticated user on a protected route.
-  if (!user && pathname !== '/login' && pathname !== '/register') {
+  // After loading, if a redirect is imminent, continue showing the loader
+  // to prevent the "flash" of the wrong page content.
+  const isUnauthenticatedOnProtectedRoute = !user && pathname !== '/login' && pathname !== '/register';
+  const isAuthenticatedOnAuthRoute = user && (pathname === '/login' || pathname === '/register' || pathname === '/');
+
+  if (isUnauthenticatedOnProtectedRoute || isAuthenticatedOnAuthRoute) {
     return (
       <div className="flex h-screen w-full items-center justify-center bg-background">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -44,10 +49,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
     );
   }
   
-  // If we reach here, it means:
-  // 1. `loading` is false.
-  // 2. EITHER the user is authenticated (`user` is truthy) AND is not on a path that needs redirection (e.g. already on /dashboard or other protected route)
-  // 3. OR the user is not authenticated (`!user`) AND they are on the `/login` or `/register` page.
-  // In these cases, we should render the children.
+  // If no loading and no redirect is pending, render the children.
+  // This means the user is in the correct state for the current route.
   return <>{children}</>;
 }
