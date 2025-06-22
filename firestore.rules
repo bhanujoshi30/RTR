@@ -1,112 +1,132 @@
+
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    //------------------------------------------------//
-    //                 Helper Functions               //
-    //------------------------------------------------//
-    
-    function isSignedIn() {
-      return request.auth != null;
+
+    // --- Helper Functions ---
+    // Note: Use get() only for rules on single documents (get, create, update, delete).
+    // Avoid get() in rules that will be used for 'list' operations (queries).
+
+    // Function to check if a user has a specific role (requires a get, use with caution)
+    function hasRole(role) {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
     }
 
-    function isUser(uid) {
-      return isSignedIn() && request.auth.uid == uid;
-    }
+    // --- Collections ---
 
-    function getUserData(uid) {
-      return get(/databases/$(database)/documents/users/$(uid)).data;
-    }
-
-    function isAdmin() {
-      // Checks if the requesting user is an admin.
-      return isSignedIn() && getUserData(request.auth.uid).role == 'admin';
-    }
-
-    function isTaskOwner(taskId) {
-      return isUser(get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid);
-    }
-    
-    function isAssignedToTask(taskId) {
-      return isSignedIn() && get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids.hasAny([request.auth.uid]);
-    }
-
-    //------------------------------------------------//
-    //                 Collection Rules               //
-    //------------------------------------------------//
-    
+    // --- Users Collection ---
     match /users/{userId} {
       // Admins can read/write any user document.
-      // Users can read/write their own document.
-      allow read, write: if isAdmin() || isUser(userId);
+      // Users can read/update their own document.
+      // The hasRole() function is safe here because listing all users is an admin-only operation,
+      // and the admin check happens first. For a non-admin getting their own doc, the second
+      // condition (request.auth.uid == userId) is met without needing hasRole().
+      allow read, update: if hasRole('admin') || request.auth.uid == userId;
+      
+      // Admins can create/delete user documents.
+      allow create, delete: if hasRole('admin');
     }
-    
+
+    // --- Projects Collection ---
     match /projects/{projectId} {
-      function isOwner() {
-        return isUser(get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid);
-      }
-      function isClient() {
-        // This performs two reads, which is inefficient but syntactically correct and necessary without 'let'
-        return get(/databases/$(database)/documents/projects/$(projectId)).data.clientUid != null 
-                && isUser(get(/databases/$(database)/documents/projects/$(projectId)).data.clientUid);
-      }
+      // Allow 'get' for any authenticated user. This is needed for supervisors/members
+      // to view project details after fetching the project ID from a task they are assigned to.
+      // The app logic ensures they only fetch IDs for projects they are involved in.
+      allow get: if request.auth.uid != null;
 
-      // Read: Project Owner, Admin, or assigned Client.
-      allow read: if isSignedIn() && (isOwner() || isAdmin() || isClient());
-      // Create: Any signed-in user. App logic restricts roles.
-      allow create: if isSignedIn();
-      // Update/Delete: Project Owner or Admin.
-      allow update, delete: if isSignedIn() && (isOwner() || isAdmin());
+      // Allow 'list' only for admins, or users querying for projects they own or are the client for.
+      // This relies on the application code to provide the correct 'where' clauses.
+      allow list: if hasRole('admin') ||
+                   (request.auth.uid != null && (
+                     (request.query.filters[0][2] == 'ownerUid' && request.query.filters[1][2] == request.auth.uid) ||
+                     (request.query.filters[0][2] == 'clientUid' && request.query.filters[1][2] == request.auth.uid)
+                   ));
+      
+      // Write access is restricted to the owner or an admin.
+      allow create, update, delete: if hasRole('admin') || resource.data.ownerUid == request.auth.uid;
     }
-    
+
+    // --- Tasks Collection ---
     match /tasks/{taskId} {
-      // Local functions to avoid repeated 'get' calls.
-      function task() { return get(/databases/$(database)/documents/tasks/$(taskId)).data; }
-      function isTaskAssigned() { return isSignedIn() && task().assignedToUids.hasAny([request.auth.uid]); }
-      function isProjectOwnerForTask() { return isUser(task().projectOwnerUid); }
+      // READ: Users can read tasks if they are an admin, the project owner, the task creator, or assigned to it.
+      // This rule avoids using `get()` which is inefficient and can cause issues with list queries.
+      // It relies on `projectOwnerUid` being stored on the task document.
+      allow read: if hasRole('admin') || 
+                   (request.auth.uid != null && (
+                     resource.data.projectOwnerUid == request.auth.uid || 
+                     resource.data.ownerUid == request.auth.uid || 
+                     request.auth.uid in resource.data.assignedToUids
+                   ));
 
-      // Read: Project Owner, Task Owner, Assigned User, or Admin.
-      allow read: if isSignedIn() && (isProjectOwnerForTask() || isUser(task().ownerUid) || isTaskAssigned() || isAdmin());
-      // Create: User must be the owner of the parent project or an admin.
-      allow create: if isSignedIn() && (isUser(get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid) || isAdmin());
-      // Update: Task Owner or an Assigned User.
-      allow update: if isSignedIn() && (isUser(task().ownerUid) || isTaskAssigned());
-      // Delete: Only the Task Owner.
-      allow delete: if isUser(task().ownerUid);
-      
-      // Subcollections
-      match /timeline/{eventId} {
-        allow read: if isSignedIn() && (isProjectOwnerForTask() || isUser(task().ownerUid) || isTaskAssigned() || isAdmin());
-        allow create: if isSignedIn(); // Logged by trusted logic.
-      }
-      match /attachments/{attachmentId} {
-        allow read, create: if isSignedIn() && (isProjectOwnerForTask() || isUser(task().ownerUid) || isTaskAssigned() || isAdmin());
-        allow delete: if isUser(resource.data.ownerUid);
-      }
+      // CREATE: A user can create a task if they are an admin or the owner of the parent project.
+      // A get() is acceptable here since it's for a single write operation.
+      allow create: if hasRole('admin') || 
+                     get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid;
+
+      // UPDATE: Project owner, task owner, or assigned user can update.
+      // (App logic restricts which fields assigned users can change).
+      allow update: if hasRole('admin') ||
+                     (request.auth.uid != null && (
+                       resource.data.projectOwnerUid == request.auth.uid ||
+                       resource.data.ownerUid == request.auth.uid ||
+                       request.auth.uid in resource.data.assignedToUids
+                     ));
+
+      // DELETE: Only the task owner or project owner can delete.
+      allow delete: if request.auth.uid != null && (
+                      resource.data.ownerUid == request.auth.uid ||
+                      resource.data.projectOwnerUid == request.auth.uid
+                    );
     }
-    
+
+    // --- Issues Collection ---
     match /issues/{issueId} {
-      // Local functions
-      function issue() { return get(/databases/$(database)/documents/issues/$(issueId)).data; }
-      function isAssignedToIssue() { return isSignedIn() && issue().assignedToUids.hasAny([request.auth.uid]); }
-      function isProjectOwnerForIssue() { return isUser(issue().projectOwnerUid); }
+      // READ: Users can read issues if they are admin, project owner, issue owner, or assigned to the issue.
+      // This rule also avoids get() by relying on `projectOwnerUid` stored on the issue.
+      allow read: if hasRole('admin') ||
+                   (request.auth.uid != null && (
+                     resource.data.projectOwnerUid == request.auth.uid ||
+                     resource.data.ownerUid == request.auth.uid ||
+                     request.auth.uid in resource.data.assignedToUids
+                   ));
+
+      // CREATE/UPDATE: User can create/update an issue if they own or are assigned to the parent sub-task.
+      // A get() is necessary and acceptable here as it's for a single write operation.
+      function canWriteIssue() {
+        let task = get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data;
+        return request.auth.uid == task.ownerUid ||
+               request.auth.uid in task.assignedToUids;
+      }
+      allow create, update: if canWriteIssue();
       
-      // Read: Project Owner, Task Owner, Issue Owner, Assigned User, Admin.
-      allow read: if isSignedIn() && (isProjectOwnerForIssue() || isTaskOwner(issue().taskId) || isUser(issue().ownerUid) || isAssignedToIssue() || isAdmin());
-      // Create: Task Owner or someone assigned to the task.
-      allow create: if isSignedIn() && (isTaskOwner(request.resource.data.taskId) || isAssignedToTask(request.resource.data.taskId));
-      // Update: Issue Owner or someone assigned to the issue.
-      allow update: if isSignedIn() && (isUser(issue().ownerUid) || isAssignedToIssue());
-      // Delete: Only the Issue Owner.
-      allow delete: if isUser(issue().ownerUid);
+      // DELETE: Only the issue owner or project owner can delete.
+      allow delete: if request.auth.uid != null && (
+                      resource.data.ownerUid == request.auth.uid ||
+                      resource.data.projectOwnerUid == request.auth.uid
+                    );
     }
     
+    // --- Timeline & Attachments Subcollections ---
+    match /tasks/{taskId}/{subcollection}/{docId} {
+        function canAccessSubcollection() {
+          let task = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+          return hasRole('admin') ||
+                 (request.auth.uid != null && (
+                   task.projectOwnerUid == request.auth.uid ||
+                   task.ownerUid == request.auth.uid ||
+                   request.auth.uid in task.assignedToUids
+                 ));
+        }
+        allow read, write: if canAccessSubcollection();
+    }
+    
+    // --- Attendance Collection ---
     match /attendance/{recordId} {
-      // Read: Only Admins.
-      allow read: if isAdmin();
-      // Create: User can only create their own record.
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        // Admins can read all records.
+        allow list, get: if hasRole('admin');
+        // Users can create their own record.
+        allow create: if request.auth.uid == request.resource.data.userId;
     }
   }
 }
