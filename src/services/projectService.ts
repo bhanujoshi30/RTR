@@ -73,10 +73,11 @@ const mapDocumentToProject = (docSnapshot: any): Project => {
 
 const getDynamicStatusFromProgress = (progress: number, allMainTasks: Task[]): ProjectStatus => {
   if (progress >= 100) {
-    const hasIncompleteCollectionTasks = allMainTasks.some(
+    // Check for any collection tasks that are not yet marked as 'Completed'.
+    const hasPendingCollectionTasks = allMainTasks.some(
       (task) => task.taskType === 'collection' && task.status !== 'Completed'
     );
-    if (hasIncompleteCollectionTasks) {
+    if (hasPendingCollectionTasks) {
       return 'Payment Incomplete';
     }
     return 'Completed';
@@ -141,47 +142,7 @@ export const createProject = async (
   }
 };
 
-export const getUserProjects = async (userUid: string, userRole?: UserRole): Promise<Project[]> => {
-  console.log(`projectService: getUserProjects for user: ${userUid}`);
-  if (!userUid) {
-    return [];
-  }
-
-  // Query without ordering to avoid composite index
-  const q = query(projectsCollection, where('ownerUid', '==', userUid));
-  try {
-    const querySnapshot = await getDocs(q);
-    const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
-    
-    // Sort in application code
-    projectsFromDb.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-
-    const projectsPromises = projectsFromDb.map(async (project) => {
-      const mainTasks = await getProjectMainTasks(project.id);
-      project.progress = await calculateProjectProgress(project.id, mainTasks);
-      project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
-      return project;
-    });
-    const projects = await Promise.all(projectsPromises);
-    console.log(`projectService: Fetched ${projects.length} projects for owner.`);
-    return projects;
-  } catch (error: any) {
-    console.error('projectService: Error fetching user projects for uid:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
-    throw error;
-  }
-};
-
-export const getClientProjects = async (clientUid: string): Promise<Project[]> => {
-  console.log(`projectService: getClientProjects for client: ${clientUid}`);
-  if (!clientUid) {
-    return [];
-  }
-
-  const q = query(projectsCollection, where('clientUid', '==', clientUid));
-  try {
-    const querySnapshot = await getDocs(q);
-    const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
-    
+const processProjectList = async (projectsFromDb: Project[]): Promise<Project[]> => {
     if (projectsFromDb.length === 0) {
         return [];
     }
@@ -189,30 +150,16 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
     const projectIds = projectsFromDb.map(p => p.id);
     const allTasksByProject = new Map<string, Task[]>();
     
-    // Efficiently fetch all tasks for all projects
     const taskChunks: string[][] = [];
     for (let i = 0; i < projectIds.length; i += 30) {
       taskChunks.push(projectIds.slice(i, i + 30));
     }
+
     for (const chunk of taskChunks) {
         const tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk));
         const tasksSnapshot = await getDocs(tasksQuery);
         tasksSnapshot.forEach(doc => {
-            const taskData = doc.data();
-            const task: Task = {
-                id: doc.id,
-                projectId: taskData.projectId,
-                parentId: taskData.parentId || null,
-                name: taskData.name,
-                description: taskData.description || '',
-                status: taskData.status as TaskStatus,
-                taskType: taskData.taskType || 'standard',
-                reminderDays: taskData.reminderDays || null,
-                ownerUid: taskData.ownerUid,
-                assignedToUids: taskData.assignedToUids || [],
-                createdAt: (taskData.createdAt as Timestamp).toDate(),
-                dueDate: (taskData.dueDate as Timestamp).toDate(),
-            };
+            const task: Task = mapDocumentToTask(doc);
             const tasks = allTasksByProject.get(task.projectId) || [];
             tasks.push(task);
             allTasksByProject.set(task.projectId, tasks);
@@ -222,7 +169,6 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
     const projectsWithDetails = projectsFromDb.map(project => {
       const projectTasks = allTasksByProject.get(project.id) || [];
       const mainTasks = projectTasks.filter(t => !t.parentId);
-      
       const standardMainTasks = mainTasks.filter(mt => mt.taskType !== 'collection');
       
       if (standardMainTasks.length > 0) {
@@ -230,16 +176,22 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
             const subTasks = projectTasks.filter(t => t.parentId === task.id);
             if (subTasks.length === 0) return sum;
             const completedSubTasks = subTasks.filter(st => st.status === 'Completed').length;
-            return sum + Math.round((completedSubTasks / subTasks.length) * 100);
+            const mainTaskProgress = Math.round((completedSubTasks / subTasks.length) * 100);
+            return sum + mainTaskProgress;
         }, 0);
         project.progress = Math.round(totalProgressSum / standardMainTasks.length);
       } else {
-        project.progress = 0;
+        project.progress = standardMainTasks.length > 0 ? 100 : 0; // If there are standard tasks but no subtasks, assume 100%? Or 0? Let's say 0. If all standard tasks are done, progress is 100.
+        const allStandardTasksDone = standardMainTasks.every(t => t.status === 'Completed');
+        if(standardMainTasks.length > 0 && allStandardTasksDone) {
+            project.progress = 100;
+        } else if (standardMainTasks.length === 0) {
+            project.progress = 0;
+        }
       }
       
       project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
 
-      // Check for upcoming reminders
       const now = new Date();
       project.hasUpcomingReminder = projectTasks.some(task => {
         if (task.taskType !== 'collection' || task.status === 'Completed' || !task.dueDate || !task.reminderDays) {
@@ -253,11 +205,39 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
     });
 
     projectsWithDetails.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-
-    console.log(`projectService: Fetched ${projectsWithDetails.length} projects for client with details.`);
     return projectsWithDetails;
+}
+
+export const getUserProjects = async (userUid: string, userRole?: UserRole): Promise<Project[]> => {
+  console.log(`projectService: getUserProjects for user: ${userUid}`);
+  if (!userUid) return [];
+
+  const q = query(projectsCollection, where('ownerUid', '==', userUid));
+  try {
+    const querySnapshot = await getDocs(q);
+    const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
+    const projects = await processProjectList(projectsFromDb);
+    console.log(`projectService: Fetched ${projects.length} projects for owner.`);
+    return projects;
   } catch (error: any) {
-    console.error('projectService: Error fetching client projects for uid:', clientUid, error.message, error.code ? `(${error.code})` : '', error.stack);
+    console.error('projectService: Error fetching user projects for uid:', userUid, error.message, error.stack);
+    throw error;
+  }
+};
+
+export const getClientProjects = async (clientUid: string): Promise<Project[]> => {
+  console.log(`projectService: getClientProjects for client: ${clientUid}`);
+  if (!clientUid) return [];
+
+  const q = query(projectsCollection, where('clientUid', '==', clientUid));
+  try {
+    const querySnapshot = await getDocs(q);
+    const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
+    const projects = await processProjectList(projectsFromDb);
+    console.log(`projectService: Fetched ${projects.length} projects for client with details.`);
+    return projects;
+  } catch (error: any) {
+    console.error('projectService: Error fetching client projects for uid:', clientUid, error.message, error.stack);
     if (error.message.includes('index')) {
         console.error("A Firestore index on 'clientUid' is required for this query to work.");
     }
@@ -278,32 +258,28 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
     if (projectSnap.exists()) {
       const projectData = mapDocumentToProject(projectSnap);
       
-      // Security check: Allow access if user is owner, admin, assigned client, or a member/supervisor assigned to a task in this project.
       const isOwner = projectData.ownerUid === userUid;
       const isClient = projectData.clientUid === userUid;
       const isAdmin = userRole === 'admin';
       const isServiceCall = userUid === 'dpr-service-call';
 
       if (!isOwner && !isClient && !isAdmin && !isServiceCall) {
-        // For other roles, check if they are assigned to any task in this project.
         if (userRole === 'supervisor' || userRole === 'member') {
           const tasksQuery = query(
             collection(db, 'tasks'),
             where('projectId', '==', projectId),
             where('assignedToUids', 'array-contains', userUid),
-            limit(1) // We only need to know if at least one exists.
+            limit(1)
           );
           const tasksSnapshot = await getDocs(tasksQuery);
           if (tasksSnapshot.empty) {
             throw new Error(`Access denied to project ${projectId}. User is not owner, client, or assigned to any tasks in it.`);
           }
         } else {
-            // Deny by default for any other unhandled case
             throw new Error(`Access denied to project ${projectId}. User role is not authorized.`);
         }
       }
       
-      // If we passed the security checks, proceed to calculate progress and status
       const mainTasks = await getProjectMainTasks(projectId);
       projectData.progress = await calculateProjectProgress(projectId, mainTasks);
       projectData.status = getDynamicStatusFromProgress(projectData.progress, mainTasks);
@@ -318,7 +294,6 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
     if ((error as any)?.code === 'permission-denied') {
         throw new Error(`Access denied to project ${projectId}. Check Firestore security rules.`);
     }
-    // Re-throw other errors, including our custom access denied ones
     throw error;
   }
 };
@@ -410,5 +385,3 @@ export const deleteProject = async (projectId: string, userUid: string): Promise
     throw error;
   }
 };
-
-    

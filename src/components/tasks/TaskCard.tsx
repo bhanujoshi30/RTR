@@ -213,7 +213,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const showEditButton = isOwnerOfThisTask;
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
   const hasOpenIssuesForCard = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
-  const showReminder = task.taskType === 'collection' && daysRemaining !== null && task.reminderDays && daysRemaining >= 0 && daysRemaining <= task.reminderDays;
+  const showReminder = task.taskType === 'collection' && task.status !== 'Completed' && daysRemaining !== null && task.reminderDays && daysRemaining >= 0 && daysRemaining <= task.reminderDays;
 
   return (
     <>
