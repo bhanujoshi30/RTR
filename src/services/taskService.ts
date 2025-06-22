@@ -18,7 +18,7 @@ import {
   getCountFromServer,
   documentId,
 } from 'firebase/firestore';
-import { deleteIssuesForTask, hasOpenIssues, getOpenIssuesForTaskIds } from '@/services/issueService';
+import { deleteIssuesForTask, hasOpenIssues, getOpenIssuesForTaskIds } from './issueService';
 import { logTimelineEvent } from '@/services/timelineService';
 
 const tasksCollection = collection(db, 'tasks');
@@ -31,6 +31,7 @@ interface CreateTaskData {
   parentId?: string | null;
   assignedToUids?: string[] | null;
   assignedToNames?: string[] | null;
+  taskType?: 'standard' | 'collection';
 }
 
 const mapDocumentToTask = (docSnapshot: any): Task => {
@@ -43,6 +44,7 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
     name: data.name,
     description: data.description || '',
     status: data.status as TaskStatus,
+    taskType: data.taskType || 'standard',
     ownerUid: data.ownerUid,
     ownerName: data.ownerName || null,
     assignedToUids: data.assignedToUids || [],
@@ -97,12 +99,14 @@ export const createTask = async (
     newTaskPayload.dueDate = Timestamp.fromDate(taskData.dueDate);
     newTaskPayload.assignedToUids = taskData.assignedToUids || [];
     newTaskPayload.assignedToNames = taskData.assignedToNames || [];
+    newTaskPayload.taskType = 'standard'; // Sub-tasks are always standard
   } else { 
-    newTaskPayload.description = ''; 
+    newTaskPayload.description = taskData.description || ''; 
     newTaskPayload.status = 'To Do'; 
     newTaskPayload.dueDate = taskData.dueDate ? Timestamp.fromDate(taskData.dueDate) : null; 
     newTaskPayload.assignedToUids = []; 
     newTaskPayload.assignedToNames = [];
+    newTaskPayload.taskType = taskData.taskType || 'standard';
   }
 
   try {
@@ -157,6 +161,17 @@ export const getProjectMainTasks = async (projectId: string, filterByIds?: strin
     const allTasksSnapshot = await getDocs(allTasksQuery);
     const mainTasks = allTasksSnapshot.docs.map(mapDocumentToTask);
     
+    const standardMainTasks = mainTasks.filter(mt => mt.taskType !== 'collection');
+    if (standardMainTasks.length === 0) {
+        mainTasks.forEach(mt => {
+            mt.progress = 0;
+            mt.openIssueCount = 0;
+        });
+        mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+        return mainTasks;
+    }
+
+
     const subTasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
     const subTasksSnapshot = await getDocs(subTasksQuery);
     const allSubTasksInProject = subTasksSnapshot.docs.map(mapDocumentToTask);
@@ -188,6 +203,12 @@ export const getProjectMainTasks = async (projectId: string, filterByIds?: strin
     }, {} as Record<string, Task[]>);
 
     mainTasks.forEach(mainTask => {
+        if (mainTask.taskType === 'collection') {
+            mainTask.progress = 0;
+            mainTask.openIssueCount = 0;
+            return;
+        }
+
         const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
         let totalOpenIssues = 0;
         relatedSubTasks.forEach(subTask => {
@@ -329,6 +350,7 @@ interface UpdateTaskData {
     dueDate?: Date | null;
     assignedToUids?: string[] | null;
     assignedToNames?: string[] | null;
+    taskType?: 'standard' | 'collection';
 }
 
 export const updateTask = async (
@@ -414,6 +436,10 @@ export const updateTask = async (
       updatePayload.description = updates.description;
       detailsChanged = true;
     }
+    if (updates.taskType !== undefined && updates.taskType !== taskDataFromSnap.taskType) {
+      updatePayload.taskType = updates.taskType;
+      detailsChanged = true;
+    }
     if (updates.dueDate !== undefined) {
         const newDate = updates.dueDate ? Timestamp.fromDate(updates.dueDate) : null;
         if (newDate?.toMillis() !== (taskDataFromSnap.dueDate ? Timestamp.fromDate(taskDataFromSnap.dueDate).toMillis() : null)) {
@@ -431,7 +457,7 @@ export const updateTask = async (
         );
     }
     
-    const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt'];
+    const allowedMainTaskKeys = ['name', 'description', 'dueDate', 'updatedAt', 'taskType'];
     Object.keys(updatePayload).forEach(key => {
         if (!allowedMainTaskKeys.includes(key as string)) {
             delete updatePayload[key];

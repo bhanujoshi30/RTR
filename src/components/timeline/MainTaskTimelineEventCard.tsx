@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { TimelineEventCard } from './TimelineEventCard';
 import { ListChecks } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MainTaskTimelineEventCardProps {
   event: AggregatedEvent;
@@ -37,12 +38,36 @@ const renderDescriptionWithLink = (event: TimelineEvent) => {
 
 
 export function MainTaskTimelineEventCard({ event }: MainTaskTimelineEventCardProps) {
+  const { user } = useAuth();
+  const isClient = user?.role === 'client';
+
   // Case 1: It's a group of sub-task events
   if (event.type === 'subTaskEventGroup') {
     const { subTaskInfo, events } = event.data as {
       subTaskInfo: { id: string; name: string };
       events: TimelineEvent[];
     };
+    
+    // For clients, render a simplified, non-interactive view
+    if (isClient) {
+      return (
+        <div className="relative flex items-start gap-4">
+          <div className="absolute left-0 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-background border-2 border-border -translate-x-1/2 z-10">
+            <ListChecks className="h-5 w-5 text-secondary-foreground" />
+          </div>
+          <div className="flex-1 space-y-1 pl-8 py-3">
+             <p className="font-semibold text-sm">
+                {events.length} event{events.length > 1 ? 's' : ''} on sub-task: <span className="text-primary">{subTaskInfo.name}</span>
+             </p>
+             <p className="text-xs text-muted-foreground">
+                (Details hidden for client view)
+             </p>
+          </div>
+        </div>
+      );
+    }
+    
+    // For other roles, render the full accordion
     return (
       <div className="relative flex items-start gap-4">
         {/* Icon for the group */}

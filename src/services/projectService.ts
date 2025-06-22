@@ -60,6 +60,8 @@ const mapDocumentToProject = (docSnapshot: any): Project => {
     name: data.name,
     description: data.description,
     ownerUid: data.ownerUid,
+    clientUid: data.clientUid || null,
+    clientName: data.clientName || null,
     status: data.status as ProjectStatus, // Initial status from Firestore
     progress: data.progress || 0,
     photoURL: data.photoURL || null,
@@ -94,6 +96,8 @@ export const createProject = async (
     name: string;
     description?: string;
     photoURL?: string | null;
+    clientUid?: string | null;
+    clientName?: string | null;
   }
 ): Promise<string> => {
   if (!userUid) {
@@ -109,6 +113,8 @@ export const createProject = async (
     progress: 0,
     status: 'Not Started' as ProjectStatus,
     photoURL: projectData.photoURL || null,
+    clientUid: projectData.clientUid || null,
+    clientName: projectData.clientName || null,
   };
   console.log('projectService: Payload for Firestore addDoc:', projectPayload);
 
@@ -152,6 +158,38 @@ export const getUserProjects = async (userUid: string, userRole?: UserRole): Pro
   }
 };
 
+export const getClientProjects = async (clientUid: string): Promise<Project[]> => {
+  console.log(`projectService: getClientProjects for client: ${clientUid}`);
+  if (!clientUid) {
+    return [];
+  }
+
+  const q = query(projectsCollection, where('clientUid', '==', clientUid));
+  try {
+    const querySnapshot = await getDocs(q);
+    const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
+    
+    projectsFromDb.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
+    const projectsPromises = projectsFromDb.map(async (project) => {
+      const mainTasks = await getProjectMainTasks(project.id);
+      project.progress = await calculateProjectProgress(project.id, mainTasks);
+      project.status = getDynamicStatusFromProgress(project.progress);
+      return project;
+    });
+    const projects = await Promise.all(projectsPromises);
+    console.log(`projectService: Fetched ${projects.length} projects for client.`);
+    return projects;
+  } catch (error: any) {
+    console.error('projectService: Error fetching client projects for uid:', clientUid, error.message, error.code ? `(${error.code})` : '', error.stack);
+    if (error.message.includes('index')) {
+        console.error("A Firestore index on 'clientUid' is required for this query to work.");
+    }
+    throw error;
+  }
+};
+
+
 export const getProjectById = async (projectId: string, userUid: string, userRole?: UserRole): Promise<Project | null> => {
   if (!userUid) {
     throw new Error('User not authenticated for getting project by ID');
@@ -163,6 +201,13 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
 
     if (projectSnap.exists()) {
       const projectData = mapDocumentToProject(projectSnap);
+      // Security check: Allow access if user is owner or assigned client
+      const isOwner = projectData.ownerUid === userUid;
+      const isClient = projectData.clientUid === userUid;
+      if (!isOwner && !isClient && userRole !== 'admin') {
+         throw new Error(`Access denied to project ${projectId}. User is not owner or client.`);
+      }
+
       const mainTasks = await getProjectMainTasks(projectId);
       projectData.progress = await calculateProjectProgress(projectId, mainTasks);
       projectData.status = getDynamicStatusFromProgress(projectData.progress);
@@ -227,7 +272,7 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
 export const updateProject = async (
   projectId: string,
   userUid: string,
-  updates: Partial<Pick<Project, 'name' | 'description' | 'photoURL'>>
+  updates: Partial<Pick<Project, 'name' | 'description' | 'photoURL' | 'clientUid' | 'clientName'>>
 ): Promise<void> => {
   if (!userUid) {
     throw new Error('User not authenticated for updating project');

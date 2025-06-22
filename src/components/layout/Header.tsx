@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from 'next/link';
@@ -37,14 +38,15 @@ export function Header() {
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
   const isAdmin = user?.role === 'admin';
+  const isClient = user?.role === 'client';
 
   const baseNavLinks = [
     { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="mr-2 h-4 w-4" /> },
   ];
 
   const conditionalNavLinks = [];
-  // "New Project" link hidden for supervisors and members
-  if (user && !isSupervisor && !isMember) { 
+  // "New Project" link hidden for supervisors, members, and clients
+  if (user && !isSupervisor && !isMember && !isClient) { 
     conditionalNavLinks.push({ href: '/projects/create', label: 'New Project', icon: <FolderPlus className="mr-2 h-4 w-4" /> });
   }
   if (isAdmin) { // "Users" tab only for admin

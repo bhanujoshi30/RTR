@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress'; 
-import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle } from 'lucide-react';
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle, CircleDollarSign } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { updateTaskStatus, deleteTask, getSubTasks } from '@/services/taskService';
 import { hasOpenIssues } from '@/services/issueService';
@@ -47,6 +47,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const { user } = useAuth();
 
   const isActuallyMainTask = !task.parentId;
+  const isCollectionTask = isActuallyMainTask && task.taskType === 'collection';
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
 
@@ -62,7 +63,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
 
   useEffect(() => {
     console.log(`[TaskCard Debug] useEffect for task '${task.name}' (ID: ${task.id}). isActuallyMainTask: ${isActuallyMainTask}, User: ${user?.uid}, Task ID: ${task.id}`);
-    if (isActuallyMainTask && user && task.id) {
+    if (isActuallyMainTask && !isCollectionTask && user && task.id) {
       const fetchCountAndProgress = async () => {
         console.log(`[TaskCard Debug] fetchCountAndProgress called for main task '${task.name}' (ID: ${task.id}). Supervisor: ${isSupervisor}, Member: ${isMember}, Owner: ${isOwnerOfThisTask}`);
         setLoadingSubTaskCount(true); // Set loading true before fetch
@@ -97,7 +98,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
       fetchCountAndProgress();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor, isMember, isOwnerOfThisTask]);
+  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor, isMember, isOwnerOfThisTask, isCollectionTask]);
 
   const handleProofSuccess = async () => {
     setShowProofDialog(false);
@@ -187,7 +188,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
     router.push(`/projects/${task.projectId}/tasks/${task.id}/edit`);
   };
 
-  const cardIcon = isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />;
+  const cardIcon = isCollectionTask ? <CircleDollarSign className="h-6 w-6 text-primary" /> : (isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />);
   const showEditButton = isOwnerOfThisTask;
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
   const hasOpenIssuesForCard = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
@@ -223,7 +224,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   {task.status}
                 </Badge>
               )}
-              {isActuallyMainTask && (
+              {isActuallyMainTask && !isCollectionTask && (
                 loadingSubTaskCount ? (
                   <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                 ) : (
@@ -232,6 +233,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   </Badge>
                 )
               )}
+              {isCollectionTask && <Badge variant="secondary">Collection</Badge>}
             </div>
           </div>
           {(!isActuallyMainTask && task.description) && (
@@ -243,12 +245,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
             <div className="flex items-center text-xs text-muted-foreground">
               <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
               Created {task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true }) : 'N/A'}
-              {(!isActuallyMainTask && task.dueDate) && (
-                <span className="ml-2 border-l pl-2">
-                  Due: {format(task.dueDate, 'PP')}
-                </span>
-              )}
-               {(isActuallyMainTask && task.dueDate) && ( 
+              {task.dueDate && (
                 <span className="ml-2 border-l pl-2">
                   Due: {format(task.dueDate, 'PP')}
                 </span>
@@ -262,7 +259,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
             )}
           </div>
 
-          {isActuallyMainTask && task.progress !== undefined && (
+          {isActuallyMainTask && !isCollectionTask && task.progress !== undefined && (
             <div className="mt-3">
               <div className="mb-1 flex justify-between text-xs text-muted-foreground">
                 <span>Main Task Progress</span>

@@ -7,20 +7,23 @@ import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createProject, updateProject, uploadProjectPhoto } from '@/services/projectService';
-import type { Project } from '@/types';
+import { getAllUsers } from '@/services/userService';
+import type { Project, User as AppUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Save, Loader2, ImagePlus } from 'lucide-react';
+import { Save, Loader2, ImagePlus, User as UserIcon } from 'lucide-react';
 import Image from 'next/image';
 
 const projectSchema = z.object({
   name: z.string().min(3, { message: 'Project name must be at least 3 characters' }).max(100),
   description: z.string().max(500).optional(),
+  clientUid: z.string().optional().nullable(),
 });
 
 type ProjectFormValues = z.infer<typeof projectSchema>;
@@ -38,14 +41,36 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(project?.photoURL || null);
+  const [clients, setClients] = useState<AppUser[]>([]);
+  
+  const isAdmin = user?.role === 'admin';
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
       name: project?.name || '',
       description: project?.description || '',
+      clientUid: project?.clientUid || null,
     },
   });
+  
+  useEffect(() => {
+    if (isAdmin && user) {
+        const fetchClients = async () => {
+            try {
+                const allUsers = await getAllUsers(user.uid);
+                const clientUsers = allUsers.filter(u => u.role === 'client');
+                setClients(clientUsers);
+            } catch (error) {
+                console.error("Failed to fetch clients:", error);
+                toast({ title: "Error", description: "Could not load list of clients.", variant: "destructive" });
+            }
+        };
+        fetchClients();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdmin, user]);
+
 
   useEffect(() => {
     return () => {
@@ -84,11 +109,15 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
         toast({ title: 'Uploading photo...', description: 'Please wait.' });
         photoURLToSave = await uploadProjectPhoto(selectedFile);
       }
+      
+      const selectedClient = data.clientUid ? clients.find(c => c.uid === data.clientUid) : null;
 
       const projectData = {
         name: data.name,
         description: data.description || '',
         photoURL: photoURLToSave,
+        clientUid: data.clientUid || null,
+        clientName: selectedClient?.displayName || null,
       };
 
       if (project) {
@@ -179,6 +208,35 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
                 </FormItem>
               )}
             />
+            
+            {isAdmin && (
+               <FormField
+                  control={form.control}
+                  name="clientUid"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex items-center gap-2"><UserIcon className="h-4 w-4 text-muted-foreground" />Assign Client (Optional)</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a client" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                           <SelectItem value="none">No Client</SelectItem>
+                           {clients.map(c => (
+                            <SelectItem key={c.uid} value={c.uid}>
+                                {c.displayName} ({c.email})
+                            </SelectItem>
+                           ))}
+                        </SelectContent>
+                      </Select>
+                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+            )}
+
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>

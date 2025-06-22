@@ -14,10 +14,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from "@/components/ui/checkbox";
-import { CalendarIcon, Save, Loader2, Users } from 'lucide-react';
+import { CalendarIcon, Save, Loader2, Users, CircleDollarSign, Layers } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -25,6 +26,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { getAllUsers } from '@/services/userService';
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
+const taskTypes = ['standard', 'collection'] as const;
 
 // Schema for Sub-tasks (most fields are relevant)
 const subTaskSchema = z.object({
@@ -38,10 +40,9 @@ const subTaskSchema = z.object({
 // Schema for Main Tasks (fewer fields directly editable or relevant here)
 const mainTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
-  description: z.string().max(1000).optional().nullable().default(null), // Description can be optional for main task
-  dueDate: z.date().optional().nullable().default(null), // Due date can be optional for main task
-  // Status for main tasks is effectively 'To Do' or derived, not set here
-  // assignedToUids is not directly set for main tasks in this form
+  description: z.string().max(1000).optional().nullable().default(null),
+  dueDate: z.date().optional().nullable().default(null),
+  taskType: z.enum(taskTypes).default('standard'),
 });
 
 type TaskFormValues = z.infer<typeof subTaskSchema> | z.infer<typeof mainTaskSchema>;
@@ -72,6 +73,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       status: isSubTask ? (task?.status || 'To Do') : undefined, // status only for subTaskSchema
       dueDate: task?.dueDate || (isSubTask ? undefined : null), // undefined for new sub-task to trigger validation
       assignedToUids: isSubTask ? (task?.assignedToUids || []) : undefined, // assignedToUids only for subTaskSchema
+      taskType: !isSubTask ? (task?.taskType || 'standard') : undefined,
     },
   });
 
@@ -126,13 +128,12 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       taskPayload.assignedToNames = assignedToNamesForPayload || [];
     } else {
       const mainTaskData = data as z.infer<typeof mainTaskSchema>;
-      // For main tasks, status defaults in service if not provided or applicable here.
-      // Description and DueDate are optional for main tasks and taken from mainTaskData.
       taskPayload.description = mainTaskData.description || '';
-      taskPayload.dueDate = mainTaskData.dueDate || null; // Can be null for main tasks
-      taskPayload.status = 'To Do'; // Main tasks default to 'To Do'
-      taskPayload.assignedToUids = []; // Main tasks are not directly assigned users this way
+      taskPayload.dueDate = mainTaskData.dueDate || null;
+      taskPayload.status = 'To Do';
+      taskPayload.assignedToUids = []; 
       taskPayload.assignedToNames = [];
+      taskPayload.taskType = mainTaskData.taskType;
     }
 
 
@@ -179,6 +180,42 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
             <CardTitle className="font-headline text-2xl">{formTitle}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+             {!isSubTask && (
+                <FormField
+                  control={form.control}
+                  name="taskType"
+                  render={({ field }) => (
+                    <FormItem className="space-y-3">
+                      <FormLabel>Main Task Type</FormLabel>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          defaultValue={field.value as string}
+                          className="flex flex-col space-y-1"
+                        >
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="standard" />
+                            </FormControl>
+                            <FormLabel className="font-normal flex items-center gap-2">
+                              <Layers className="h-4 w-4 text-muted-foreground" /> Standard Task (with sub-tasks)
+                            </FormLabel>
+                          </FormItem>
+                          <FormItem className="flex items-center space-x-3 space-y-0">
+                            <FormControl>
+                              <RadioGroupItem value="collection" />
+                            </FormControl>
+                            <FormLabel className="font-normal flex items-center gap-2">
+                                <CircleDollarSign className="h-4 w-4 text-muted-foreground" /> Collection Task (payment reminder)
+                            </FormLabel>
+                          </FormItem>
+                        </RadioGroup>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+             )}
             <FormField
               control={form.control}
               name="name"

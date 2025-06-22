@@ -1,5 +1,5 @@
 
-export type UserRole = 'admin' | 'supervisor' | 'member';
+export type UserRole = 'admin' | 'supervisor' | 'member' | 'client';
 
 export interface User {
   uid: string;
@@ -23,6 +23,8 @@ export interface Project {
   name: string;
   description?: string;
   ownerUid: string;
+  clientUid?: string | null;
+  clientName?: string | null;
   createdAt: Date;
   status: ProjectStatus;
   progress: number; // 0-100, Now dynamically calculated
@@ -40,6 +42,7 @@ export interface Task {
   name: string;
   description?: string;
   status: TaskStatus; // Status is user-editable only for sub-tasks
+  taskType?: 'standard' | 'collection';
   createdAt: Date;
   dueDate: Date; // Made mandatory from previous change for sub-tasks, optional for main tasks
   ownerUid: string;
@@ -94,7 +97,6 @@ export type TimelineEventType =
   | 'ISSUE_CREATED'
   | 'ISSUE_STATUS_CHANGED'
   | 'ISSUE_DELETED'
-  | 'ATTACHMENT_ADDED'
   | 'ATTACHMENT_DELETED';
 
 export interface TimelineEvent {

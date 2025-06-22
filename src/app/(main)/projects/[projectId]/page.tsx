@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList'; 
-import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock } from 'lucide-react'; 
+import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User } from 'lucide-react'; 
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -46,6 +46,7 @@ export default function ProjectDetailsPage() {
   const { user, loading: authLoading } = useAuth();
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
+  const isClient = user?.role === 'client';
 
   const fetchProjectDetails = async () => {
     if (authLoading || !user || !projectId) return;
@@ -79,7 +80,7 @@ export default function ProjectDetailsPage() {
   }, [projectId, user, authLoading]);
 
   const handleDeleteProject = async () => {
-    if (!project || !user || isSupervisor || isMember) return; // Supervisors or Members cannot delete
+    if (!project || !user || isSupervisor || isMember || isClient) return; // Non-owners cannot delete
     try {
       await deleteProject(project.id, user.uid);
       toast({ title: 'Project Deleted', description: `"${project.name}" has been deleted.` });
@@ -126,16 +127,11 @@ export default function ProjectDetailsPage() {
     return <p className="text-center text-muted-foreground py-10">Project not found.</p>;
   }
   
-  const canManageProject = user && !isSupervisor && !isMember;
+  const canManageProject = user && !isSupervisor && !isMember && !isClient;
   const displayProgress = project.progress !== undefined ? Math.round(project.progress) : 0;
 
-  return (
-    <div className="space-y-8">
-      <Button variant="outline" onClick={() => router.push('/dashboard')} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Projects
-      </Button>
-
-      <Card className="shadow-lg">
+  const ProjectDetailsCard = () => (
+     <Card className="shadow-lg">
         <CardHeader>
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <CardTitle className="font-headline text-3xl tracking-tight">{project.name}</CardTitle>
@@ -180,7 +176,7 @@ export default function ProjectDetailsPage() {
           {project.description && <CardDescription className="mt-2 text-lg">{project.description}</CardDescription>}
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-3">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 md:grid-cols-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Status</p>
               <Badge variant="secondary" className={`${getStatusColor(project.status)} text-primary-foreground text-base px-3 py-1`}>
@@ -201,46 +197,76 @@ export default function ProjectDetailsPage() {
                 {project.createdAt ? format(project.createdAt, 'PPP') : 'N/A'}
               </div>
             </div>
+            {project.clientName && (
+                 <div className="space-y-1">
+                    <p className="text-sm font-medium text-muted-foreground">Client</p>
+                    <div className="flex items-center text-base">
+                        <User className="mr-2 h-4 w-4 text-muted-foreground" />
+                        {project.clientName}
+                    </div>
+                </div>
+            )}
           </div>
         </CardContent>
       </Card>
+  );
 
-      <Tabs defaultValue="tasks" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> Main Tasks</TabsTrigger>
-          <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Project Timeline</TabsTrigger>
-        </TabsList>
-        <TabsContent value="tasks" className="mt-6">
-            <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
-                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                    <h2 className="font-headline text-2xl font-semibold flex items-center">
-                        <Layers className="mr-3 h-7 w-7 text-primary" />
-                        Main Tasks
-                    </h2>
-                    {canManageProject && (
-                        <Button asChild>
-                            <Link href={`/projects/${projectId}/tasks/create`}>
-                                <PlusCircle className="mr-2 h-4 w-4" />
-                                Add New Main Task
-                            </Link>
-                        </Button>
-                    )}
+  return (
+    <div className="space-y-8">
+      <Button variant="outline" onClick={() => router.push('/dashboard')} className="mb-6">
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+      </Button>
+
+      <ProjectDetailsCard />
+
+      {isClient ? (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Project Timeline</CardTitle>
+                <CardDescription>A high-level history of all main tasks within this project.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <ProjectTimeline projectId={projectId} />
+            </CardContent>
+        </Card>
+      ) : (
+        <Tabs defaultValue="tasks" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> Main Tasks</TabsTrigger>
+            <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Project Timeline</TabsTrigger>
+            </TabsList>
+            <TabsContent value="tasks" className="mt-6">
+                <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
+                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                        <h2 className="font-headline text-2xl font-semibold flex items-center">
+                            <Layers className="mr-3 h-7 w-7 text-primary" />
+                            Main Tasks
+                        </h2>
+                        {canManageProject && (
+                            <Button asChild>
+                                <Link href={`/projects/${projectId}/tasks/create`}>
+                                    <PlusCircle className="mr-2 h-4 w-4" />
+                                    Add New Main Task
+                                </Link>
+                            </Button>
+                        )}
+                    </div>
+                    {user && <TaskList projectId={projectId} />}
                 </div>
-                {user && <TaskList projectId={projectId} />}
-            </div>
-        </TabsContent>
-        <TabsContent value="timeline" className="mt-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Project Timeline</CardTitle>
-                    <CardDescription>A complete history of all main tasks and sub-tasks within this project.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <ProjectTimeline projectId={projectId} />
-                </CardContent>
-            </Card>
-        </TabsContent>
-      </Tabs>
+            </TabsContent>
+            <TabsContent value="timeline" className="mt-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Project Timeline</CardTitle>
+                        <CardDescription>A complete history of all main tasks and sub-tasks within this project.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ProjectTimeline projectId={projectId} />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
+      )}
     </div>
   );
 }

@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import type { Project, Task as AppTask } from '@/types'; // Task aliased as AppTask if needed, but direct use is fine if no conflict
 import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
-import { getProjectsByIds, getUserProjects } from '@/services/projectService';
+import { getProjectsByIds, getUserProjects, getClientProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 // Firestore functions are not directly used here for counts anymore due to service layer abstraction
 
@@ -32,10 +32,11 @@ export default function DashboardPage() {
       
       const isSupervisor = user?.role === 'supervisor';
       const isMember = user?.role === 'member';
-      const isAdminOrOwner = !isSupervisor && !isMember; 
+      const isClient = user?.role === 'client';
+      const isAdminOrOwner = !isSupervisor && !isMember && !isClient; 
 
       console.log(`DashboardPage: fetchDashboardData called. Auth Loading: ${authLoading}, User: ${user ? `${user.displayName || user.email} (Role: ${user.role || 'owner/admin'}, UID: ${user.uid})` : 'null'}`);
-      console.log(`DashboardPage: Determined roles - isSupervisor: ${isSupervisor}, isMember: ${isMember}, isAdminOrOwner: ${isAdminOrOwner}`);
+      console.log(`DashboardPage: Determined roles - isSupervisor: ${isSupervisor}, isMember: ${isMember}, isAdminOrOwner: ${isAdminOrOwner}, isClient: ${isClient}`);
 
 
       setDashboardLoading(true);
@@ -43,8 +44,12 @@ export default function DashboardPage() {
 
       try {
         let finalProjectsToDisplay: Project[] = [];
-
-        if (isSupervisor || isMember) {
+        
+        if (isClient) {
+            console.log(`DashboardPage: User is client (UID: ${user.uid}). Fetching assigned projects.`);
+            const clientProjects = await getClientProjects(user.uid);
+            finalProjectsToDisplay = clientProjects;
+        } else if (isSupervisor || isMember) {
           const userRoleForLog = isSupervisor ? 'supervisor' : 'member';
           console.log(`DashboardPage: User is ${userRoleForLog} (UID: ${user.uid}). Fetching user-specific work details.`);
           
@@ -160,8 +165,16 @@ export default function DashboardPage() {
 
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
-  const pageTitle = (isSupervisor || isMember) ? "My Assigned Work Overview" : "My Projects";
-  const canCreateProject = user && !isSupervisor && !isMember;
+  const isClient = user?.role === 'client';
+  
+  let pageTitle = "My Projects";
+  if (isSupervisor || isMember) {
+    pageTitle = "My Assigned Work Overview";
+  } else if (isClient) {
+    pageTitle = "My Projects";
+  }
+
+  const canCreateProject = user && !isSupervisor && !isMember && !isClient;
 
   if (authLoading || dashboardLoading) {
     return (
@@ -186,7 +199,7 @@ export default function DashboardPage() {
         )}
       </div>
       {dashboardError && <p className="text-center text-destructive py-4">{dashboardError}</p>}
-      {!dashboardError && <ProjectList projects={projectsToDisplay} isSupervisorView={isSupervisor || isMember} />}
+      {!dashboardError && <ProjectList projects={projectsToDisplay} isSupervisorView={isSupervisor || isMember} isClientView={isClient} />}
     </div>
   );
 }

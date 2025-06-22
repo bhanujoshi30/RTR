@@ -14,7 +14,7 @@ import type { User as AppUser, UserRole } from '@/types';
 import { upsertUserDocument, type UserDocumentData } from '@/services/userService';
 import { useState } from 'react';
 
-const userRoles: UserRole[] = ['admin', 'supervisor', 'member'];
+const userRoles: UserRole[] = ['admin', 'supervisor', 'member', 'client'];
 
 const userFormSchema = z.object({
   uid: z.string().min(1, { message: "Firebase UID is required." }),
