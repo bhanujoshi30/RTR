@@ -12,12 +12,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { CalendarIcon, Save, Loader2, Users, Layers } from 'lucide-react';
 import { format, differenceInDays } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -34,7 +35,6 @@ const subTaskSchema = z.object({
   description: z.string().max(1000).optional(),
   status: z.enum(taskStatuses),
   dueDate: z.date({ required_error: "Due date is required for sub-tasks." }),
-  assignedToUids: z.array(z.string()).optional().default([]), 
 });
 
 // Schema for Main Tasks (fewer fields directly editable or relevant here)
@@ -76,14 +76,16 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const isSubTask = !!(parentId || task?.parentId);
   const currentSchema = isSubTask ? subTaskSchema : mainTaskSchema;
 
+  const [selectedUserUids, setSelectedUserUids] = useState<string[]>(isSubTask ? (task?.assignedToUids || []) : []);
+
+
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(currentSchema),
     defaultValues: {
       name: task?.name || '',
       description: task?.description || (isSubTask ? '' : null),
-      status: isSubTask ? (task?.status || 'To Do') : undefined, // status only for subTaskSchema
+      status: isSubTask ? (task?.status || 'To Do') : undefined,
       dueDate: task?.dueDate || undefined, 
-      assignedToUids: isSubTask ? (task?.assignedToUids || []) : undefined, // assignedToUids only for subTaskSchema
       taskType: !isSubTask ? (task?.taskType || 'standard') : undefined,
       reminderDays: !isSubTask ? (task?.reminderDays || null) : undefined,
       cost: !isSubTask ? (task?.cost || null) : undefined,
@@ -96,7 +98,6 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     if (isSubTask && user) {
       const fetchAssignableUsers = async () => {
         try {
-          // Fetch all users and filter for assignable roles.
           const allUsers = await getAllUsers(user.uid);
           const assignable = allUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
           setAssignableUsers(assignable);
@@ -114,6 +115,15 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     }
   }, [isSubTask, toast, user]);
 
+  const handleUserSelectionChange = (uid: string, isSelected: boolean) => {
+    if (isSelected) {
+      setSelectedUserUids(prev => [...prev, uid]);
+    } else {
+      setSelectedUserUids(prev => prev.filter(id => id !== uid));
+    }
+  };
+
+
   const onSubmit: SubmitHandler<TaskFormValues> = async (data) => {
     if (!user) {
       toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
@@ -121,25 +131,22 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     }
     setLoading(true);
 
-    let assignedToNamesForPayload: string[] | undefined = undefined;
-    if (isSubTask && (data as z.infer<typeof subTaskSchema>).assignedToUids && (data as z.infer<typeof subTaskSchema>).assignedToUids!.length > 0) {
-      assignedToNamesForPayload = (data as z.infer<typeof subTaskSchema>).assignedToUids!.map(uid => {
-        const assignedUser = assignableUsers.find(u => u.uid === uid);
-        return assignedUser?.displayName || uid; 
-      });
-    }
-    
     const taskPayload: any = {
       name: data.name,
-      description: data.description || '', // Ensure description is at least an empty string
+      description: data.description || '',
       parentId: parentId || task?.parentId || null,
     };
 
     if (isSubTask) {
       const subTaskData = data as z.infer<typeof subTaskSchema>;
+      const assignedToNamesForPayload = selectedUserUids.map(uid => {
+        const assignedUser = assignableUsers.find(u => u.uid === uid);
+        return assignedUser?.displayName || uid; 
+      });
+
       taskPayload.status = subTaskData.status;
-      taskPayload.dueDate = subTaskData.dueDate; // Already a Date object
-      taskPayload.assignedToUids = subTaskData.assignedToUids || [];
+      taskPayload.dueDate = subTaskData.dueDate;
+      taskPayload.assignedToUids = selectedUserUids || [];
       taskPayload.assignedToNames = assignedToNamesForPayload || [];
       taskPayload.taskType = 'standard';
       taskPayload.cost = null;
@@ -328,54 +335,24 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                     )}
                   />
                 </div>
-                 <FormField
-                  control={form.control}
-                  name="assignedToUids"
-                  render={() => (
-                    <FormItem>
-                      <div className="mb-4">
-                        <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
-                      </div>
-                      <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                        {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available in this project yet...</p>}
-                        {assignableUsers.map(assignableUser => (
-                           <FormField
-                            key={assignableUser.uid}
-                            control={form.control}
-                            name="assignedToUids"
-                            render={({ field }) => {
-                              return (
-                                <FormItem
-                                  className="flex flex-row items-center space-x-3 space-y-0"
-                                >
-                                  <FormControl>
-                                    <Checkbox
-                                      checked={field.value?.includes(assignableUser.uid)}
-                                      onCheckedChange={(checked) => {
-                                        const currentUids = field.value || [];
-                                        return checked
-                                          ? field.onChange([...currentUids, assignableUser.uid])
-                                          : field.onChange(
-                                              currentUids.filter(
-                                                (value) => value !== assignableUser.uid
-                                              )
-                                            )
-                                      }}
-                                    />
-                                  </FormControl>
-                                  <FormLabel className="font-normal cursor-pointer">
-                                    {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
-                                  </FormLabel>
-                                </FormItem>
-                              )
-                            }}
-                          />
-                        ))}
-                      </div>
-                       <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                 <div className="space-y-2">
+                    <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
+                    <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                      {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available in this project yet...</p>}
+                      {assignableUsers.map(assignableUser => (
+                         <div key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
+                           <Checkbox
+                              id={`task-user-${assignableUser.uid}`}
+                              checked={selectedUserUids.includes(assignableUser.uid)}
+                              onCheckedChange={(checked) => handleUserSelectionChange(assignableUser.uid, !!checked)}
+                           />
+                            <Label htmlFor={`task-user-${assignableUser.uid}`} className="font-normal cursor-pointer">
+                              {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
+                            </Label>
+                         </div>
+                      ))}
+                    </div>
+                 </div>
               </>
             )}
             {!isSubTask && (
