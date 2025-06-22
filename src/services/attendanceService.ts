@@ -103,6 +103,28 @@ export const getTodaysAttendanceForUser = async (userId: string, dateString: str
   }
 };
 
+export const getAttendanceForUser = async (userId: string): Promise<AttendanceRecord[]> => {
+  const attendanceCollectionRef = collection(db, 'attendance');
+  const q = query(
+    attendanceCollectionRef,
+    where('userId', '==', userId)
+  );
+
+  const querySnapshot = await getDocs(q);
+  const records = querySnapshot.docs.map(docSnap => {
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      ...data,
+      timestamp: (data.timestamp as Timestamp).toDate(),
+    } as AttendanceRecord;
+  });
+
+  // Sort in application code to avoid needing a composite index for this query
+  records.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  
+  return records;
+};
 
 export const getAttendanceByDate = async (dateString: string): Promise<AttendanceRecord[]> => {
   const attendanceCollectionRef = collection(db, 'attendance');
