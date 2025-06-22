@@ -32,6 +32,7 @@ export interface Project {
   totalMainTasks?: number;
   totalSubTasks?: number;
   totalOpenIssues?: number;
+  hasUpcomingReminder?: boolean;
 }
 
 export interface Task {
@@ -97,8 +98,8 @@ export type TimelineEventType =
   | 'ASSIGNMENT_CHANGED'
   | 'ISSUE_CREATED'
   | 'ISSUE_STATUS_CHANGED'
-  | 'ISSUE_DELETED'
-  | 'ATTACHMENT_DELETED';
+  | 'ATTACHMENT_DELETED'
+  | 'ATTACHMENT_ADDED';
 
 export interface TimelineEvent {
   id: string;

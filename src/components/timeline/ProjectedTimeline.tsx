@@ -4,6 +4,7 @@
 import { useEffect, useState } from 'react';
 import type { Task } from '@/types';
 import { getAllProjectTasks } from '@/services/taskService';
+import { getOpenIssuesForTaskIds } from '@/services/issueService';
 import { Loader2, GanttChartSquare } from 'lucide-react';
 import { ProjectedTimelineItem } from './ProjectedTimelineItem';
 
@@ -22,7 +23,23 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
       try {
         setLoading(true);
         const fetchedTasks = await getAllProjectTasks(projectId);
-        const sortedTasks = fetchedTasks
+
+        // Fetch issue counts for sub-tasks to display on the timeline item
+        const subTaskIds = fetchedTasks.filter(t => !!t.parentId).map(t => t.id);
+        const openIssues = await getOpenIssuesForTaskIds(subTaskIds);
+        const issuesBySubTaskId = openIssues.reduce((acc, issue) => {
+            acc[issue.taskId] = (acc[issue.taskId] || 0) + 1;
+            return acc;
+        }, {} as Record<string, number>);
+
+        const tasksWithDetails = fetchedTasks.map(task => {
+            if (task.parentId) { // It's a subtask
+                task.openIssueCount = issuesBySubTaskId[task.id] || 0;
+            }
+            return task;
+        });
+        
+        const sortedTasks = tasksWithDetails
           .filter(task => task.dueDate) // Only include tasks with a due date
           .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
         setTasks(sortedTasks);
@@ -64,7 +81,7 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
 
   return (
     <div className="relative pl-6 border-l-2 border-border">
-      <div className="space-y-8">
+      <div className="space-y-4">
         {tasks.map((task) => (
           <ProjectedTimelineItem key={task.id} task={task} />
         ))}

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers } from 'lucide-react'; 
+import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers, Wallet } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 
 interface ProjectCardProps {
@@ -35,9 +35,17 @@ export function ProjectCard({ project }: ProjectCardProps) {
           data-ai-hint="office project"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
-        <Badge variant="secondary" className={`${getStatusColor(project.status)} text-primary-foreground absolute top-2 right-2 z-10`}>
-          {project.status}
-        </Badge>
+        <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-2">
+            {project.hasUpcomingReminder && (
+                <Badge variant="destructive" className="animate-pulse">
+                    <Wallet className="mr-1.5 h-3.5 w-3.5" />
+                    Payment Due Soon
+                </Badge>
+            )}
+            <Badge variant="secondary" className={`${getStatusColor(project.status)} text-primary-foreground`}>
+            {project.status}
+            </Badge>
+        </div>
       </Link>
       <CardHeader className="pb-4">
         <CardTitle className="font-headline text-xl">

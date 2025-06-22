@@ -1,6 +1,6 @@
 
 import { db, storage } from '@/lib/firebase';
-import type { Project, ProjectStatus, Task, UserRole } from '@/types';
+import type { Project, ProjectStatus, Task, UserRole, TaskStatus } from '@/types';
 import {
   collection,
   addDoc,
@@ -17,7 +17,8 @@ import {
   documentId,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { deleteAllTasksForProject, getProjectMainTasks } from '@/services/taskService';
+import { deleteAllTasksForProject, getProjectMainTasks, getAllProjectTasks } from '@/services/taskService';
+import { differenceInCalendarDays } from 'date-fns';
 
 const projectsCollection = collection(db, 'projects');
 
@@ -169,17 +170,80 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
     const querySnapshot = await getDocs(q);
     const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
     
-    projectsFromDb.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    if (projectsFromDb.length === 0) {
+        return [];
+    }
 
-    const projectsPromises = projectsFromDb.map(async (project) => {
-      const mainTasks = await getProjectMainTasks(project.id);
-      project.progress = await calculateProjectProgress(project.id, mainTasks);
+    const projectIds = projectsFromDb.map(p => p.id);
+    const allTasksByProject = new Map<string, Task[]>();
+    
+    // Efficiently fetch all tasks for all projects
+    const taskChunks: string[][] = [];
+    for (let i = 0; i < projectIds.length; i += 30) {
+      taskChunks.push(projectIds.slice(i, i + 30));
+    }
+    for (const chunk of taskChunks) {
+        const tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk));
+        const tasksSnapshot = await getDocs(tasksQuery);
+        tasksSnapshot.forEach(doc => {
+            const taskData = doc.data();
+            const task: Task = {
+                id: doc.id,
+                projectId: taskData.projectId,
+                parentId: taskData.parentId || null,
+                name: taskData.name,
+                description: taskData.description || '',
+                status: taskData.status as TaskStatus,
+                taskType: taskData.taskType || 'standard',
+                reminderDays: taskData.reminderDays || null,
+                ownerUid: taskData.ownerUid,
+                assignedToUids: taskData.assignedToUids || [],
+                createdAt: (taskData.createdAt as Timestamp).toDate(),
+                dueDate: (taskData.dueDate as Timestamp).toDate(),
+            };
+            const tasks = allTasksByProject.get(task.projectId) || [];
+            tasks.push(task);
+            allTasksByProject.set(task.projectId, tasks);
+        });
+    }
+
+    const projectsWithDetails = projectsFromDb.map(project => {
+      const projectTasks = allTasksByProject.get(project.id) || [];
+      const mainTasks = projectTasks.filter(t => !t.parentId);
+      
+      const standardMainTasks = mainTasks.filter(mt => mt.taskType !== 'collection');
+      
+      if (standardMainTasks.length > 0) {
+        const totalProgressSum = standardMainTasks.reduce((sum, task) => {
+            const subTasks = projectTasks.filter(t => t.parentId === task.id);
+            if (subTasks.length === 0) return sum;
+            const completedSubTasks = subTasks.filter(st => st.status === 'Completed').length;
+            return sum + Math.round((completedSubTasks / subTasks.length) * 100);
+        }, 0);
+        project.progress = Math.round(totalProgressSum / standardMainTasks.length);
+      } else {
+        project.progress = 0;
+      }
+      
       project.status = getDynamicStatusFromProgress(project.progress);
+
+      // Check for upcoming reminders
+      const now = new Date();
+      project.hasUpcomingReminder = projectTasks.some(task => {
+        if (task.taskType !== 'collection' || task.status === 'Completed' || !task.dueDate || !task.reminderDays) {
+          return false;
+        }
+        const daysRemaining = differenceInCalendarDays(task.dueDate, now);
+        return daysRemaining >= 0 && daysRemaining <= task.reminderDays;
+      });
+
       return project;
     });
-    const projects = await Promise.all(projectsPromises);
-    console.log(`projectService: Fetched ${projects.length} projects for client.`);
-    return projects;
+
+    projectsWithDetails.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
+    console.log(`projectService: Fetched ${projectsWithDetails.length} projects for client with details.`);
+    return projectsWithDetails;
   } catch (error: any) {
     console.error('projectService: Error fetching client projects for uid:', clientUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message.includes('index')) {
