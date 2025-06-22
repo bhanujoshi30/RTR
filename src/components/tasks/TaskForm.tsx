@@ -328,31 +328,48 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                     )}
                   />
                 </div>
-                <Controller
+                 <FormField
                   control={form.control}
                   name="assignedToUids"
-                  render={({ field }) => (
+                  render={() => (
                     <FormItem>
-                      <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
-                      {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available in this project yet...</p>}
+                      <div className="mb-4">
+                        <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
+                      </div>
                       <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                        {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available in this project yet...</p>}
                         {assignableUsers.map(assignableUser => (
-                          <FormItem key={assignableUser.uid} className="flex flex-row items-start space-x-3 space-y-0">
-                            <FormControl>
-                               <Checkbox
-                                checked={(field.value as string[])?.includes(assignableUser.uid)}
-                                onCheckedChange={(checked) => {
-                                  const currentUids = (field.value as string[]) || [];
-                                  return checked
-                                    ? field.onChange([...currentUids, assignableUser.uid])
-                                    : field.onChange(currentUids.filter((uid) => uid !== assignableUser.uid));
-                                }}
-                              />
-                            </FormControl>
-                            <FormLabel className="font-normal">
-                              {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
-                            </FormLabel>
-                          </FormItem>
+                           <FormField
+                            key={assignableUser.uid}
+                            control={form.control}
+                            name="assignedToUids"
+                            render={({ field }) => {
+                              return (
+                                <FormItem
+                                  className="flex flex-row items-center space-x-3 space-y-0"
+                                >
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={field.value?.includes(assignableUser.uid)}
+                                      onCheckedChange={(checked) => {
+                                        const currentUids = field.value || [];
+                                        return checked
+                                          ? field.onChange([...currentUids, assignableUser.uid])
+                                          : field.onChange(
+                                              currentUids.filter(
+                                                (value) => value !== assignableUser.uid
+                                              )
+                                            )
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="font-normal cursor-pointer">
+                                    {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
+                                  </FormLabel>
+                                </FormItem>
+                              )
+                            }}
+                          />
                         ))}
                       </div>
                        <FormMessage />
