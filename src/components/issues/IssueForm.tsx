@@ -319,34 +319,45 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               </div>
               <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                 {assignableUsersForIssue.map((item) => (
-                  <FormItem
+                  <FormField
                     key={item.uid}
-                    className="flex flex-row items-center space-x-3 space-y-0"
-                  >
-                    <FormControl>
-                      <Checkbox
-                        checked={field.value?.includes(item.uid)}
-                        onCheckedChange={(checked) => {
-                          return checked
-                            ? field.onChange([...(field.value || []), item.uid])
-                            : field.onChange(
-                                (field.value || []).filter(
-                                  (value) => value !== item.uid
-                                )
-                              );
-                        }}
-                      />
-                    </FormControl>
-                    <FormLabel className="text-sm font-normal">
-                      {item.displayName || item.email} ({item.role})
-                    </FormLabel>
-                  </FormItem>
+                    control={form.control}
+                    name="assignedToUids"
+                    render={({ field }) => {
+                      return (
+                        <FormItem
+                          key={item.uid}
+                          className="flex flex-row items-center space-x-3 space-y-0"
+                        >
+                          <FormControl>
+                            <Checkbox
+                              checked={field.value?.includes(item.uid)}
+                              onCheckedChange={(checked) => {
+                                const currentUids = field.value || [];
+                                return checked
+                                  ? field.onChange([...currentUids, item.uid])
+                                  : field.onChange(
+                                      currentUids.filter(
+                                        (value) => value !== item.uid
+                                      )
+                                    );
+                              }}
+                            />
+                          </FormControl>
+                          <FormLabel className="text-sm font-normal">
+                            {item.displayName || item.email} ({item.role})
+                          </FormLabel>
+                        </FormItem>
+                      );
+                    }}
+                  />
                 ))}
               </div>
               <FormMessage />
             </FormItem>
           )}
         />
+
 
         <FormField control={form.control} name="dueDate" render={({ field }) => (
           <FormItem className="flex flex-col">
@@ -385,3 +396,5 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Form>
   );
 }
+
+    
