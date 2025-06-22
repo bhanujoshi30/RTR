@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList'; 
-import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User, GanttChartSquare, Camera, CheckCircle, Wallet } from 'lucide-react'; 
+import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User, GanttChartSquare, Camera, CheckCircle, IndianRupee } from 'lucide-react'; 
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -286,10 +286,10 @@ export default function ProjectDetailsPage() {
             )}
              {project.totalCost && project.totalCost > 0 && (
                 <div className="space-y-1">
-                    <p className="text-sm font-medium text-muted-foreground">Estimated Cost</p>
                     <div className="flex items-center text-base">
-                        <Wallet className="mr-2 h-4 w-4 text-muted-foreground" />
-                        <span className="font-semibold">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(project.totalCost)}</span>
+                        <IndianRupee className="mr-2 h-4 w-4 text-green-600" />
+                        <span className="text-muted-foreground">Est. Cost:&nbsp;</span>
+                        <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(project.totalCost)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost)}</p>
                 </div>
