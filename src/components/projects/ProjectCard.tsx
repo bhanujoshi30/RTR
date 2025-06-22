@@ -1,6 +1,7 @@
 
 import type { Project } from '@/types';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -23,14 +24,22 @@ export function ProjectCard({ project }: ProjectCardProps) {
   };
   
   return (
-    <Card className="flex h-full transform flex-col shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+    <Card className="flex h-full transform flex-col overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group">
+      <Link href={`/projects/${project.id}`} className="block relative w-full aspect-video bg-muted">
+        <Image
+          src={project.photoURL || 'https://placehold.co/600x400.png'}
+          alt={project.name}
+          layout="fill"
+          objectFit="cover"
+          className="transition-transform duration-300 group-hover:scale-105"
+          data-ai-hint="office project"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
+        <Badge variant="secondary" className={`${getStatusColor(project.status)} text-primary-foreground absolute top-2 right-2 z-10`}>
+          {project.status}
+        </Badge>
+      </Link>
       <CardHeader className="pb-4">
-        <div className="flex items-start justify-between">
-          <FolderKanban className="mb-2 h-8 w-8 text-primary" />
-           <Badge variant="secondary" className={`${getStatusColor(project.status)} text-primary-foreground`}>
-            {project.status}
-          </Badge>
-        </div>
         <CardTitle className="font-headline text-xl">
           <Link href={`/projects/${project.id}`} className="hover:underline">
             {project.name}
@@ -46,7 +55,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         <div>
           <div className="flex justify-between text-sm text-muted-foreground">
             <span>Progress</span>
-            <span>{project.progress}%</span>
+            <span>{Math.round(project.progress)}%</span>
           </div>
           <Progress value={project.progress} className="h-2 w-full" aria-label={`Project progress: ${project.progress}%`} />
         </div>

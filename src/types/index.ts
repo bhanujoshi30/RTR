@@ -26,6 +26,7 @@ export interface Project {
   createdAt: Date;
   status: ProjectStatus;
   progress: number; // 0-100, Now dynamically calculated
+  photoURL?: string | null;
   totalMainTasks?: number;
   totalSubTasks?: number;
   totalOpenIssues?: number;

@@ -1,5 +1,5 @@
 
-import { db } from '@/lib/firebase';
+import { db, storage } from '@/lib/firebase';
 import type { Project, ProjectStatus, Task, UserRole } from '@/types';
 import {
   collection,
@@ -16,9 +16,42 @@ import {
   orderBy,
   documentId,
 } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { deleteAllTasksForProject, getProjectMainTasks } from '@/services/taskService';
 
 const projectsCollection = collection(db, 'projects');
+
+export const uploadProjectPhoto = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const uniqueFilename = `${Date.now()}-${file.name}`;
+    const filePath = `project-photos/${uniqueFilename}`;
+    const storageRef = ref(storage, filePath);
+    const uploadTask = uploadBytesResumable(storageRef, file);
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        // Optional: report progress
+        // const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+      },
+      (error) => {
+        console.error('Project photo upload failed:', error);
+        reject(error);
+      },
+      () => {
+        getDownloadURL(uploadTask.snapshot.ref)
+          .then((downloadURL) => {
+            resolve(downloadURL);
+          })
+          .catch((error) => {
+            console.error('Failed to get download URL for project photo:', error);
+            reject(error);
+          });
+      }
+    );
+  });
+};
+
 
 const mapDocumentToProject = (docSnapshot: any): Project => {
   const data = docSnapshot.data();
@@ -29,6 +62,7 @@ const mapDocumentToProject = (docSnapshot: any): Project => {
     ownerUid: data.ownerUid,
     status: data.status as ProjectStatus, // Initial status from Firestore
     progress: data.progress || 0,
+    photoURL: data.photoURL || null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
   };
 };
@@ -59,6 +93,7 @@ export const createProject = async (
   projectData: {
     name: string;
     description?: string;
+    photoURL?: string | null;
   }
 ): Promise<string> => {
   if (!userUid) {
@@ -73,6 +108,7 @@ export const createProject = async (
     createdAt: serverTimestamp() as Timestamp,
     progress: 0,
     status: 'Not Started' as ProjectStatus,
+    photoURL: projectData.photoURL || null,
   };
   console.log('projectService: Payload for Firestore addDoc:', projectPayload);
 
@@ -191,7 +227,7 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
 export const updateProject = async (
   projectId: string,
   userUid: string,
-  updates: Partial<Pick<Project, 'name' | 'description'>>
+  updates: Partial<Pick<Project, 'name' | 'description' | 'photoURL'>>
 ): Promise<void> => {
   if (!userUid) {
     throw new Error('User not authenticated for updating project');

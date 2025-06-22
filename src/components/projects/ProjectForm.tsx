@@ -1,12 +1,12 @@
 
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { createProject, updateProject } from '@/services/projectService';
+import { createProject, updateProject, uploadProjectPhoto } from '@/services/projectService';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,9 +15,9 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Save, Loader2 } from 'lucide-react';
+import { Save, Loader2, ImagePlus } from 'lucide-react';
+import Image from 'next/image';
 
-// Status removed from schema, as it's now dynamic
 const projectSchema = z.object({
   name: z.string().min(3, { message: 'Project name must be at least 3 characters' }).max(100),
   description: z.string().max(500).optional(),
@@ -35,15 +35,36 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
+  
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(project?.photoURL || null);
 
   const form = useForm<ProjectFormValues>({
     resolver: zodResolver(projectSchema),
     defaultValues: {
       name: project?.name || '',
       description: project?.description || '',
-      // status is no longer part of the form's default values
     },
   });
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+  
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
 
   const onSubmit: SubmitHandler<ProjectFormValues> = async (data) => {
     if (!user) {
@@ -55,13 +76,21 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
       return;
     }
     setLoading(true);
-    // projectData will not include status
-    const projectData = {
-      name: data.name,
-      description: data.description || '', // Ensure description is at least an empty string
-    };
+    
+    let photoURLToSave = project?.photoURL || null;
 
     try {
+      if (selectedFile) {
+        toast({ title: 'Uploading photo...', description: 'Please wait.' });
+        photoURLToSave = await uploadProjectPhoto(selectedFile);
+      }
+
+      const projectData = {
+        name: data.name,
+        description: data.description || '',
+        photoURL: photoURLToSave,
+      };
+
       if (project) {
         await updateProject(project.id, user.uid, projectData);
         toast({ title: 'Project Updated', description: `"${data.name}" has been updated.` });
@@ -94,6 +123,36 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
             <CardTitle className="font-headline text-2xl">{project ? 'Edit Project' : 'New Project Details'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <FormItem>
+              <FormLabel>Project Photo (Optional)</FormLabel>
+              <FormControl>
+                <div className="w-full">
+                  <label htmlFor="photo-upload" className="cursor-pointer">
+                    <div className="relative mt-2 flex justify-center rounded-lg border border-dashed border-input px-6 py-10 hover:border-primary">
+                      {previewUrl ? (
+                        <Image
+                          src={previewUrl}
+                          alt="Project preview"
+                          width={400}
+                          height={225}
+                          className="object-cover rounded-md aspect-video"
+                        />
+                      ) : (
+                        <div className="text-center">
+                          <ImagePlus className="mx-auto h-12 w-12 text-muted-foreground" />
+                          <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                            Upload a photo
+                          </p>
+                          <p className="text-xs leading-5 text-muted-foreground">PNG, JPG up to 5MB</p>
+                        </div>
+                      )}
+                    </div>
+                  </label>
+                  <Input id="photo-upload" type="file" className="sr-only" onChange={handleFileChange} accept="image/jpeg,image/png" />
+                </div>
+              </FormControl>
+            </FormItem>
+
             <FormField
               control={form.control}
               name="name"
@@ -120,7 +179,6 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
                 </FormItem>
               )}
             />
-            {/* Status Field Removed */}
           </CardContent>
           <CardFooter>
             <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>
