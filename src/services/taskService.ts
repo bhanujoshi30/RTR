@@ -41,6 +41,7 @@ const mapDocumentToTask = (docSnapshot: any): Task => {
     id: docSnapshot.id,
     projectId: data.projectId,
     projectOwnerUid: data.projectOwnerUid,
+    clientUid: data.clientUid || null,
     parentId: data.parentId || null,
     name: data.name,
     description: data.description || '',
@@ -84,6 +85,7 @@ export const createTask = async (
   const newTaskPayload: any = {
     projectId,
     projectOwnerUid: projectData.ownerUid, // Storing project owner UID for rules
+    clientUid: projectData.clientUid || null, // Denormalize client Uid for rules
     ownerUid: userUid,
     ownerName: ownerName,
     name: taskData.name,

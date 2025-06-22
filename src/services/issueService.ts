@@ -40,6 +40,7 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
     id: docSnapshot.id,
     projectId: data.projectId,
     projectOwnerUid: data.projectOwnerUid,
+    clientUid: data.clientUid || null,
     taskId: data.taskId, 
     ownerUid: data.ownerUid,
     ownerName: data.ownerName || null,
@@ -74,16 +75,14 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
   }
 
   if (!taskData.projectOwnerUid) {
-      console.warn(`taskService: Parent task ${taskId} is missing projectOwnerUid. Fetching from project as a fallback.`);
-      const projectDoc = await getDoc(doc(db, 'projects', projectId));
-      if (!projectDoc.exists()) throw new Error('Project not found when creating issue.');
-      taskData.projectOwnerUid = projectDoc.data().ownerUid;
+      console.warn(`taskService: Parent task ${taskId} is missing projectOwnerUid. This is unexpected.`);
   }
 
   const newIssuePayload = {
     ...issueData,
     projectId,
     projectOwnerUid: taskData.projectOwnerUid,
+    clientUid: taskData.clientUid || null,
     taskId, 
     ownerUid: userUid,
     ownerName: ownerName,

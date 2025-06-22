@@ -39,6 +39,7 @@ export interface Task {
   id: string;
   projectId: string;
   projectOwnerUid?: string; // For security rules
+  clientUid?: string | null; // For security rules
   parentId?: string | null; // null if it's a main task
   name: string;
   description?: string;
@@ -60,6 +61,7 @@ export interface Issue {
   id: string;
   projectId: string;
   projectOwnerUid?: string;
+  clientUid?: string | null;
   taskId: string; // This is the ID of the parent SubTask
   ownerUid: string;
   ownerName?: string | null;
