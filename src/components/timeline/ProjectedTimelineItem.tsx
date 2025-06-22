@@ -1,4 +1,3 @@
-
 "use client";
 
 import type { Task } from '@/types';
@@ -7,6 +6,7 @@ import { Layers, ListChecks, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import React from 'react';
+import { Progress } from '@/components/ui/progress';
 
 const RupeeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
 
@@ -35,6 +35,7 @@ export function ProjectedTimelineItem({ task }: ProjectedTimelineItemProps) {
   const daysRemaining = task.dueDate ? differenceInCalendarDays(task.dueDate, new Date()) : null;
   const showReminder = task.taskType === 'collection' && task.status !== 'Completed' && daysRemaining !== null && task.reminderDays && daysRemaining >= 0 && daysRemaining <= task.reminderDays;
   const hasOpenIssues = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
+  const isStandardMainTask = !task.parentId && task.taskType !== 'collection';
 
   return (
     <div className="relative flex items-start gap-4">
@@ -48,10 +49,21 @@ export function ProjectedTimelineItem({ task }: ProjectedTimelineItemProps) {
                  <p className="text-xs text-muted-foreground">{label}</p>
             </div>
             <div className="text-right flex-shrink-0">
-                <p className="text-sm font-medium text-foreground">{format(task.dueDate, 'PP')}</p>
+                <p className="text-sm font-medium text-foreground">{task.dueDate ? format(task.dueDate, 'PP') : ''}</p>
                 <p className="text-xs text-muted-foreground">Due Date</p>
             </div>
         </div>
+        
+        {isStandardMainTask && task.progress !== undefined && (
+          <div className="pt-1">
+            <div className="flex justify-between text-xs text-muted-foreground mb-1">
+              <span>Progress</span>
+              <span>{Math.round(task.progress)}%</span>
+            </div>
+            <Progress value={task.progress} className="h-1.5 w-full" />
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-2 pt-1">
             {showReminder && (
                 <Badge variant="destructive" className="animate-pulse">

@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -24,24 +23,48 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
         setLoading(true);
         const fetchedTasks = await getAllProjectTasks(projectId);
 
-        // Fetch issue counts for sub-tasks to display on the timeline item
-        const subTaskIds = fetchedTasks.filter(t => !!t.parentId).map(t => t.id);
+        const mainTasks = fetchedTasks.filter(t => !t.parentId);
+        const subTasks = fetchedTasks.filter(t => !!t.parentId);
+
+        const subTasksByMainTaskId = subTasks.reduce((acc, subTask) => {
+            const mainTaskId = subTask.parentId!;
+            if (!acc[mainTaskId]) {
+                acc[mainTaskId] = [];
+            }
+            acc[mainTaskId].push(subTask);
+            return acc;
+        }, {} as Record<string, Task[]>);
+
+        mainTasks.forEach(mainTask => {
+            if (mainTask.taskType === 'collection') {
+                mainTask.progress = 0;
+                return;
+            }
+            const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
+            if (relatedSubTasks.length > 0) {
+                const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
+                mainTask.progress = Math.round((completedSubTasks / relatedSubTasks.length) * 100);
+            } else {
+                mainTask.progress = 0;
+            }
+        });
+        
+        const subTaskIds = subTasks.map(t => t.id);
         const openIssues = await getOpenIssuesForTaskIds(subTaskIds);
         const issuesBySubTaskId = openIssues.reduce((acc, issue) => {
             acc[issue.taskId] = (acc[issue.taskId] || 0) + 1;
             return acc;
         }, {} as Record<string, number>);
 
-        const tasksWithDetails = fetchedTasks.map(task => {
-            if (task.parentId) { // It's a subtask
-                task.openIssueCount = issuesBySubTaskId[task.id] || 0;
-            }
-            return task;
+        subTasks.forEach(subTask => {
+          subTask.openIssueCount = issuesBySubTaskId[subTask.id] || 0;
         });
+
+        const tasksWithDetails = [...mainTasks, ...subTasks];
         
         const sortedTasks = tasksWithDetails
           .filter(task => task.dueDate) // Only include tasks with a due date
-          .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+          .sort((a, b) => a.dueDate!.getTime() - b.dueDate!.getTime());
         setTasks(sortedTasks);
         setError(null);
       } catch (err: any) {
