@@ -5,7 +5,7 @@ import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore
 import { getProjectById } from './projectService';
 import { getAllProjectTasks } from './taskService';
 import { getProjectIssues } from './issueService';
-import { getAttendanceByDate } from './attendanceService';
+import { getAttendanceByDateForProject } from './attendanceService';
 import { getUsersByIds } from './userService';
 import { getAttachmentsForTask } from './attachmentService';
 import { isSameDay, parseISO } from 'date-fns';
@@ -19,7 +19,7 @@ export const getDprData = async (projectId: string, date: string): Promise<DprDa
     const targetDate = parseISO(date);
 
     // 1. Get Project Details
-    const project = await getProjectById(projectId, 'dpr-service-call'); // userUid is for security, service call can bypass if rules allow
+    const project = await getProjectById(projectId, 'dpr-service-call', 'admin'); 
     if (!project) {
         throw new Error(`Project with ID ${projectId} not found.`);
     }
@@ -44,10 +44,10 @@ export const getDprData = async (projectId: string, date: string): Promise<DprDa
     const attachmentsByTask = await Promise.all(taskAttachmentPromises);
     attachmentsByTask.forEach(atts => dailyAttachments.push(...atts));
 
-    // 5. Get Team Attendance
+    // 5. Get Team Attendance for this specific project
     const assignedUserUids = [...new Set(allTasks.flatMap(t => t.assignedToUids || []))];
     const assignedUsers = await getUsersByIds(assignedUserUids);
-    const attendanceRecords = await getAttendanceByDate(date);
+    const attendanceRecords = await getAttendanceByDateForProject(date, projectId);
     const presentUids = new Set(attendanceRecords.map(rec => rec.userId));
 
     const presentTeam = assignedUsers.filter(u => presentUids.has(u.uid));

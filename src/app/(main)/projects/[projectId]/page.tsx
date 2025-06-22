@@ -5,13 +5,16 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getProjectById, deleteProject } from '@/services/projectService';
+import { getAllTasksAssignedToUser } from '@/services/taskService';
+import { getTodaysAttendanceForUserInProject } from '@/services/attendanceService';
+import { AttendanceDialog } from '@/components/attendance/AttendanceDialog';
 import type { Project } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList'; 
-import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User, GanttChartSquare } from 'lucide-react'; 
+import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User, GanttChartSquare, Camera, CheckCircle } from 'lucide-react'; 
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -44,6 +47,13 @@ export default function ProjectDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
 
+  // Attendance State
+  const [showAttendanceDialog, setShowAttendanceDialog] = useState(false);
+  const [checkingAttendance, setCheckingAttendance] = useState(true);
+  const [canSubmitAttendance, setCanSubmitAttendance] = useState(false);
+  const [attendanceStatus, setAttendanceStatus] = useState<{ submitted: boolean; timestamp?: Date | null }>({ submitted: false, timestamp: null });
+
+
   const { user, loading: authLoading } = useAuth();
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
@@ -59,7 +69,6 @@ export default function ProjectDetailsPage() {
         setProject(fetchedProject);
       } else {
         setError('Project not found. It may have been deleted or you do not have permission to view it.');
-        // router.push('/dashboard'); 
       }
     } catch (err: any) {
       console.error('Error fetching project:', err);
@@ -72,13 +81,51 @@ export default function ProjectDetailsPage() {
       setLoading(false);
     }
   };
-  
+
   useEffect(() => {
     if(user && !authLoading){
       fetchProjectDetails();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, user, authLoading]);
+  
+  // Effect for checking attendance eligibility and status
+  useEffect(() => {
+      if (authLoading || !user || !projectId) return;
+
+      const checkEligibilityAndStatus = async () => {
+          setCheckingAttendance(true);
+          
+          if (user.role === 'member' || user.role === 'supervisor') {
+              try {
+                  const assignedTasks = await getAllTasksAssignedToUser(user.uid);
+                  const isAssignedToThisProject = assignedTasks.some(task => task.projectId === projectId);
+                  
+                  if (isAssignedToThisProject) {
+                      setCanSubmitAttendance(true);
+                      const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+                      const record = await getTodaysAttendanceForUserInProject(user.uid, projectId, today);
+                      if (record) {
+                          setAttendanceStatus({ submitted: true, timestamp: record.timestamp });
+                      } else {
+                          setAttendanceStatus({ submitted: false, timestamp: null });
+                      }
+                  } else {
+                      setCanSubmitAttendance(false);
+                  }
+              } catch (e) {
+                  console.error("Failed to check attendance eligibility/status", e);
+                  setCanSubmitAttendance(false);
+              }
+          } else {
+              setCanSubmitAttendance(false);
+          }
+          setCheckingAttendance(false);
+      };
+      checkEligibilityAndStatus();
+
+  }, [user, authLoading, projectId]);
+
 
   const handleDeleteProject = async () => {
     if (!project || !user || isSupervisor || isMember || isClient) return; // Non-owners cannot delete
@@ -99,7 +146,6 @@ export default function ProjectDetailsPage() {
   const handleProjectFormSuccess = () => {
     setShowEditModal(false);
     fetchProjectDetails(); 
-    // router.refresh(); // fetchProjectDetails already re-fetches, refresh might be redundant if it causes another full reload
   };
 
 
@@ -112,7 +158,7 @@ export default function ProjectDetailsPage() {
     }
   };
 
-  if (loading || authLoading) {
+  if (loading || authLoading || checkingAttendance) {
     return (
       <div className="flex h-[calc(100vh-10rem)] items-center justify-center">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
@@ -137,43 +183,60 @@ export default function ProjectDetailsPage() {
         <CardHeader>
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
             <CardTitle className="font-headline text-3xl tracking-tight">{project.name}</CardTitle>
-            {canManageProject && ( 
-              <div className="flex items-center gap-2">
-                <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <Edit className="mr-2 h-4 w-4" /> Edit Project
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle className="font-headline text-2xl">Edit Project</DialogTitle>
-                    </DialogHeader>
-                    <ProjectForm project={project} onFormSuccess={handleProjectFormSuccess} />
-                  </DialogContent>
-                </Dialog>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the project
-                        and all associated tasks (main tasks, sub-tasks, and issues).
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive hover:bg-destructive/90">
-                        Delete Project
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            )}
+            <div className="flex items-center gap-2">
+                 {canSubmitAttendance && (
+                    <>
+                      {attendanceStatus.submitted ? (
+                          <Button variant="outline" size="sm" disabled>
+                              <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                              Submitted at {attendanceStatus.timestamp ? format(attendanceStatus.timestamp, 'p') : ''}
+                          </Button>
+                      ) : (
+                          <Button variant="outline" size="sm" onClick={() => setShowAttendanceDialog(true)}>
+                              <Camera className="mr-2 h-4 w-4" />
+                              Submit Attendance
+                          </Button>
+                      )}
+                    </>
+                )}
+                {canManageProject && ( 
+                  <>
+                    <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" size="sm">
+                          <Edit className="mr-2 h-4 w-4" /> Edit
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-2xl">
+                        <DialogHeader>
+                          <DialogTitle className="font-headline text-2xl">Edit Project</DialogTitle>
+                        </DialogHeader>
+                        <ProjectForm project={project} onFormSuccess={handleProjectFormSuccess} />
+                      </DialogContent>
+                    </Dialog>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This action cannot be undone. This will permanently delete the project
+                            and all associated tasks (main tasks, sub-tasks, and issues).
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive hover:bg-destructive/90">
+                            Delete Project
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </>
+                )}
+            </div>
           </div>
           {project.description && <CardDescription className="mt-2 text-lg">{project.description}</CardDescription>}
         </CardHeader>
@@ -214,71 +277,85 @@ export default function ProjectDetailsPage() {
   );
 
   return (
-    <div className="space-y-8">
-      <Button variant="outline" onClick={() => router.push('/dashboard')} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
-      </Button>
+    <>
+      {canSubmitAttendance && (
+          <AttendanceDialog
+              open={showAttendanceDialog}
+              onOpenChange={setShowAttendanceDialog}
+              onSuccess={() => {
+                setShowAttendanceDialog(false);
+                setAttendanceStatus({ submitted: true, timestamp: new Date() });
+              }}
+              projectId={projectId}
+              projectName={project.name}
+          />
+        )}
+      <div className="space-y-8">
+        <Button variant="outline" onClick={() => router.push('/dashboard')} className="mb-6">
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+        </Button>
 
-      <ProjectDetailsCard />
+        <ProjectDetailsCard />
 
-      <Tabs defaultValue={defaultTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
-            {!isClient && <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> Main Tasks</TabsTrigger>}
-            <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Activity Timeline</TabsTrigger>
-            <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> Projected Timeline</TabsTrigger>
-          </TabsList>
-          
-          {!isClient && (
-            <TabsContent value="tasks" className="mt-6">
-                <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
-                    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
-                        <h2 className="font-headline text-2xl font-semibold flex items-center">
-                            <Layers className="mr-3 h-7 w-7 text-primary" />
-                            Main Tasks
-                        </h2>
-                        {canManageProject && (
-                            <Button asChild>
-                                <Link href={`/projects/${projectId}/tasks/create`}>
-                                    <PlusCircle className="mr-2 h-4 w-4" />
-                                    Add New Main Task
-                                </Link>
-                            </Button>
-                        )}
-                    </div>
-                    {user && <TaskList projectId={projectId} />}
-                </div>
+        <Tabs defaultValue={defaultTab} className="w-full">
+            <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
+              {!isClient && <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> Main Tasks</TabsTrigger>}
+              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Activity Timeline</TabsTrigger>
+              <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> Projected Timeline</TabsTrigger>
+            </TabsList>
+            
+            {!isClient && (
+              <TabsContent value="tasks" className="mt-6">
+                  <div className="space-y-6 rounded-lg border bg-card p-6 shadow-sm">
+                      <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                          <h2 className="font-headline text-2xl font-semibold flex items-center">
+                              <Layers className="mr-3 h-7 w-7 text-primary" />
+                              Main Tasks
+                          </h2>
+                          {canManageProject && (
+                              <Button asChild>
+                                  <Link href={`/projects/${projectId}/tasks/create`}>
+                                      <PlusCircle className="mr-2 h-4 w-4" />
+                                      Add New Main Task
+                                  </Link>
+                              </Button>
+                          )}
+                      </div>
+                      {user && <TaskList projectId={projectId} />}
+                  </div>
+              </TabsContent>
+            )}
+
+            <TabsContent value="timeline" className="mt-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Activity Timeline</CardTitle>
+                        <CardDescription>
+                          {isClient
+                            ? "A high-level history of all main tasks within this project."
+                            : "A complete history of all main tasks and sub-tasks within this project."
+                          }
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ProjectTimeline projectId={projectId} />
+                    </CardContent>
+                </Card>
             </TabsContent>
-          )}
-
-          <TabsContent value="timeline" className="mt-6">
-              <Card>
-                  <CardHeader>
-                      <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Activity Timeline</CardTitle>
-                      <CardDescription>
-                        {isClient
-                          ? "A high-level history of all main tasks within this project."
-                          : "A complete history of all main tasks and sub-tasks within this project."
-                        }
-                      </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                      <ProjectTimeline projectId={projectId} />
-                  </CardContent>
-              </Card>
-          </TabsContent>
-          
-          <TabsContent value="projected" className="mt-6">
-              <Card>
-                  <CardHeader>
-                      <CardTitle className="flex items-center"><GanttChartSquare className="mr-2 h-5 w-5" /> Projected Timeline</CardTitle>
-                      <CardDescription>The planned schedule of all tasks and their due dates for this project.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                      <ProjectedTimeline projectId={projectId} />
-                  </CardContent>
-              </Card>
-          </TabsContent>
-      </Tabs>
-    </div>
+            
+            <TabsContent value="projected" className="mt-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center"><GanttChartSquare className="mr-2 h-5 w-5" /> Projected Timeline</CardTitle>
+                        <CardDescription>The planned schedule of all tasks and their due dates for this project.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ProjectedTimeline projectId={projectId} />
+                    </CardContent>
+                </Card>
+            </TabsContent>
+        </Tabs>
+      </div>
+    </>
   );
 }

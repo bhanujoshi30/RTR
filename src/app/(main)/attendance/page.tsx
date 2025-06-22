@@ -1,29 +1,29 @@
 
 "use client";
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CalendarCheck, User, Camera, MapPin, Search, BarChart, XCircle } from 'lucide-react';
+import { Loader2, CalendarCheck, User, Search, BarChart, XCircle, Building } from 'lucide-react';
 import type { AttendanceRecord, User as AppUser } from '@/types';
 import { getAttendanceForUser } from '@/services/attendanceService';
 import { getAllUsers } from '@/services/userService';
-import { format, isSameMonth, addDays, isBefore, startOfToday } from 'date-fns';
+import { format, isSameMonth, addDays, isBefore, startOfToday, startOfMonth } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import Image from 'next/image';
 
-const AttendanceDetailCard = ({ record, selectedDate }: { record: AttendanceRecord | null, selectedDate?: Date }) => {
+const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRecord[] | null, selectedDate?: Date }) => {
   if (!selectedDate) {
     return (
       <Card>
         <CardHeader>
           <CardTitle>Attendance Details</CardTitle>
-          <CardDescription>Select a highlighted day on the calendar to view details.</CardDescription>
+          <CardDescription>Select a user and a highlighted day on the calendar to view details.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center text-center h-96">
           <CalendarCheck className="h-16 w-16 text-muted-foreground/50" />
@@ -33,7 +33,7 @@ const AttendanceDetailCard = ({ record, selectedDate }: { record: AttendanceReco
     );
   }
 
-  if (!record) {
+  if (!records || records.length === 0) {
     return (
       <Card>
         <CardHeader>
@@ -51,40 +51,49 @@ const AttendanceDetailCard = ({ record, selectedDate }: { record: AttendanceReco
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Details for {format(record.timestamp, 'PPP')}</CardTitle>
-        <CardDescription>Attendance submitted by {record.userName} at {format(record.timestamp, 'p')}.</CardDescription>
+        <CardTitle>Details for {format(selectedDate, 'PPP')}</CardTitle>
+        <CardDescription>
+          {records[0].userName} submitted attendance for {records.length} project{records.length > 1 ? 's' : ''} today.
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="relative aspect-video w-full rounded-lg overflow-hidden border">
-           <Image src={record.photoUrl} alt={`Attendance for ${record.userName}`} layout="fill" objectFit="cover" />
-        </div>
-        
-        <div className="space-y-2">
-            <h4 className="font-semibold flex items-center gap-2"><MapPin className="h-4 w-4 text-primary" /> Location</h4>
-             {record.location ? (
-                <div className="text-sm pl-6">
-                    <p className="whitespace-normal break-words text-foreground">
-                    {record.location.address || 'Address not available'}
-                    </p>
-                    <a
-                        href={`https://www.google.com/maps?q=${record.location.latitude},${record.location.longitude}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs text-muted-foreground mt-1 hover:text-primary hover:underline block"
-                    >
-                        {`Lat: ${record.location.latitude.toFixed(4)}, Lon: ${record.location.longitude.toFixed(4)}`}
-                    </a>
+      <CardContent className="space-y-6">
+        {records.map(record => (
+            <div key={record.id} className="rounded-lg border p-4 space-y-4 bg-background">
+                 <div className="flex justify-between items-start">
+                    <div>
+                        <p className="font-semibold flex items-center gap-2"><Building className="h-4 w-4 text-primary" />{record.projectName}</p>
+                        <p className="text-xs text-muted-foreground">Submitted at {format(record.timestamp, 'p')}</p>
+                    </div>
+                    <Button asChild variant="outline" size="sm">
+                        <Link href={record.photoUrl} target="_blank" rel="noopener noreferrer">
+                           View Photo
+                        </Link>
+                    </Button>
                 </div>
-            ) : (
-                <p className="text-sm text-muted-foreground pl-6">Not available</p>
-            )}
-        </div>
-
-        <Button asChild className="w-full">
-            <Link href={record.photoUrl} target="_blank" rel="noopener noreferrer">
-                <Camera className="mr-2 h-4 w-4" /> View Original Photo
-            </Link>
-        </Button>
+                
+                <div className="relative aspect-video w-full rounded-lg overflow-hidden border">
+                    <Image src={record.photoUrl} alt={`Attendance for ${record.userName}`} layout="fill" objectFit="cover" />
+                </div>
+                
+                {record.location ? (
+                    <div className="text-sm">
+                        <p className="whitespace-normal break-words text-foreground">
+                        {record.location.address || 'Address not available'}
+                        </p>
+                        <a
+                            href={`https://www.google.com/maps?q=${record.location.latitude},${record.location.longitude}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-muted-foreground mt-1 hover:text-primary hover:underline block"
+                        >
+                            {`Lat: ${record.location.latitude.toFixed(4)}, Lon: ${record.location.longitude.toFixed(4)}`}
+                        </a>
+                    </div>
+                ) : (
+                    <p className="text-sm text-muted-foreground">Location not available</p>
+                )}
+            </div>
+        ))}
       </CardContent>
     </Card>
   );
@@ -113,12 +122,11 @@ export default function AttendancePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
 
-  // State
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   
-  const [userAttendance, setUserAttendance] = useState<AttendanceRecord[]>([]);
+  const [allUserAttendance, setAllUserAttendance] = useState<AttendanceRecord[]>([]);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
   
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
@@ -126,33 +134,16 @@ export default function AttendancePage() {
   
   const [error, setError] = useState<string | null>(null);
   
-  // Explicit state and effect for selected record to fix refresh issue
-  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
-
-  useEffect(() => {
-    if (!selectedDate || loadingAttendance) {
-      setSelectedRecord(null);
-      return;
-    }
-    const dateString = format(selectedDate, 'yyyy-MM-dd');
-    const record = userAttendance.find(rec => rec.date === dateString) || null;
-    setSelectedRecord(record);
-  }, [selectedDate, userAttendance, loadingAttendance]);
-
-
+  const [selectedDateRecords, setSelectedDateRecords] = useState<AttendanceRecord[] | null>(null);
+  
   const isAdmin = user?.role === 'admin';
 
-  // Check for admin role
   useEffect(() => {
-    if (!authLoading && !isAdmin) {
-      router.push('/dashboard');
-    }
+    if (!authLoading && !isAdmin) router.push('/dashboard');
   }, [user, authLoading, router, isAdmin]);
 
-  // Fetch all users for the dropdown
   useEffect(() => {
     if (!isAdmin || !user) return;
-    
     const fetchUsers = async () => {
       setLoadingUsers(true);
       setError(null);
@@ -170,19 +161,17 @@ export default function AttendancePage() {
     fetchUsers();
   }, [isAdmin, user]);
   
-  // Fetch attendance records when a user is selected
   useEffect(() => {
     if (!selectedUserId) {
-      setUserAttendance([]); // Clear data if no user is selected
+      setAllUserAttendance([]);
       return;
     }
-
     const fetchRecords = async () => {
       setLoadingAttendance(true);
       setError(null);
       try {
         const fetchedRecords = await getAttendanceForUser(selectedUserId);
-        setUserAttendance(fetchedRecords);
+        setAllUserAttendance(fetchedRecords);
       } catch (err: any) {
         setError("Failed to load attendance records.");
         console.error(err);
@@ -193,21 +182,34 @@ export default function AttendancePage() {
     fetchRecords();
   }, [selectedUserId]);
 
+  const updateSelectedDateRecords = useCallback(() => {
+    if (!selectedDate || !selectedUserId) {
+        setSelectedDateRecords(null);
+        return;
+    }
+    const dateString = format(selectedDate, 'yyyy-MM-dd');
+    const records = allUserAttendance.filter(rec => rec.date === dateString);
+    setSelectedDateRecords(records);
+  }, [selectedDate, allUserAttendance, selectedUserId]);
 
-  const handleDateSelect = (date: Date | undefined) => {
-    setSelectedDate(date);
-  };
-  
-  const attendedDays = useMemo(() => userAttendance.map(record => record.timestamp), [userAttendance]);
+  useEffect(() => {
+    updateSelectedDateRecords();
+  }, [selectedDate, allUserAttendance, updateSelectedDateRecords]);
+
+
+  const attendedDays = useMemo(() => {
+    const dates = new Set(allUserAttendance.map(record => record.date));
+    return Array.from(dates).map(dateStr => new Date(dateStr + 'T12:00:00')); // Use noon to avoid timezone issues
+  }, [allUserAttendance]);
   
   const missedDays = useMemo(() => {
     if (!selectedUserId) return [];
     
     const today = startOfToday();
-    const attendedDates = new Set(userAttendance.map(rec => rec.date)); // 'YYYY-MM-DD' format
+    const attendedDates = new Set(allUserAttendance.map(rec => rec.date));
     
     const missed: Date[] = [];
-    let dayIterator = new Date(month.getFullYear(), month.getMonth(), 1);
+    let dayIterator = startOfMonth(month);
 
     while (isSameMonth(dayIterator, month) && isBefore(dayIterator, today)) {
         const dateString = format(dayIterator, 'yyyy-MM-dd');
@@ -217,14 +219,14 @@ export default function AttendancePage() {
         dayIterator = addDays(dayIterator, 1);
     }
     return missed;
-  }, [userAttendance, month, selectedUserId]);
+  }, [allUserAttendance, month, selectedUserId]);
 
   const summaryStats = useMemo(() => {
     if (!selectedUserId) return { present: 0, absent: 0 };
-    const present = userAttendance.filter(rec => isSameMonth(rec.timestamp, month)).length;
-    const absent = missedDays.length;
-    return { present, absent };
-  }, [userAttendance, month, selectedUserId, missedDays]);
+    const monthlyRecords = allUserAttendance.filter(rec => isSameMonth(rec.timestamp, month));
+    const presentDays = new Set(monthlyRecords.map(r => r.date));
+    return { present: presentDays.size, absent: missedDays.length };
+  }, [allUserAttendance, month, selectedUserId, missedDays]);
 
 
   if (authLoading || !isAdmin) {
@@ -247,7 +249,6 @@ export default function AttendancePage() {
       {error && <p className="text-center text-destructive py-4">{error}</p>}
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-start">
-        {/* Left Column: User selection, summary and calendar */}
         <div className="lg:col-span-1 space-y-6">
             <Card>
                 <CardHeader>
@@ -291,27 +292,16 @@ export default function AttendancePage() {
                     )}
                     <Calendar
                         mode="single"
-                        onSelect={handleDateSelect}
+                        onSelect={setSelectedDate}
                         selected={selectedDate}
                         month={month}
                         onMonthChange={setMonth}
                         className="rounded-md border p-0"
-                        modifiers={{ 
-                            attended: attendedDays, 
-                            missed: missedDays,
-                        }}
+                        modifiers={{ attended: attendedDays, missed: missedDays }}
                         modifiersStyles={{ 
-                            attended: {
-                                backgroundColor: 'hsl(var(--primary))',
-                                color: 'hsl(var(--primary-foreground))',
-                            },
-                            missed: {
-                                backgroundColor: 'hsl(var(--destructive) / 0.15)',
-                            },
-                            selected: {
-                                outline: '2px solid hsl(var(--ring))',
-                                outlineOffset: '2px',
-                            },
+                            attended: { backgroundColor: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' },
+                            missed: { backgroundColor: 'hsl(var(--destructive) / 0.15)' },
+                            selected: { outline: '2px solid hsl(var(--ring))', outlineOffset: '2px' },
                         }}
                         disabled={!selectedUserId || loadingAttendance}
                     />
@@ -319,9 +309,8 @@ export default function AttendancePage() {
             </Card>
         </div>
 
-        {/* Right Column: Attendance Details */}
         <div className="lg:col-span-2">
-           <AttendanceDetailCard record={selectedRecord} selectedDate={selectedDate} />
+           <AttendanceDetailCard records={selectedDateRecords} selectedDate={selectedDate} />
         </div>
       </div>
     </div>

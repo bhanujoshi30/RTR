@@ -16,6 +16,8 @@ interface AttendanceDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  projectId: string;
+  projectName: string;
 }
 
 interface Location {
@@ -24,7 +26,7 @@ interface Location {
   address?: string;
 }
 
-export function AttendanceDialog({ open, onOpenChange, onSuccess }: AttendanceDialogProps) {
+export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, projectName }: AttendanceDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   
@@ -199,6 +201,8 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess }: AttendanceDi
       await addAttendanceRecord({
         userId: user.uid,
         userName: user.displayName || user.email || 'N/A',
+        projectId: projectId,
+        projectName: projectName,
         photoUrl: downloadURL,
         location: location || undefined,
       });
@@ -225,7 +229,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess }: AttendanceDi
         <DialogHeader>
           <DialogTitle className="font-headline text-xl capitalize">Submit Daily Attendance</DialogTitle>
           <DialogDescription>
-            Select a photo for today's attendance. Your name, time, and location will be stamped on the image.
+            Submit attendance for project: <span className="font-semibold text-primary">{projectName}</span>.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">

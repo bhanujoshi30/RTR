@@ -49,6 +49,8 @@ export const uploadAttendancePhoto = (
 interface AttendanceData {
   userId: string;
   userName: string;
+  projectId: string;
+  projectName: string;
   photoUrl: string;
   location?: {
     latitude: number;
@@ -64,6 +66,8 @@ export const addAttendanceRecord = async (data: AttendanceData): Promise<string>
   const payload = {
     userId: data.userId,
     userName: data.userName,
+    projectId: data.projectId,
+    projectName: data.projectName,
     photoUrl: data.photoUrl,
     location: data.location || null,
     date: format(today, 'yyyy-MM-dd'),
@@ -74,11 +78,12 @@ export const addAttendanceRecord = async (data: AttendanceData): Promise<string>
   return docRef.id;
 };
 
-export const getTodaysAttendanceForUser = async (userId: string, dateString: string): Promise<AttendanceRecord | null> => {
+export const getTodaysAttendanceForUserInProject = async (userId: string, projectId: string, dateString: string): Promise<AttendanceRecord | null> => {
   const attendanceCollectionRef = collection(db, 'attendance');
   const q = query(
     attendanceCollectionRef,
     where('userId', '==', userId),
+    where('projectId', '==', projectId),
     where('date', '==', dateString),
     orderBy('timestamp', 'desc'),
     limit(1)
@@ -97,8 +102,7 @@ export const getTodaysAttendanceForUser = async (userId: string, dateString: str
       timestamp: (data.timestamp as Timestamp).toDate(),
     } as AttendanceRecord;
   } catch (error) {
-    console.error("Error fetching today's attendance submission:", error);
-    // To avoid blocking the user, treat errors as if no submission was found
+    console.error("Error fetching today's project attendance submission:", error);
     return null;
   }
 };
@@ -120,17 +124,17 @@ export const getAttendanceForUser = async (userId: string): Promise<AttendanceRe
     } as AttendanceRecord;
   });
 
-  // Sort in application code to avoid needing a composite index for this query
   records.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   
   return records;
 };
 
-export const getAttendanceByDate = async (dateString: string): Promise<AttendanceRecord[]> => {
+export const getAttendanceByDateForProject = async (dateString: string, projectId: string): Promise<AttendanceRecord[]> => {
   const attendanceCollectionRef = collection(db, 'attendance');
   const q = query(
     attendanceCollectionRef,
     where('date', '==', dateString),
+    where('projectId', '==', projectId),
     orderBy('timestamp', 'desc')
   );
 

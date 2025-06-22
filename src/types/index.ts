@@ -148,6 +148,8 @@ export interface AttendanceRecord {
   id: string;
   userId: string;
   userName: string;
+  projectId: string;
+  projectName: string;
   date: string; // YYYY-MM-DD for easy querying
   timestamp: Date;
   photoUrl: string;
