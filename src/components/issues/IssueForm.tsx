@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import { CalendarIcon, Save, Loader2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -30,7 +31,6 @@ const issueSchema = z.object({
   description: z.string().max(1000).optional(),
   severity: z.enum(issueSeverities),
   status: z.enum(issueProgressStatuses),
-  assignedToUids: z.array(z.string()).optional().default([]),
   dueDate: z.date({ required_error: "Due date is required." }),
 });
 
@@ -48,6 +48,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   const [loading, setLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const [assignableUsersForIssue, setAssignableUsersForIssue] = useState<AppUser[]>([]);
+  const [selectedUids, setSelectedUids] = useState<string[]>(issue?.assignedToUids || []);
   const [parentSubTask, setParentSubTask] = useState<Task | null>(null);
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
 
@@ -58,12 +59,10 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       description: issue?.description || '',
       severity: issue?.severity || 'Normal',
       status: issue?.status || 'Open',
-      assignedToUids: issue?.assignedToUids || [],
       dueDate: issue?.dueDate || undefined,
     },
   });
 
-  // Effect for fetching prerequisites (users, parent task)
   useEffect(() => {
     const fetchPrerequisites = async () => {
       if (!user || !taskId) return;
@@ -103,6 +102,16 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   }, [taskId, user, authLoading, toast]);
 
 
+  const handleUserSelection = (uid: string, isChecked: boolean) => {
+    setSelectedUids(prevUids => {
+        if (isChecked) {
+            return [...prevUids, uid];
+        } else {
+            return prevUids.filter(id => id !== uid);
+        }
+    });
+  };
+
   const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
     if (!user || !parentSubTask) {
       toast({ title: 'Error', description: 'User or parent task details are missing. Cannot proceed.', variant: 'destructive' });
@@ -111,15 +120,17 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
     setLoading(true);
 
-    let assignedToNamesForPayload: string[] | undefined = undefined;
-    if (data.assignedToUids && data.assignedToUids.length > 0) {
-      assignedToNamesForPayload = data.assignedToUids.map(uid => {
-        const assignedUser = assignableUsersForIssue.find(u => u.uid === uid);
-        return assignedUser?.displayName || uid;
-      });
-    }
+    const assignedToNamesForPayload = selectedUids.map(uid => {
+      const assignedUser = assignableUsersForIssue.find(u => u.uid === uid);
+      return assignedUser?.displayName || uid;
+    });
 
-    const issueDataPayload = { ...data, assignedToUids: data.assignedToUids || [], assignedToNames: assignedToNamesForPayload || [], dueDate: data.dueDate };
+    const issueDataPayload = { 
+        ...data, 
+        assignedToUids: selectedUids, 
+        assignedToNames: assignedToNamesForPayload, 
+        dueDate: data.dueDate 
+    };
 
     try {
       if (issue) {
@@ -136,7 +147,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         }
       }
       
-      const finalAssigneeUids = data.assignedToUids || [];
+      const finalAssigneeUids = selectedUids;
       if (finalAssigneeUids.length > 0) {
         const parentTaskAssigneeUids = parentSubTask.assignedToUids || [];
         const newUidsToAdd = finalAssigneeUids.filter(uid => !parentTaskAssigneeUids.includes(uid));
@@ -168,48 +179,32 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           <FormField control={form.control} name="status" render={({ field }) => ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select status" /> </SelectTrigger> </FormControl> <SelectContent> {issueProgressStatuses.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
         </div>
         
-         <FormField
-          control={form.control}
-          name="assignedToUids"
-          render={({ field }) => (
-            <FormItem>
-              <div className="mb-4">
-                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
-                <FormDescription>
-                  Select team members to assign this issue to.
-                </FormDescription>
-              </div>
-              <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                {assignableUsersForIssue.map((item) => (
-                  <FormItem
-                    key={item.uid}
-                    className="flex flex-row items-center space-x-3 space-y-0"
-                  >
-                    <FormControl>
-                      <Checkbox
-                        checked={(field.value || []).includes(item.uid)}
-                        onCheckedChange={(checked) => {
-                          const currentValue = field.value || [];
-                          return checked
-                            ? field.onChange([...currentValue, item.uid])
-                            : field.onChange(
-                                currentValue.filter(
-                                  (value) => value !== item.uid
-                                )
-                              );
-                        }}
-                      />
-                    </FormControl>
-                    <FormLabel className="font-normal cursor-pointer">
-                      {item.displayName || item.email}
-                    </FormLabel>
-                  </FormItem>
-                ))}
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <FormItem>
+            <div className="mb-4">
+            <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
+            <FormDescription>
+                Select team members to assign this issue to.
+            </FormDescription>
+            </div>
+            <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+            {assignableUsersForIssue.map((item) => (
+                <div
+                key={item.uid}
+                className="flex flex-row items-center space-x-3 space-y-0"
+                >
+                <Checkbox
+                    id={`user-${item.uid}`}
+                    checked={selectedUids.includes(item.uid)}
+                    onCheckedChange={(checked) => handleUserSelection(item.uid, !!checked)}
+                />
+                <Label htmlFor={`user-${item.uid}`} className="font-normal cursor-pointer">
+                    {item.displayName || item.email}
+                </Label>
+                </div>
+            ))}
+            {loadingAssignableUsers && <p className="text-sm text-muted-foreground">Loading users...</p>}
+            </div>
+        </FormItem>
 
 
         <FormField control={form.control} name="dueDate" render={({ field }) => (
