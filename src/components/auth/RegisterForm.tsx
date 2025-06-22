@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff, UserPlus, Workflow } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, Workflow, Loader2 } from 'lucide-react';
 
 
 const registerSchema = z.object({
@@ -142,8 +142,17 @@ export function RegisterForm() {
               )}
             />
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? 'Creating Account...' : 'Sign Up'}
-              <UserPlus className="ml-2 h-4 w-4" />
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                <>
+                  Sign Up
+                  <UserPlus className="ml-2 h-4 w-4" />
+                </>
+              )}
             </Button>
           </form>
         </Form>
