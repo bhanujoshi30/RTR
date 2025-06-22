@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { TaskList } from '@/components/tasks/TaskList'; 
-import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User, GanttChartSquare, Camera, CheckCircle, Wallet } from 'lucide-react'; 
+import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User, GanttChartSquare, Camera, CheckCircle } from 'lucide-react'; 
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import {
@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectTimeline } from '@/components/timeline/ProjectTimeline';
 import { ProjectedTimeline } from '@/components/timeline/ProjectedTimeline';
+import { numberToWordsInr } from '@/lib/currencyUtils';
 
 
 export default function ProjectDetailsPage() {
@@ -287,9 +288,10 @@ export default function ProjectDetailsPage() {
                 <div className="space-y-1">
                     <p className="text-sm font-medium text-muted-foreground">Estimated Cost</p>
                     <div className="flex items-center text-base">
-                        <Wallet className="mr-2 h-4 w-4 text-muted-foreground" />
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-2 h-4 w-4 text-muted-foreground"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
                         <span className="font-semibold">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(project.totalCost)}</span>
                     </div>
+                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost)}</p>
                 </div>
             )}
           </div>
