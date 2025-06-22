@@ -46,6 +46,7 @@ export default function ProjectDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Attendance State
   const [showAttendanceDialog, setShowAttendanceDialog] = useState(false);
@@ -129,6 +130,7 @@ export default function ProjectDetailsPage() {
 
   const handleDeleteProject = async () => {
     if (!project || !user || isSupervisor || isMember || isClient) return; // Non-owners cannot delete
+    setIsDeleting(true);
     try {
       await deleteProject(project.id, user.uid);
       toast({ title: 'Project Deleted', description: `"${project.name}" has been deleted.` });
@@ -140,6 +142,8 @@ export default function ProjectDetailsPage() {
         description: error.message || 'Could not delete the project.',
         variant: 'destructive',
       });
+    } finally {
+        setIsDeleting(false);
     }
   };
 
@@ -229,7 +233,8 @@ export default function ProjectDetailsPage() {
                         </AlertDialogHeader>
                         <AlertDialogFooter>
                           <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive hover:bg-destructive/90">
+                          <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                            {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             Delete Project
                           </AlertDialogAction>
                         </AlertDialogFooter>

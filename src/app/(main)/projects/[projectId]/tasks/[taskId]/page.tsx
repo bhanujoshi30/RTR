@@ -38,9 +38,10 @@ export default function TaskDetailsPage() {
   const [showAddEditTaskModal, setShowAddEditTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); 
   const [ownerDisplayName, setOwnerDisplayName] = useState<string | null>(null);
-  const [isFetchingOwnerName, setIsFetchingOwnerName] = useState(false);
   const [activeTab, setActiveTab] = useState<string>("details");
   const [showDailyReportDialog, setShowDailyReportDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isStatusChanging, setIsStatusChanging] = useState(false);
 
   const isSupervisor = user?.role === 'supervisor';
   const isMainTask = task && !task.parentId;
@@ -111,6 +112,7 @@ export default function TaskDetailsPage() {
         toast({ title: 'Permission Denied', description: 'You do not have permission to delete this task.', variant: 'destructive' });
         return;
     }
+    setIsDeleting(true);
     try {
       await deleteTask(task.id, user.uid);
       toast({ title: 'Task Deleted', description: `"${task.name}" has been deleted.` });
@@ -126,11 +128,14 @@ export default function TaskDetailsPage() {
         description: error.message || 'Could not delete the task.',
         variant: 'destructive',
       });
+    } finally {
+        setIsDeleting(false);
     }
   };
 
   const handleCollectionStatusChange = async (newStatus: TaskStatus) => {
     if (!task || !user || !canChangeCollectionStatus) return;
+    setIsStatusChanging(true);
     try {
       await updateTaskStatus(task.id, user.uid, newStatus, user.role);
       toast({ title: 'Task Updated', description: `"${task.name}" has been marked as ${newStatus}.` });
@@ -141,6 +146,8 @@ export default function TaskDetailsPage() {
         description: error.message || 'Could not update the task status.',
         variant: 'destructive',
       });
+    } finally {
+        setIsStatusChanging(false);
     }
   };
 
@@ -215,13 +222,13 @@ export default function TaskDetailsPage() {
                     </Button>
                 )}
                 {isCollectionTask && canChangeCollectionStatus && task.status !== 'Completed' && (
-                  <Button variant="outline" size="sm" onClick={() => handleCollectionStatusChange('Completed')}>
-                      <CheckCircle className="mr-2 h-4 w-4" /> Mark as Complete
+                  <Button variant="outline" size="sm" onClick={() => handleCollectionStatusChange('Completed')} disabled={isStatusChanging}>
+                      {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />} Mark as Complete
                   </Button>
                 )}
                 {isCollectionTask && canChangeCollectionStatus && task.status === 'Completed' && (
-                  <Button variant="outline" size="sm" onClick={() => handleCollectionStatusChange('To Do')}>
-                      <RotateCcw className="mr-2 h-4 w-4" /> Reopen Task
+                  <Button variant="outline" size="sm" onClick={() => handleCollectionStatusChange('To Do')} disabled={isStatusChanging}>
+                      {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} Reopen Task
                   </Button>
                 )}
                 {canEditCurrentTask && (
@@ -263,8 +270,8 @@ export default function TaskDetailsPage() {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteCurrentTask} className="bg-destructive hover:bg-destructive/90">
-                          Delete
+                        <AlertDialogAction onClick={handleDeleteCurrentTask} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                           {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Delete
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>

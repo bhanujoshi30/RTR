@@ -5,7 +5,7 @@ import type { User as AppUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Edit2, Trash2, ShieldCheck, UserCog, UserIcon as DefaultUserIcon } from 'lucide-react';
+import { Edit2, Trash2, ShieldCheck, UserCog, UserIcon as DefaultUserIcon, Loader2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { deleteUserDocument } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
 
 interface UserListProps {
   users: AppUser[];
@@ -29,18 +30,22 @@ interface UserListProps {
 
 export function UserList({ users, onEditUser, currentAdminUid, onUsersChanged }: UserListProps) {
   const { toast } = useToast();
+  const [deletingUid, setDeletingUid] = useState<string | null>(null);
 
   const handleDeleteUser = async (targetUserUid: string, targetUserDisplayName?: string) => {
     if (currentAdminUid === targetUserUid) {
       toast({ title: "Error", description: "Admin cannot delete their own user document.", variant: "destructive" });
       return;
     }
+    setDeletingUid(targetUserUid);
     try {
       await deleteUserDocument(currentAdminUid, targetUserUid);
       toast({ title: "User Deleted", description: `User document for "${targetUserDisplayName || targetUserUid}" has been deleted.` });
       onUsersChanged(); // Refresh the list
     } catch (error: any) {
       toast({ title: "Deletion Failed", description: error.message || "Could not delete user document.", variant: "destructive" });
+    } finally {
+        setDeletingUid(null);
     }
   };
   
@@ -121,7 +126,9 @@ export function UserList({ users, onEditUser, currentAdminUid, onUsersChanged }:
                       <AlertDialogAction
                         onClick={() => handleDeleteUser(user.uid, user.displayName || undefined)}
                         className="bg-destructive hover:bg-destructive/90"
+                        disabled={deletingUid === user.uid}
                       >
+                        {deletingUid === user.uid && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Delete Document
                       </AlertDialogAction>
                     </AlertDialogFooter>

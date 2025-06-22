@@ -5,7 +5,7 @@ import type { Issue, IssueProgressStatus, IssueSeverity, UserRole } from '@/type
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle, RotateCcw } from 'lucide-react'; 
+import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react'; 
 import { formatDistanceToNow, format } from 'date-fns';
 import { deleteIssue, updateIssueStatus } from '@/services/issueService';
 import { getTaskById, updateTaskStatus as updateParentTaskStatus } from '@/services/taskService';
@@ -39,6 +39,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
   const { toast } = useToast();
   const [showEditModal, setShowEditModal] = useState(false);
   const [statusChangeState, setStatusChangeState] = useState<{ open: boolean; newStatus: IssueProgressStatus | null }>({ open: false, newStatus: null });
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const { user } = useAuth();
 
@@ -84,6 +85,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
         toast({ title: 'Error', description: 'User not authenticated.', variant: 'destructive'});
         return;
     }
+    setIsDeleting(true);
     try {
       await deleteIssue(issue.id, user.uid);
       toast({ title: 'Issue Deleted', description: `"${issue.title}" has been deleted.` });
@@ -94,6 +96,8 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
         description: error.message || 'Could not delete the issue.',
         variant: 'destructive',
       });
+    } finally {
+        setIsDeleting(false);
     }
   };
 
@@ -198,7 +202,8 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
                 </AlertDialogHeader>
                 <AlertDialogFooter>
                   <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteIssue} className="bg-destructive hover:bg-destructive/90">
+                  <AlertDialogAction onClick={handleDeleteIssue} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Delete Issue
                   </AlertDialogAction>
                 </AlertDialogFooter>

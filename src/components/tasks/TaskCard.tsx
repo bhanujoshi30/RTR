@@ -46,6 +46,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const [showProofDialog, setShowProofDialog] = useState(false);
   const { user } = useAuth();
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
+  const [isStatusChanging, setIsStatusChanging] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     if (initialTask.taskType === 'collection' && initialTask.dueDate) {
@@ -160,12 +162,15 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   
   const handleCollectionStatusChange = async (newStatus: TaskStatus) => {
     if (!user || !isOwnerOfThisTask || !isCollectionTask) return;
+    setIsStatusChanging(true);
     try {
       await updateTaskStatus(task.id, user.uid, newStatus, user.role);
       toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
       onTaskUpdated();
     } catch (error: any) {
       toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
+    } finally {
+        setIsStatusChanging(false);
     }
   };
 
@@ -174,6 +179,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
          toast({ title: 'Permission Denied', description: 'Only the task owner can delete this task.', variant: 'destructive'});
         return;
     }
+    setIsDeleting(true);
     try {
       await deleteTask(task.id, user.uid);
       toast({ title: 'Task Deleted', description: `"${task.name}" has been deleted.` });
@@ -184,6 +190,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
         description: error.message || 'Could not delete the task.',
         variant: 'destructive',
       });
+    } finally {
+        setIsDeleting(false);
     }
   };
 
@@ -246,7 +254,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   {task.openIssueCount} Open Issue{task.openIssueCount !== 1 ? 's' : ''}
                 </Badge>
               )}
-              {task.status && (
+              {task.status && (isActuallyMainTask || isSubTaskView) && (
                 <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
                   {task.status}
                 </Badge>
@@ -298,13 +306,13 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
 
           <div className="flex items-center justify-end gap-2 pt-2">
               {isCollectionTask && isOwnerOfThisTask && task.status !== 'Completed' && (
-                <Button size="sm" variant="outline" onClick={() => handleCollectionStatusChange('Completed')}>
-                    <CheckCircle className="mr-2 h-4 w-4" /> Mark Complete
+                <Button size="sm" variant="outline" onClick={() => handleCollectionStatusChange('Completed')} disabled={isStatusChanging}>
+                    {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />} Mark Complete
                 </Button>
               )}
               {isCollectionTask && isOwnerOfThisTask && task.status === 'Completed' && (
-                <Button size="sm" variant="outline" onClick={() => handleCollectionStatusChange('To Do')}>
-                    <RotateCcw className="mr-2 h-4 w-4" /> Reopen
+                <Button size="sm" variant="outline" onClick={() => handleCollectionStatusChange('To Do')} disabled={isStatusChanging}>
+                    {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} Reopen
                 </Button>
               )}
               {!isActuallyMainTask && (
@@ -361,7 +369,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteTask} className="bg-destructive hover:bg-destructive/90">
+                      <AlertDialogAction onClick={handleDeleteTask} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                        {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         Delete
                       </AlertDialogAction>
                     </AlertDialogFooter>
