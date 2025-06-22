@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { getProjectById, deleteProject } from '@/services/projectService';
 import { getAllTasksAssignedToUser } from '@/services/taskService';
 import { getTodaysAttendanceForUserInProject } from '@/services/attendanceService';
@@ -30,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { useToast } from '@/hooks/use-toast';
 import { ProjectForm } from '@/components/projects/ProjectForm'; 
+import { TaskForm } from '@/components/tasks/TaskForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectTimeline } from '@/components/timeline/ProjectTimeline';
@@ -46,6 +46,7 @@ export default function ProjectDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showAddMainTaskModal, setShowAddMainTaskModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Attendance State
@@ -151,6 +152,11 @@ export default function ProjectDetailsPage() {
     setShowEditModal(false);
     fetchProjectDetails(); 
   };
+  
+  const handleTaskFormSuccess = () => {
+    setShowAddMainTaskModal(false);
+    fetchProjectDetails();
+  };
 
 
   const getStatusColor = (status: Project['status']) => {
@@ -221,7 +227,7 @@ export default function ProjectDetailsPage() {
                     </Dialog>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                        <Button variant="destructive" size="sm" disabled={isDeleting}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
@@ -319,12 +325,20 @@ export default function ProjectDetailsPage() {
                               Main Tasks
                           </h2>
                           {canManageProject && (
-                              <Button asChild>
-                                  <Link href={`/projects/${projectId}/tasks/create`}>
+                            <Dialog open={showAddMainTaskModal} onOpenChange={setShowAddMainTaskModal}>
+                              <DialogTrigger asChild>
+                                  <Button>
                                       <PlusCircle className="mr-2 h-4 w-4" />
                                       Add New Main Task
-                                  </Link>
-                              </Button>
+                                  </Button>
+                              </DialogTrigger>
+                              <DialogContent className="sm:max-w-2xl">
+                                  <DialogHeader>
+                                      <DialogTitle className="font-headline text-2xl">Add New Main Task</DialogTitle>
+                                  </DialogHeader>
+                                  <TaskForm projectId={projectId} onFormSuccess={handleTaskFormSuccess} />
+                              </DialogContent>
+                            </Dialog>
                           )}
                       </div>
                       {user && <TaskList projectId={projectId} onTasksUpdated={fetchProjectDetails} />}
