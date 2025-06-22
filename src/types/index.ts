@@ -94,7 +94,8 @@ export type TimelineEventType =
   | 'ATTACHMENT_DELETED'
   | 'ISSUE_DELETED'
   | 'ATTACHMENT_ADDED'
-  | 'MAIN_TASK_COMPLETED';
+  | 'MAIN_TASK_COMPLETED'
+  | 'MAIN_TASK_REOPENED';
 
 export interface TimelineEvent {
   id: string;

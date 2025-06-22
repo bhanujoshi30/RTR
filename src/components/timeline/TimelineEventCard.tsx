@@ -13,6 +13,7 @@ import {
   Trash2,
   FileX,
   Edit,
+  RotateCcw,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -34,6 +35,7 @@ const eventIcons: Record<TimelineEventType, React.ElementType> = {
   ISSUE_DELETED: Trash2,
   ATTACHMENT_ADDED: Paperclip,
   MAIN_TASK_COMPLETED: CheckCircle2,
+  MAIN_TASK_REOPENED: RotateCcw,
 };
 
 const renderDescription = (event: TimelineEvent) => {

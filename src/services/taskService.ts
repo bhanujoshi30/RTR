@@ -1,6 +1,7 @@
 
 
 
+
 import { db } from '@/lib/firebase';
 import type { Task, TaskStatus, UserRole, AggregatedEvent, ProjectAggregatedEvent, TimelineEvent } from '@/types';
 import {
@@ -601,6 +602,25 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
                     `completed the main task.`
                 );
             }
+        }
+      }
+
+      if (oldStatus === 'Completed' && status !== 'Completed' && taskData.parentId) {
+        const parentId = taskData.parentId;
+        const siblingSubTasks = await getSubTasks(parentId);
+
+        const allOtherSubTasksWereCompleted = siblingSubTasks
+            .filter(st => st.id !== taskId)
+            .every(st => st.status === 'Completed');
+        
+        if (allOtherSubTasksWereCompleted) {
+            await logTimelineEvent(
+                parentId,
+                userUid,
+                'MAIN_TASK_REOPENED',
+                `reopened the main task because sub-task "${taskData.name}" was reopened.`,
+                { subTaskId: taskId, subTaskName: taskData.name }
+            );
         }
       }
     }
