@@ -29,16 +29,13 @@ import { getAllUsers } from '@/services/userService';
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 const taskTypes = ['standard', 'collection'] as const;
 
-// Schema for Sub-tasks (most fields are relevant)
 const subTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
   description: z.string().max(1000).optional(),
   status: z.enum(taskStatuses),
   dueDate: z.date({ required_error: "Due date is required for sub-tasks." }),
-  assignedToUids: z.array(z.string()).optional(),
 });
 
-// Schema for Main Tasks (fewer fields directly editable or relevant here)
 const mainTaskSchema = z.object({
   name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
   description: z.string().max(1000).optional().nullable().default(null),
@@ -46,7 +43,6 @@ const mainTaskSchema = z.object({
   taskType: z.enum(taskTypes).default('standard'),
   reminderDays: z.coerce.number().int().min(0).optional().nullable(),
   cost: z.coerce.number().positive({ message: "Cost must be a positive number"}).optional().nullable(),
-  assignedToUids: z.array(z.string()).optional(), // Keep for type consistency even if not used in UI
 }).superRefine((data, ctx) => {
     if (data.taskType === 'collection' && (data.cost === undefined || data.cost === null || data.cost <= 0)) {
         ctx.addIssue({
@@ -74,9 +70,11 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   const [assignableUsers, setAssignableUsers] = useState<AppUser[]>([]);
-
+  
   const isSubTask = !!(parentId || task?.parentId);
   const currentSchema = isSubTask ? subTaskSchema : mainTaskSchema;
+
+  const [selectedUids, setSelectedUids] = useState<string[]>(isSubTask ? (task?.assignedToUids || []) : []);
 
   const form = useForm<TaskFormValues>({
     resolver: zodResolver(currentSchema),
@@ -88,7 +86,6 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       taskType: !isSubTask ? (task?.taskType || 'standard') : undefined,
       reminderDays: !isSubTask ? (task?.reminderDays || null) : undefined,
       cost: !isSubTask ? (task?.cost || null) : undefined,
-      assignedToUids: isSubTask ? (task?.assignedToUids || []) : undefined,
     },
   });
 
@@ -130,14 +127,14 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
 
     if (isSubTask) {
       const subTaskData = data as z.infer<typeof subTaskSchema>;
-      const assignedToNamesForPayload = subTaskData.assignedToUids?.map(uid => {
+      const assignedToNamesForPayload = selectedUids.map(uid => {
         const assignedUser = assignableUsers.find(u => u.uid === uid);
         return assignedUser?.displayName || uid; 
-      }) || [];
+      });
 
       taskPayload.status = subTaskData.status;
       taskPayload.dueDate = subTaskData.dueDate;
-      taskPayload.assignedToUids = subTaskData.assignedToUids || [];
+      taskPayload.assignedToUids = selectedUids || [];
       taskPayload.assignedToNames = assignedToNamesForPayload;
       taskPayload.taskType = 'standard';
       taskPayload.cost = null;
@@ -189,8 +186,6 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     ? (isSubTask ? "Edit Sub-task" : "Edit Main Task")
     : (isSubTask ? "Add New Sub-task" : "New Main Task");
 
-  const assignedToUids = isSubTask ? (form.watch("assignedToUids") as string[] | undefined) || [] : [];
-
   return (
     <Card className="shadow-lg">
       <Form {...form}>
@@ -203,7 +198,9 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 <FormField
                   control={form.control}
                   name="taskType"
-                  render={({ field }) => (
+                  render={({ field }) => {
+                    console.log('[TaskForm] Rendering field: taskType');
+                    return (
                     <FormItem className="space-y-3">
                       <FormLabel>Main Task Type</FormLabel>
                       <FormControl>
@@ -233,13 +230,15 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                       </FormControl>
                       <FormMessage />
                     </FormItem>
-                  )}
+                  )}}
                 />
              )}
             <FormField
               control={form.control}
               name="name"
-              render={({ field }) => (
+              render={({ field }) => {
+                console.log('[TaskForm] Rendering field: name');
+                return (
                 <FormItem>
                   <FormLabel>Name</FormLabel>
                   <FormControl>
@@ -247,12 +246,14 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   </FormControl>
                   <FormMessage />
                 </FormItem>
-              )}
+              )}}
             />
              <FormField
                 control={form.control}
                 name="description"
-                render={({ field }) => (
+                render={({ field }) => {
+                  console.log('[TaskForm] Rendering field: description');
+                  return (
                   <FormItem>
                     <FormLabel>Description (Optional)</FormLabel>
                     <FormControl>
@@ -265,7 +266,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )}
+                )}}
               />
 
             {isSubTask && (
@@ -274,7 +275,9 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   <FormField
                     control={form.control}
                     name="status"
-                    render={({ field }) => (
+                    render={({ field }) => {
+                      console.log('[TaskForm] Rendering field: status');
+                      return (
                       <FormItem>
                         <FormLabel>Status</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value as TaskStatus}>
@@ -291,12 +294,14 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                         </Select>
                         <FormMessage />
                       </FormItem>
-                    )}
+                    )}}
                   />
                   <FormField
                     control={form.control}
                     name="dueDate"
-                    render={({ field }) => (
+                    render={({ field }) => {
+                      console.log('[TaskForm] Rendering field: dueDate (sub-task)');
+                      return (
                       <FormItem className="flex flex-col">
                         <FormLabel>Due Date</FormLabel>
                         <Popover>
@@ -325,52 +330,48 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                         </Popover>
                         <FormMessage />
                       </FormItem>
-                    )}
+                    )}}
                   />
                 </div>
-                <FormField
-                    control={form.control}
-                    name="assignedToUids"
-                    render={() => (
-                        <FormItem>
-                             <div className="mb-2">
-                                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
-                                <FormDescription>Select team members to assign this sub-task to.</FormDescription>
+                <FormItem>
+                     <div className="mb-2">
+                        <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
+                        <FormDescription>Select team members to assign this sub-task to.</FormDescription>
+                    </div>
+                    <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                        {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
+                        {assignableUsers.map((assignableUser) => (
+                            <div key={assignableUser.uid} className="flex flex-row items-center space-x-3 space-y-0">
+                                <Checkbox
+                                    id={`user-task-${assignableUser.uid}`}
+                                    checked={selectedUids.includes(assignableUser.uid)}
+                                    onCheckedChange={(checked) => {
+                                        setSelectedUids((prev) => {
+                                            if (checked) {
+                                                return [...prev, assignableUser.uid];
+                                            } else {
+                                                return prev.filter((id) => id !== assignableUser.uid);
+                                            }
+                                        });
+                                    }}
+                                />
+                                <Label htmlFor={`user-task-${assignableUser.uid}`} className="font-normal cursor-pointer">
+                                {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
+                                </Label>
                             </div>
-                            <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                                {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
-                                {assignableUsers.map((assignableUser) => (
-                                    <div key={assignableUser.uid} className="flex flex-row items-center space-x-3 space-y-0">
-                                        <Checkbox
-                                            id={`user-task-${assignableUser.uid}`}
-                                            checked={assignedToUids.includes(assignableUser.uid)}
-                                            onCheckedChange={(checked) => {
-                                                const currentUids = (form.getValues('assignedToUids') as string[] | undefined) || [];
-                                                const newUids = checked
-                                                    ? [...currentUids, assignableUser.uid]
-                                                    : currentUids.filter((value) => value !== assignableUser.uid);
-                                                form.setValue('assignedToUids', newUids, { shouldValidate: true });
-                                            }}
-                                        />
-                                        <Label htmlFor={`user-task-${assignableUser.uid}`} className="font-normal cursor-pointer">
-                                        {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
-                                        </Label>
-                                    </div>
-                                ))}
-                            </div>
-                           <FormMessage />
-                        </FormItem>
-                    )}
-                />
-
+                        ))}
+                    </div>
+                </FormItem>
               </>
             )}
             {!isSubTask && (
                 <FormField
                     control={form.control}
                     name="dueDate"
-                    render={({ field }) => (
-                    <FormItem className="flex flex-col">
+                    render={({ field }) => {
+                      console.log('[TaskForm] Rendering field: dueDate (main task)');
+                      return (
+                      <FormItem className="flex flex-col">
                         <FormLabel>Due Date</FormLabel>
                         <Popover>
                         <PopoverTrigger asChild>
@@ -397,8 +398,8 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                         </PopoverContent>
                         </Popover>
                         <FormMessage />
-                    </FormItem>
-                    )}
+                      </FormItem>
+                    )}}
                 />
             )}
              {taskTypeWatcher === 'collection' && !isSubTask && (
@@ -406,7 +407,9 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                 <FormField
                   control={form.control}
                   name="cost"
-                  render={({ field }) => (
+                  render={({ field }) => {
+                    console.log('[TaskForm] Rendering field: cost');
+                    return (
                     <FormItem>
                       <FormLabel>Cost Amount (INR)</FormLabel>
                       <FormControl>
@@ -420,12 +423,14 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                       </FormControl>
                       <FormMessage />
                     </FormItem>
-                  )}
+                  )}}
                 />
                 <FormField
                   control={form.control}
                   name="reminderDays"
-                  render={({ field }) => (
+                  render={({ field }) => {
+                    console.log('[TaskForm] Rendering field: reminderDays');
+                    return (
                     <FormItem>
                       <FormLabel>Reminder (Days Before Due)</FormLabel>
                       <FormControl>
@@ -439,7 +444,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                       </FormControl>
                       <FormMessage />
                     </FormItem>
-                  )}
+                  )}}
                 />
               </div>
             )}
