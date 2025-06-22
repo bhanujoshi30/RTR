@@ -309,7 +309,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         <FormField
           control={form.control}
           name="assignedToUids"
-          render={() => (
+          render={({ field }) => (
             <FormItem>
               <div className="mb-4">
                 <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
@@ -319,37 +319,28 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               </div>
               <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
                 {assignableUsersForIssue.map((item) => (
-                  <FormField
+                  <FormItem
                     key={item.uid}
-                    control={form.control}
-                    name="assignedToUids"
-                    render={({ field }) => {
-                      return (
-                        <FormItem
-                          key={item.uid}
-                          className="flex flex-row items-start space-x-3 space-y-0"
-                        >
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value?.includes(item.uid)}
-                              onCheckedChange={(checked) => {
-                                return checked
-                                  ? field.onChange([...(field.value || []), item.uid])
-                                  : field.onChange(
-                                      (field.value || []).filter(
-                                        (value) => value !== item.uid
-                                      )
-                                    );
-                              }}
-                            />
-                          </FormControl>
-                          <FormLabel className="text-sm font-normal">
-                            {item.displayName || item.email} ({item.role})
-                          </FormLabel>
-                        </FormItem>
-                      );
-                    }}
-                  />
+                    className="flex flex-row items-center space-x-3 space-y-0"
+                  >
+                    <FormControl>
+                      <Checkbox
+                        checked={field.value?.includes(item.uid)}
+                        onCheckedChange={(checked) => {
+                          return checked
+                            ? field.onChange([...(field.value || []), item.uid])
+                            : field.onChange(
+                                (field.value || []).filter(
+                                  (value) => value !== item.uid
+                                )
+                              );
+                        }}
+                      />
+                    </FormControl>
+                    <FormLabel className="text-sm font-normal">
+                      {item.displayName || item.email} ({item.role})
+                    </FormLabel>
+                  </FormItem>
                 ))}
               </div>
               <FormMessage />
