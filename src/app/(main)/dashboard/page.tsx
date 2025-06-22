@@ -3,7 +3,7 @@
 
 import { ProjectList } from '@/components/projects/ProjectList';
 import { Button } from '@/components/ui/button';
-import { FolderPlus, Camera } from 'lucide-react';
+import { FolderPlus, Camera, CheckCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
@@ -12,8 +12,9 @@ import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks 
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects, getClientProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
-import { hasUserSubmittedAttendanceToday } from '@/services/attendanceService';
+import { getTodaysAttendanceForUser } from '@/services/attendanceService';
 import { AttendanceDialog } from '@/components/attendance/AttendanceDialog';
+import { format } from 'date-fns';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   // Attendance state
   const [showAttendanceDialog, setShowAttendanceDialog] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(true);
+  const [attendanceStatus, setAttendanceStatus] = useState<{ submitted: boolean; timestamp?: Date | null }>({ submitted: false, timestamp: null });
 
   useEffect(() => {
     if (authLoading || !user) {
@@ -36,12 +38,16 @@ export default function DashboardPage() {
         if (user.role === 'member' || user.role === 'supervisor') {
             const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
             try {
-                const submitted = await hasUserSubmittedAttendanceToday(user.uid, today);
-                if (!submitted) {
+                const record = await getTodaysAttendanceForUser(user.uid, today);
+                if (record) {
+                    setAttendanceStatus({ submitted: true, timestamp: record.timestamp });
+                } else {
+                    setAttendanceStatus({ submitted: false, timestamp: null });
                     setShowAttendanceDialog(true);
                 }
             } catch (e) {
                 console.error("Failed to check attendance status", e);
+                setAttendanceStatus({ submitted: false, timestamp: null });
             }
         }
         setCheckingAttendance(false);
@@ -219,7 +225,10 @@ export default function DashboardPage() {
           <AttendanceDialog
               open={showAttendanceDialog}
               onOpenChange={setShowAttendanceDialog}
-              onSuccess={() => setShowAttendanceDialog(false)}
+              onSuccess={() => {
+                setShowAttendanceDialog(false);
+                setAttendanceStatus({ submitted: true, timestamp: new Date() });
+              }}
           />
         )}
       <div className="space-y-8">
@@ -227,10 +236,19 @@ export default function DashboardPage() {
           <h1 className="font-headline text-3xl font-semibold tracking-tight">{pageTitle}</h1>
           <div className="flex items-center gap-2">
             {canSubmitAttendance && (
-                <Button variant="outline" onClick={() => setShowAttendanceDialog(true)}>
-                    <Camera className="mr-2 h-4 w-4" />
-                    Submit Attendance
-                </Button>
+                <>
+                  {attendanceStatus.submitted ? (
+                     <Button variant="outline" disabled>
+                        <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                        Submitted at {attendanceStatus.timestamp ? format(attendanceStatus.timestamp, 'p') : ''}
+                    </Button>
+                  ) : (
+                    <Button variant="outline" onClick={() => setShowAttendanceDialog(true)}>
+                        <Camera className="mr-2 h-4 w-4" />
+                        Submit Attendance
+                    </Button>
+                  )}
+                </>
             )}
             {canCreateProject && (
               <Button asChild>

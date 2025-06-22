@@ -74,24 +74,35 @@ export const addAttendanceRecord = async (data: AttendanceData): Promise<string>
   return docRef.id;
 };
 
-export const hasUserSubmittedAttendanceToday = async (userId: string, dateString: string): Promise<boolean> => {
+export const getTodaysAttendanceForUser = async (userId: string, dateString: string): Promise<AttendanceRecord | null> => {
   const attendanceCollectionRef = collection(db, 'attendance');
   const q = query(
     attendanceCollectionRef,
     where('userId', '==', userId),
     where('date', '==', dateString),
+    orderBy('timestamp', 'desc'),
     limit(1)
   );
   
   try {
     const querySnapshot = await getDocs(q);
-    return !querySnapshot.empty;
+    if (querySnapshot.empty) {
+      return null;
+    }
+    const docSnap = querySnapshot.docs[0];
+    const data = docSnap.data();
+    return {
+      id: docSnap.id,
+      ...data,
+      timestamp: (data.timestamp as Timestamp).toDate(),
+    } as AttendanceRecord;
   } catch (error) {
-    console.error("Error checking attendance submission:", error);
-    // Let it proceed as if not submitted, to avoid blocking user on error
-    return false;
+    console.error("Error fetching today's attendance submission:", error);
+    // To avoid blocking the user, treat errors as if no submission was found
+    return null;
   }
 };
+
 
 export const getAttendanceByDate = async (dateString: string): Promise<AttendanceRecord[]> => {
   const attendanceCollectionRef = collection(db, 'attendance');
