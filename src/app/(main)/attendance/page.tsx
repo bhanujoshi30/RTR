@@ -11,7 +11,7 @@ import { Loader2, CalendarCheck, User, Camera, MapPin, Search, BarChart, XCircle
 import type { AttendanceRecord, User as AppUser } from '@/types';
 import { getAttendanceForUser } from '@/services/attendanceService';
 import { getAllUsers } from '@/services/userService';
-import { format, isSameMonth, isWeekend, addDays, isBefore, startOfToday } from 'date-fns';
+import { format, isSameMonth, addDays, isBefore, startOfToday } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
@@ -125,6 +125,20 @@ export default function AttendancePage() {
   const [month, setMonth] = useState<Date>(new Date());
   
   const [error, setError] = useState<string | null>(null);
+  
+  // Explicit state and effect for selected record to fix refresh issue
+  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
+
+  useEffect(() => {
+    if (!selectedDate || loadingAttendance) {
+      setSelectedRecord(null);
+      return;
+    }
+    const dateString = format(selectedDate, 'yyyy-MM-dd');
+    const record = userAttendance.find(rec => rec.date === dateString) || null;
+    setSelectedRecord(record);
+  }, [selectedDate, userAttendance, loadingAttendance]);
+
 
   const isAdmin = user?.role === 'admin';
 
@@ -158,10 +172,10 @@ export default function AttendancePage() {
   
   // Fetch attendance records when a user is selected
   useEffect(() => {
-    // Reset attendance data when user changes
-    setUserAttendance([]);
-    
-    if (!selectedUserId) return;
+    if (!selectedUserId) {
+      setUserAttendance([]); // Clear data if no user is selected
+      return;
+    }
 
     const fetchRecords = async () => {
       setLoadingAttendance(true);
@@ -186,12 +200,6 @@ export default function AttendancePage() {
   
   const attendedDays = useMemo(() => userAttendance.map(record => record.timestamp), [userAttendance]);
   
-  const selectedRecord = useMemo(() => {
-    if (!selectedDate) return null;
-    const dateString = format(selectedDate, 'yyyy-MM-dd');
-    return userAttendance.find(rec => rec.date === dateString) || null;
-  }, [selectedDate, userAttendance]);
-
   const missedDays = useMemo(() => {
     if (!selectedUserId) return [];
     
@@ -202,11 +210,9 @@ export default function AttendancePage() {
     let dayIterator = new Date(month.getFullYear(), month.getMonth(), 1);
 
     while (isSameMonth(dayIterator, month) && isBefore(dayIterator, today)) {
-        if (!isWeekend(dayIterator)) {
-            const dateString = format(dayIterator, 'yyyy-MM-dd');
-            if (!attendedDates.has(dateString)) {
-                missed.push(new Date(dayIterator));
-            }
+        const dateString = format(dayIterator, 'yyyy-MM-dd');
+        if (!attendedDates.has(dateString)) {
+            missed.push(new Date(dayIterator));
         }
         dayIterator = addDays(dayIterator, 1);
     }
@@ -293,7 +299,6 @@ export default function AttendancePage() {
                         modifiers={{ 
                             attended: attendedDays, 
                             missed: missedDays,
-                            weekend: isWeekend
                         }}
                         modifiersStyles={{ 
                             attended: {
@@ -303,10 +308,10 @@ export default function AttendancePage() {
                             missed: {
                                 backgroundColor: 'hsl(var(--destructive) / 0.15)',
                             },
-                            weekend: {
-                                color: 'hsl(var(--muted-foreground))',
-                                opacity: 0.6,
-                            }
+                            selected: {
+                                outline: '2px solid hsl(var(--ring))',
+                                outlineOffset: '2px',
+                            },
                         }}
                         disabled={!selectedUserId || loadingAttendance}
                     />
