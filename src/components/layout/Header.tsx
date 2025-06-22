@@ -2,7 +2,7 @@
 "use client";
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,14 +16,24 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users, CalendarCheck, ClipboardList } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users, CalendarCheck, ClipboardList, Loader2 } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 export function Header() {
   const { user } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [loadingLink, setLoadingLink] = useState<string | null>(null);
+
+  // When route changes, clear the loader
+  useEffect(() => {
+    if (loadingLink) {
+      setLoadingLink(null);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const handleLogout = async () => {
     try {
@@ -58,14 +68,34 @@ export function Header() {
 
   const NavItems = ({isMobile = false} : {isMobile?: boolean}) => (
     <>
-      {navLinks.map((link) => (
-        <Button variant="ghost" asChild key={link.href} onClick={() => isMobile && setMobileMenuOpen(false)}>
-          <Link href={link.href} className={`flex items-center ${isMobile ? 'justify-start w-full text-lg py-3' : ''}`}>
-            {link.icon}
-            {link.label}
-          </Link>
-        </Button>
-      ))}
+      {navLinks.map((link) => {
+        const isLoading = loadingLink === link.href;
+        const isActive = pathname === link.href;
+
+        const handleNavClick = () => {
+          if (!isActive) {
+            setLoadingLink(link.href);
+          }
+          if (isMobile) {
+            setMobileMenuOpen(false);
+          }
+        };
+
+        return (
+          <Button
+            variant={isActive && !isLoading ? "secondary" : "ghost"}
+            asChild
+            key={link.href}
+            onClick={handleNavClick}
+            disabled={isLoading}
+          >
+            <Link href={link.href} className={`flex items-center ${isMobile ? 'justify-start w-full text-lg py-3' : ''}`}>
+              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : link.icon}
+              {link.label}
+            </Link>
+          </Button>
+        );
+      })}
     </>
   );
 
