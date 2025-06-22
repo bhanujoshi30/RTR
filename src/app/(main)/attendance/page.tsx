@@ -1,24 +1,24 @@
 
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CalendarCheck, User, Camera, MapPin, Search } from 'lucide-react';
+import { Loader2, CalendarCheck, User, Camera, MapPin, Search, BarChart, XCircle } from 'lucide-react';
 import type { AttendanceRecord, User as AppUser } from '@/types';
 import { getAttendanceForUser } from '@/services/attendanceService';
 import { getAllUsers } from '@/services/userService';
-import { format } from 'date-fns';
+import { format, isSameMonth, isPast, isWeekend, addDays, isBefore } from 'date-fns';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import Image from 'next/image';
 
-const AttendanceDetailCard = ({ record }: { record: AttendanceRecord | null }) => {
-  if (!record) {
+const AttendanceDetailCard = ({ record, selectedDate }: { record: AttendanceRecord | null, selectedDate?: Date }) => {
+  if (!selectedDate) {
     return (
       <Card>
         <CardHeader>
@@ -28,6 +28,21 @@ const AttendanceDetailCard = ({ record }: { record: AttendanceRecord | null }) =
         <CardContent className="flex flex-col items-center justify-center text-center h-96">
           <CalendarCheck className="h-16 w-16 text-muted-foreground/50" />
           <p className="mt-4 text-muted-foreground">No date selected</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!record) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Details for {format(selectedDate, 'PPP')}</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col items-center justify-center text-center h-96">
+          <XCircle className="h-16 w-16 text-destructive/80" />
+          <p className="mt-4 text-foreground font-semibold">No Attendance Recorded</p>
+          <p className="text-muted-foreground text-sm">There is no attendance record for this day.</p>
         </CardContent>
       </Card>
     );
@@ -70,6 +85,24 @@ const AttendanceDetailCard = ({ record }: { record: AttendanceRecord | null }) =
   );
 };
 
+const AttendanceSummaryCard = ({ present, absent }: { present: number, absent: number }) => (
+    <Card>
+        <CardHeader>
+            <CardTitle className="flex items-center gap-2"><BarChart className="h-5 w-5" /> Monthly Summary</CardTitle>
+            <CardDescription>Attendance for the selected month.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-4 text-center">
+            <div>
+                <p className="text-2xl font-bold text-green-600">{present}</p>
+                <p className="text-sm text-muted-foreground">Days Present</p>
+            </div>
+             <div>
+                <p className="text-2xl font-bold text-red-600">{absent}</p>
+                <p className="text-sm text-muted-foreground">Days Absent</p>
+            </div>
+        </CardContent>
+    </Card>
+)
 
 export default function AttendancePage() {
   const { user, loading: authLoading } = useAuth();
@@ -82,8 +115,11 @@ export default function AttendancePage() {
   
   const [userAttendance, setUserAttendance] = useState<AttendanceRecord[]>([]);
   const [loadingAttendance, setLoadingAttendance] = useState(false);
+  
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
-
+  const [month, setMonth] = useState<Date>(new Date());
+  
   const [error, setError] = useState<string | null>(null);
 
   const isAdmin = user?.role === 'admin';
@@ -118,11 +154,13 @@ export default function AttendancePage() {
   
   // Fetch attendance records when a user is selected
   useEffect(() => {
-    if (!selectedUserId) {
-        setUserAttendance([]);
-        setSelectedRecord(null);
-        return;
-    };
+    // Reset states when user changes
+    setUserAttendance([]);
+    setSelectedRecord(null);
+    setSelectedDate(undefined);
+    setMonth(new Date());
+
+    if (!selectedUserId) return;
 
     const fetchRecords = async () => {
       setLoadingAttendance(true);
@@ -141,6 +179,7 @@ export default function AttendancePage() {
   }, [selectedUserId]);
 
   const handleDateSelect = (date: Date | undefined) => {
+    setSelectedDate(date);
     if (!date) {
         setSelectedRecord(null);
         return;
@@ -150,10 +189,37 @@ export default function AttendancePage() {
     setSelectedRecord(recordForDay || null);
   };
   
-  // Dates with attendance records to highlight in the calendar
-  const attendedDays = userAttendance.map(record => record.timestamp);
+  const attendedDays = useMemo(() => userAttendance.map(record => record.timestamp), [userAttendance]);
+  
+  const missedDays = useMemo(() => {
+    if (!selectedUserId) return [];
+    
+    const today = new Date();
+    const attendedDates = new Set(userAttendance.map(rec => rec.date)); // 'YYYY-MM-DD' format
+    
+    const missed: Date[] = [];
+    let dayIterator = new Date(month.getFullYear(), month.getMonth(), 1);
 
-  // Main render logic
+    while (isSameMonth(dayIterator, month) && isBefore(dayIterator, today)) {
+        if (!isWeekend(dayIterator)) {
+            const dateString = format(dayIterator, 'yyyy-MM-dd');
+            if (!attendedDates.has(dateString)) {
+                missed.push(new Date(dayIterator));
+            }
+        }
+        dayIterator = addDays(dayIterator, 1);
+    }
+    return missed;
+  }, [userAttendance, month, selectedUserId]);
+
+  const summaryStats = useMemo(() => {
+    if (!selectedUserId) return { present: 0, absent: 0 };
+    const present = userAttendance.filter(rec => isSameMonth(rec.timestamp, month)).length;
+    const absent = missedDays.length;
+    return { present, absent };
+  }, [userAttendance, month, selectedUserId, missedDays]);
+
+
   if (authLoading || !isAdmin) {
     return (
       <div className="flex h-[calc(100vh-10rem)] items-center justify-center">
@@ -174,7 +240,7 @@ export default function AttendancePage() {
       {error && <p className="text-center text-destructive py-4">{error}</p>}
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:items-start">
-        {/* Left Column: User selection and calendar */}
+        {/* Left Column: User selection, summary and calendar */}
         <div className="lg:col-span-1 space-y-6">
             <Card>
                 <CardHeader>
@@ -183,7 +249,7 @@ export default function AttendancePage() {
                 <CardContent>
                     <Select onValueChange={setSelectedUserId} disabled={loadingUsers}>
                         <SelectTrigger className="w-full">
-                            <SelectValue placeholder={loadingUsers ? "Loading users..." : "Select a user to view attendance"} />
+                            <SelectValue placeholder={loadingUsers ? "Loading users..." : "Select a user"} />
                         </SelectTrigger>
                         <SelectContent>
                         {users.map(u => (
@@ -202,10 +268,12 @@ export default function AttendancePage() {
                 </CardContent>
             </Card>
 
+            {selectedUserId && <AttendanceSummaryCard present={summaryStats.present} absent={summaryStats.absent} />}
+
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2"><Search className="h-5 w-5" /> Find Attendance</CardTitle>
-                    <CardDescription>Days with submitted attendance are highlighted.</CardDescription>
+                    <CardDescription>Days with attendance are green. Missed days are red.</CardDescription>
                 </CardHeader>
                 <CardContent className="relative">
                     {loadingAttendance && (
@@ -217,13 +285,21 @@ export default function AttendancePage() {
                     <Calendar
                         mode="single"
                         onSelect={handleDateSelect}
+                        selected={selectedDate}
+                        month={month}
+                        onMonthChange={setMonth}
                         className="rounded-md border p-0"
-                        modifiers={{ attended: attendedDays }}
-                        modifiersStyles={{ attended: {
-                            backgroundColor: 'hsl(var(--primary))',
-                            color: 'hsl(var(--primary-foreground))',
-                            opacity: 0.8,
-                        }}}
+                        modifiers={{ attended: attendedDays, missed: missedDays }}
+                        modifiersStyles={{ 
+                            attended: {
+                                backgroundColor: 'hsl(var(--primary))',
+                                color: 'hsl(var(--primary-foreground))',
+                                opacity: 0.9,
+                            },
+                            missed: {
+                                backgroundColor: 'hsl(var(--destructive) / 0.15)',
+                            }
+                        }}
                         disabled={!selectedUserId || loadingAttendance}
                     />
                 </CardContent>
@@ -232,9 +308,10 @@ export default function AttendancePage() {
 
         {/* Right Column: Attendance Details */}
         <div className="lg:col-span-2">
-           <AttendanceDetailCard record={selectedRecord} />
+           <AttendanceDetailCard record={selectedRecord} selectedDate={selectedDate} />
         </div>
       </div>
     </div>
   );
 }
+
