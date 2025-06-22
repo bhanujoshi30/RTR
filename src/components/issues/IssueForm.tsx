@@ -162,6 +162,8 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     }
   };
 
+  const assignedToUids = form.watch("assignedToUids") || [];
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
@@ -173,47 +175,45 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         </div>
         
         <FormField
-          control={form.control}
-          name="assignedToUids"
-          render={({ field }) => (
-            <FormItem>
-              <div className="mb-2">
-                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
-                <FormDescription>Select team members to assign this issue to.</FormDescription>
-              </div>
-              <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                {loadingAssignableUsers ? (
-                  <p className="text-sm text-muted-foreground">Loading users...</p>
-                ) : assignableUsersForIssue.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No assignable users found for the parent task.</p>
-                ) : (
-                  assignableUsersForIssue.map((item) => (
-                    <div key={item.uid} className="flex flex-row items-center space-x-3 space-y-0">
-                      <Checkbox
-                        id={`user-issue-${item.uid}`}
-                        checked={field.value?.includes(item.uid)}
-                        onCheckedChange={(checked) => {
-                          const currentUids = field.value || [];
-                          return checked
-                            ? field.onChange([...currentUids, item.uid])
-                            : field.onChange(
-                                currentUids.filter(
-                                  (value) => value !== item.uid
-                                )
-                              );
-                        }}
-                      />
-                      <Label htmlFor={`user-issue-${item.uid}`} className="font-normal cursor-pointer">
-                        {item.displayName || item.email}
-                      </Label>
+            control={form.control}
+            name="assignedToUids"
+            render={() => (
+                <FormItem>
+                    <div className="mb-2">
+                        <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground" />Assign To (Team Members)</FormLabel>
+                        <FormDescription>Select team members to assign this issue to.</FormDescription>
                     </div>
-                  ))
-                )}
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
+                    <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                        {loadingAssignableUsers ? (
+                            <p className="text-sm text-muted-foreground">Loading users...</p>
+                        ) : assignableUsersForIssue.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No assignable users found for the parent task.</p>
+                        ) : (
+                            assignableUsersForIssue.map((item) => (
+                                <div key={item.uid} className="flex flex-row items-center space-x-3 space-y-0">
+                                    <Checkbox
+                                        id={`user-issue-${item.uid}`}
+                                        checked={assignedToUids.includes(item.uid)}
+                                        onCheckedChange={(checked) => {
+                                            const currentUids = form.getValues("assignedToUids") || [];
+                                            const newUids = checked
+                                                ? [...currentUids, item.uid]
+                                                : currentUids.filter((value) => value !== item.uid);
+                                            form.setValue("assignedToUids", newUids, { shouldValidate: true });
+                                        }}
+                                    />
+                                    <Label htmlFor={`user-issue-${item.uid}`} className="font-normal cursor-pointer">
+                                        {item.displayName || item.email}
+                                    </Label>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                    <FormMessage />
+                </FormItem>
+            )}
         />
+
 
         <FormField control={form.control} name="dueDate" render={({ field }) => (
           <FormItem className="flex flex-col">

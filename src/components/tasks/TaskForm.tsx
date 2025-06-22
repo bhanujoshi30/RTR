@@ -189,6 +189,8 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     ? (isSubTask ? "Edit Sub-task" : "Edit Main Task")
     : (isSubTask ? "Add New Sub-task" : "New Main Task");
 
+  const assignedToUids = isSubTask ? (form.watch("assignedToUids") as string[] | undefined) || [] : [];
+
   return (
     <Card className="shadow-lg">
       <Form {...form}>
@@ -327,42 +329,40 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   />
                 </div>
                 <FormField
-                  control={form.control}
-                  name="assignedToUids"
-                  render={({ field }) => (
-                    <FormItem>
-                      <div className="mb-2">
-                        <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
-                        <FormDescription>Select team members to assign this sub-task to.</FormDescription>
-                      </div>
-                      <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                        {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
-                        {assignableUsers.map((assignableUser) => (
-                          <div key={assignableUser.uid} className="flex flex-row items-center space-x-3 space-y-0">
-                            <Checkbox
-                              id={`user-task-${assignableUser.uid}`}
-                              checked={field.value?.includes(assignableUser.uid)}
-                              onCheckedChange={(checked) => {
-                                const currentUids = field.value || [];
-                                return checked
-                                  ? field.onChange([...currentUids, assignableUser.uid])
-                                  : field.onChange(
-                                      currentUids.filter(
-                                        (value) => value !== assignableUser.uid
-                                      )
-                                    );
-                              }}
-                            />
-                            <Label htmlFor={`user-task-${assignableUser.uid}`} className="font-normal cursor-pointer">
-                              {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                    control={form.control}
+                    name="assignedToUids"
+                    render={() => (
+                        <FormItem>
+                             <div className="mb-2">
+                                <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
+                                <FormDescription>Select team members to assign this sub-task to.</FormDescription>
+                            </div>
+                            <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                                {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
+                                {assignableUsers.map((assignableUser) => (
+                                    <div key={assignableUser.uid} className="flex flex-row items-center space-x-3 space-y-0">
+                                        <Checkbox
+                                            id={`user-task-${assignableUser.uid}`}
+                                            checked={assignedToUids.includes(assignableUser.uid)}
+                                            onCheckedChange={(checked) => {
+                                                const currentUids = (form.getValues('assignedToUids') as string[] | undefined) || [];
+                                                const newUids = checked
+                                                    ? [...currentUids, assignableUser.uid]
+                                                    : currentUids.filter((value) => value !== assignableUser.uid);
+                                                form.setValue('assignedToUids', newUids, { shouldValidate: true });
+                                            }}
+                                        />
+                                        <Label htmlFor={`user-task-${assignableUser.uid}`} className="font-normal cursor-pointer">
+                                        {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
+                                        </Label>
+                                    </div>
+                                ))}
+                            </div>
+                           <FormMessage />
+                        </FormItem>
+                    )}
                 />
+
               </>
             )}
             {!isSubTask && (
