@@ -149,6 +149,7 @@ export interface AttendanceRecord {
     longitude: number;
     address?: string;
   };
+  projectExists?: boolean;
 }
 
 export interface DprData {

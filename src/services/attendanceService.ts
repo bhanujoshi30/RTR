@@ -11,6 +11,7 @@ import {
   Timestamp,
   orderBy,
   limit,
+  documentId,
 } from 'firebase/firestore';
 import { ref, getDownloadURL, uploadBytesResumable } from 'firebase/storage';
 import { format } from 'date-fns';
@@ -109,13 +110,17 @@ export const getTodaysAttendanceForUserInProject = async (userId: string, projec
 
 export const getAttendanceForUser = async (userId: string): Promise<AttendanceRecord[]> => {
   const attendanceCollectionRef = collection(db, 'attendance');
-  const q = query(
+  const attendanceQuery = query(
     attendanceCollectionRef,
     where('userId', '==', userId)
   );
 
-  const querySnapshot = await getDocs(q);
-  const records = querySnapshot.docs.map(docSnap => {
+  const attendanceSnapshot = await getDocs(attendanceQuery);
+  if (attendanceSnapshot.empty) {
+    return [];
+  }
+
+  const records: Omit<AttendanceRecord, 'projectExists'>[] = attendanceSnapshot.docs.map(docSnap => {
     const data = docSnap.data();
     return {
       id: docSnap.id,
@@ -124,10 +129,38 @@ export const getAttendanceForUser = async (userId: string): Promise<AttendanceRe
     } as AttendanceRecord;
   });
 
-  records.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  const projectIds = [...new Set(records.map(rec => rec.projectId))];
+
+  if (projectIds.length === 0) {
+    records.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return records.map(r => ({ ...r, projectExists: false }));
+  }
+
+  const existingProjectIds = new Set<string>();
+  const projectChunks: string[][] = [];
+  for (let i = 0; i < projectIds.length; i += 30) {
+    projectChunks.push(projectIds.slice(i, i + 30));
+  }
+
+  for (const chunk of projectChunks) {
+      if (chunk.length > 0) {
+        const projectsRef = collection(db, 'projects');
+        const projectsQuery = query(projectsRef, where(documentId(), 'in', chunk));
+        const projectsSnapshot = await getDocs(projectsQuery);
+        projectsSnapshot.forEach(doc => existingProjectIds.add(doc.id));
+      }
+  }
+
+  const recordsWithProjectStatus = records.map(record => ({
+    ...record,
+    projectExists: existingProjectIds.has(record.projectId),
+  }));
+
+  recordsWithProjectStatus.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   
-  return records;
+  return recordsWithProjectStatus;
 };
+
 
 export const getAttendanceByDateForProject = async (dateString: string, projectId: string): Promise<AttendanceRecord[]> => {
   const attendanceCollectionRef = collection(db, 'attendance');

@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, CalendarCheck, User, Search, BarChart, XCircle, Building } from 'lucide-react';
+import { Loader2, CalendarCheck, User, Search, BarChart, XCircle, Building, FolderX } from 'lucide-react';
 import type { AttendanceRecord, User as AppUser } from '@/types';
 import { getAttendanceForUser } from '@/services/attendanceService';
 import { getAllUsers } from '@/services/userService';
@@ -61,7 +61,11 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
             <div key={record.id} className="rounded-lg border p-4 space-y-4 bg-background">
                  <div className="flex justify-between items-start">
                     <div>
-                        <p className="font-semibold flex items-center gap-2"><Building className="h-4 w-4 text-primary" />{record.projectName}</p>
+                        {record.projectExists === false ? (
+                           <p className="font-semibold flex items-center gap-2 text-muted-foreground"><FolderX className="h-4 w-4 text-destructive" />{record.projectName} (Deleted)</p>
+                        ) : (
+                           <p className="font-semibold flex items-center gap-2"><Building className="h-4 w-4 text-primary" />{record.projectName}</p>
+                        )}
                         <p className="text-xs text-muted-foreground">Submitted at {format(record.timestamp, 'p')}</p>
                     </div>
                     <Button asChild variant="outline" size="sm">
