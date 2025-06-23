@@ -759,24 +759,25 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   }
 };
 
-export const countProjectSubTasks = async (projectId: string): Promise<number> => {
-  console.log(`taskService: countProjectSubTasks (DEBUG MODE) called for projectId: ${projectId}`);
-  if (!projectId) {
-    console.warn('taskService: countProjectSubTasks (DEBUG MODE) called with no projectId.');
+export const countProjectSubTasks = async (projectId: string, userUid: string): Promise<number> => {
+  console.log(`taskService: countProjectSubTasks (DEBUG MODE) called for projectId: ${projectId} by user: ${userUid}`);
+  if (!projectId || !userUid) {
+    console.warn('taskService: countProjectSubTasks (DEBUG MODE) called with no projectId or userUid.');
     return 0;
   }
 
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
-    where('parentId', '!=', null)
+    where('parentId', '!=', null),
+    where('projectOwnerUid', '==', userUid)
   );
 
   try {
     const querySnapshot = await getDocs(q);
     const count = querySnapshot.size;
     if (count === 0) {
-      console.warn(`taskService: countProjectSubTasks (DEBUG MODE) - Query for projectId '${projectId}' (parentId != null) executed successfully using getDocs but returned 0 sub-tasks. Docs found by query: []. Please verify data and/or Firestore indexes if this is unexpected. Ensure tasks intended as sub-tasks have a non-null 'parentId' and the correct 'projectId'.`);
+      console.warn(`taskService: countProjectSubTasks (DEBUG MODE) - Query for projectId '${projectId}' (parentId != null, projectOwnerUid == ${userUid}) executed successfully using getDocs but returned 0 sub-tasks. Docs found by query: []. Please verify data and/or Firestore indexes if this is unexpected. Ensure tasks intended as sub-tasks have a non-null 'parentId' and the correct 'projectId' and 'projectOwnerUid'.`);
     } else {
       const docsFound = querySnapshot.docs.map(d => ({ id: d.id, parentId: d.data().parentId, projectId: d.data().projectId, name: d.data().name}));
       console.log(`taskService: countProjectSubTasks (DEBUG MODE) - Successfully queried using getDocs. Found ${count} sub-tasks for project ${projectId}. Docs: ${JSON.stringify(docsFound)}`);
@@ -788,35 +789,37 @@ export const countProjectSubTasks = async (projectId: string): Promise<number> =
     if (e.code === 'failed-precondition' && e.message && e.message.toLowerCase().includes("index")) {
       console.error(`\n\n🚨🚨🚨 Firestore Index Might Be Required or Query Failed for countProjectSubTasks (DEBUG MODE) 🚨🚨🚨\n` +
         `PROJECT ID: '${projectId}'\n` +
-        `QUERY: Firestore query on 'tasks' collection where 'projectId' == '${projectId}' AND 'parentId' != null.\n` +
+        `QUERY: Firestore query on 'tasks' collection where 'projectId' == '${projectId}' AND 'projectOwnerUid' == '${userUid}' AND 'parentId' != null.\n` +
         `COMMON CAUSE: This type of query often requires a composite index.\n` +
         `SUGGESTED INDEX:\n` +
         `  - Collection: 'tasks'\n` +
         `  - Fields:\n` +
         `    1. 'projectId' (Ascending)\n` +
-        `    2. 'parentId' (Ascending OR Descending - Firestore will guide you if a specific direction is needed for '!=' queries)\n` +
+        `    2. 'projectOwnerUid' (Ascending)\n` +
+        `    3. 'parentId' (Ascending OR Descending - Firestore will guide you if a specific direction is needed for '!=' queries)\n` +
         `ACTION: Please check your Firebase Console -> Firestore Database -> Indexes. If the exact error message from Firebase provides a direct link to create the index, use that.\n` +
         `Original error message: ${e.message}\n` +
         `Error code: ${e.code}\n\n`);
     } else if (e.message && e.message.toLowerCase().includes("index")) {
-        console.error(`An index-related error occurred while counting sub-tasks for project ${projectId}. Please check your Firestore indexes for the 'tasks' collection. Query: projectId == ${projectId}, parentId != null.`);
+        console.error(`An index-related error occurred while counting sub-tasks for project ${projectId}. Please check your Firestore indexes for the 'tasks' collection. Query: projectId == ${projectId}, projectOwnerUid == ${userUid}, parentId != null.`);
     }
     return 0; 
   }
 };
 
 
-export const countProjectMainTasks = async (projectId: string): Promise<number> => {
-  if (!projectId) {
-    console.warn('taskService: countProjectMainTasks called with no projectId.');
+export const countProjectMainTasks = async (projectId: string, userUid: string): Promise<number> => {
+  if (!projectId || !userUid) {
+    console.warn('taskService: countProjectMainTasks called with no projectId or userUid.');
     return 0;
   }
-  console.log(`taskService: countProjectMainTasks called for projectId: ${projectId}`);
+  console.log(`taskService: countProjectMainTasks called for projectId: ${projectId} by user ${userUid}`);
 
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
-    where('parentId', '==', null)
+    where('parentId', '==', null),
+    where('projectOwnerUid', '==', userUid)
   );
 
   try {
@@ -832,12 +835,12 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
         `The query to count main tasks for project '${projectId}' failed because a Firestore index is missing or not yet active.\n` +
         `DETAILS:\n` +
         ` - Collection: 'tasks'\n` +
-        ` - Query conditions: projectId == '${projectId}', parentId == null\n` +
-        ` - Likely required index fields: 'projectId' (Ascending), 'parentId' (Ascending).\n` +
+        ` - Query conditions: projectId == '${projectId}', parentId == null, projectOwnerUid == '${userUid}'\n` +
+        ` - Likely required index fields: 'projectId' (Ascending), 'projectOwnerUid' (Ascending), 'parentId' (Ascending).\n` +
         `Please go to your Firebase Console -> Firestore Database -> Indexes, and create the required composite index.\n` +
         `The detailed error message from Firebase (often including a URL to create the index) might be visible in your browser's network tab for the failing request, or earlier in the console if not caught cleanly.\n\n`);
     } else if (e.message && e.message.toLowerCase().includes("index")) {
-        console.error(`An index-related error occurred while counting main tasks for project ${projectId}. Please check your Firestore indexes for the 'tasks' collection. Query: projectId == ${projectId}, parentId == null.`);
+        console.error(`An index-related error occurred while counting main tasks for project ${projectId}. Please check your Firestore indexes for the 'tasks' collection. Query: projectId == ${projectId}, parentId == null, projectOwnerUid == ${userUid}.`);
     } else {
       console.error(`An unexpected error occurred while counting main tasks for project ${projectId}.`);
     }

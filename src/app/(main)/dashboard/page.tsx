@@ -109,10 +109,10 @@ export default function DashboardPage() {
                   console.log(`DashboardPage: [Admin/Owner View] Processing project ${project.id} (${project.name}) for project-wide counts.`);
                   
                   console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectMainTasks.`);
-                  const mainTaskCountPromise = countProjectMainTasks(project.id);
+                  const mainTaskCountPromise = countProjectMainTasks(project.id, user.uid);
                   
                   console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks (service).`);
-                  const subTaskCountPromise = countProjectSubTasks(project.id);
+                  const subTaskCountPromise = countProjectSubTasks(project.id, user.uid);
                   
                   console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectOpenIssues.`);
                   const openIssueCountPromise = countProjectOpenIssues(project.id, user.uid);
