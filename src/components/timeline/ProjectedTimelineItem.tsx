@@ -14,7 +14,7 @@ const RupeeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" heigh
 
 const getTaskTypeInfo = (task: Task, t: (key: string) => string) => {
   if (task.taskType === 'collection') return { icon: RupeeIcon, label: t('taskForm.collectionTask') };
-  if (task.parentId) return { icon: ListChecks, label: t('projectDetails.mainTasks') }; // Assuming a sub-task is a type of main task for this label
+  if (task.parentId) return { icon: ListChecks, label: t('projectDetails.subTask') };
   return { icon: Layers, label: t('projectDetails.mainTasks') };
 };
 
@@ -49,6 +49,7 @@ export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTime
   
   const reminderText = () => {
     if (!showReminder || daysRemaining === null) return '';
+    if (daysRemaining <= 0) return t('taskCard.reminderDueToday');
     const key = daysRemaining === 1 ? 'taskCard.reminderDayLeft' : 'taskCard.reminderDaysLeft';
     return t(key).replace('{day}', '1').replace('{days}', daysRemaining.toString());
   };

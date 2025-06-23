@@ -29,7 +29,8 @@
   },
   "dashboard": {
     "myProjects": "मेरे प्रोजेक्ट",
-    "assignedWork": "मेरे सौंपे गए काम का अवलोकन"
+    "assignedWork": "मेरे सौंपे गए काम का अवलोकन",
+    "clientProjects": "मेरे प्रोजेक्ट"
   },
   "projectList": {
     "noProjects": "अभी तक कोई प्रोजेक्ट नहीं है",
@@ -60,10 +61,14 @@
     "client": "ग्राहक",
     "estCost": "अनुमानित लागत:",
     "mainTasks": "मुख्य कार्य",
+    "subTask": "उप-कार्य",
     "activityTimeline": "गतिविधि समयरेखा",
     "projectedTimeline": "अनुमानित समयरेखा",
     "addNewMainTask": "नया मुख्य कार्य जोड़ें",
-    "addNewMainTaskDesc": "इस प्रोजेक्ट में एक नया मुख्य कार्य जोड़ें। आप बाद में उप-कार्य और अन्य विवरण जोड़ सकते हैं।"
+    "addNewMainTaskDesc": "इस प्रोजेक्ट में एक नया मुख्य कार्य जोड़ें। आप बाद में उप-कार्य और अन्य विवरण जोड़ सकते हैं।",
+    "clientTimelineDesc": "इस प्रोजेक्ट के भीतर सभी मुख्य कार्यों का एक उच्च-स्तरीय इतिहास।",
+    "fullTimelineDesc": "इस प्रोजेक्ट के भीतर सभी मुख्य कार्यों और उप-कार्यों का एक पूरा इतिहास।",
+    "projectedTimelineDesc": "इस प्रोजेक्ट के लिए सभी कार्यों और उनकी नियत तारीखों की नियोजित अनुसूची।"
   },
   "attendance": {
     "pageTitle": "उपयोगकर्ता उपस्थिति दर्शक",
@@ -158,11 +163,22 @@
     "subTasks": "{count} उप-कार्य",
     "reminderDaysLeft": "अनुस्मारक: {days} दिन शेष",
     "reminderDayLeft": "अनुस्मारक: {day} दिन शेष",
+    "reminderDueToday": "अनुस्मारक: आज देय",
     "openIssue": "{count} खुला मुद्दा",
     "openIssues": "{count} खुले मुद्दे",
     "mainTaskProgress": "मुख्य कार्य प्रगति",
     "markComplete": "पूर्ण के रूप में चिह्नित करें",
-    "reopenTask": "फिर से खोलें"
+    "reopenTask": "फिर से खोलें",
+    "taskCompleted": "कार्य पूरा हुआ",
+    "taskMarkedComplete": "कार्य {name} को पूर्ण के रूप में चिह्नित किया गया है।",
+    "mainTaskStatusInfo": "मुख्य कार्य की स्थिति उसके उप-कार्यों से प्राप्त होती है।",
+    "cannotChangeStatus": "आप इस उप-कार्य की स्थिति नहीं बदल सकते।",
+    "cannotComplete": "उप-कार्य पूरा नहीं कर सकते",
+    "openIssuesExist": "अभी भी खुले मुद्दे हैं। कृपया पहले उन्हें हल करें।",
+    "couldNotVerifyIssues": "मुद्दों की पुष्टि नहीं की जा सकी: {error}",
+    "statusChanged": "{name} की स्थिति बदलकर {status} कर दी गई है।",
+    "cannotDeleteTask": "केवल कार्य का स्वामी ही इस कार्य को हटा सकता है।",
+    "cannotEditTask": "केवल कार्य का स्वामी ही कार्य विवरण संपादित कर सकता है।"
   },
   "issueCard": {
     "overdue": "देर हो चुकी है",
@@ -200,7 +216,17 @@
     "created": "बनाया गया:",
     "due": "देय:",
     "attachments": "अनुलग्नक",
-    "noAttachments": "इस मुद्दे के लिए कोई अनुलग्नक नहीं है।"
+    "noAttachments": "इस मुद्दे के लिए कोई अनुलग्नक नहीं है।",
+    "changeStatus": "स्थिति बदलें",
+    "taskUpdated": "कार्य अपडेट किया गया",
+    "updateFailed": "अपडेट विफल",
+    "couldNotUpdateStatus": "कार्य की स्थिति अपडेट नहीं की जा सकी।",
+    "permissionDenied": "अनुमति नहीं है",
+    "error": "त्रुटि",
+    "taskDeleted": "कार्य हटा दिया गया",
+    "taskDeletedSuccess": "कार्य {name} हटा दिया गया है।",
+    "deletionFailed": "हटाना विफल",
+    "couldNotDeleteTask": "कार्य को हटाया नहीं जा सका।"
   },
   "taskForm": {
     "editSubTask": "उप-कार्य संपादित करें",

@@ -121,20 +121,20 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
     if (!user) return;
     try {
       await updateTaskStatus(task.id, user.uid, 'Completed', user.role);
-      toast({ title: 'Task Completed', description: `"${task.name}" has been marked as complete.` });
+      toast({ title: t('taskCard.taskCompleted'), description: t('taskCard.taskMarkedComplete').replace('{name}', `"${task.name}"`) });
       onTaskUpdated();
     } catch (error: any) {
-      toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
+      toast({ title: t('common.updateFailed'), description: error.message || t('common.couldNotUpdateStatus'), variant: 'destructive' });
     }
   };
 
   const handleStatusChange = async (newStatus: TaskStatus) => {
     if (isActuallyMainTask || !user) {
-      toast({ title: 'Info', description: 'Main task status is derived from its sub-tasks.'});
+      toast({ title: 'Info', description: t('taskCard.mainTaskStatusInfo')});
       return;
     }
     if (!canChangeSubTaskStatus) {
-      toast({ title: 'Permission Denied', description: 'You cannot change the status of this sub-task.', variant: 'destructive'});
+      toast({ title: t('common.permissionDenied'), description: t('taskCard.cannotChangeStatus'), variant: 'destructive'});
       return;
     }
 
@@ -143,8 +143,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
         const openIssuesExist = await hasOpenIssues(task.id);
         if (openIssuesExist) {
           toast({
-            title: 'Cannot Complete Sub-task',
-            description: 'There are still open issues. Please resolve them first.',
+            title: t('taskCard.cannotComplete'),
+            description: t('taskCard.openIssuesExist'),
             variant: 'destructive',
           });
           onTaskUpdated(); // Refreshes the select to its original value
@@ -152,15 +152,15 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
         }
         setShowProofDialog(true);
       } catch (error: any) {
-         toast({ title: 'Error', description: `Could not verify issues: ${error.message}`, variant: 'destructive' });
+         toast({ title: t('common.error'), description: t('taskCard.couldNotVerifyIssues').replace('{error}', (error as Error).message), variant: 'destructive' });
       }
     } else {
       try {
         await updateTaskStatus(task.id, user.uid, newStatus, user.role);
-        toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
+        toast({ title: t('common.taskUpdated'), description: t('taskCard.statusChanged').replace('{name}', `"${task.name}"`).replace('{status}', t(`status.${newStatus.toLowerCase().replace(/ /g, '')}`)) });
         onTaskUpdated(); 
       } catch (error: any) {
-        toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
+        toast({ title: t('common.updateFailed'), description: error.message || t('common.couldNotUpdateStatus'), variant: 'destructive' });
       }
     }
   };
@@ -170,10 +170,10 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
     setIsStatusChanging(true);
     try {
       await updateTaskStatus(task.id, user.uid, newStatus, user.role);
-      toast({ title: 'Task Updated', description: `Status of "${task.name}" changed to ${newStatus}.` });
+      toast({ title: t('common.taskUpdated'), description: t('taskCard.statusChanged').replace('{name}', `"${task.name}"`).replace('{status}', t(`status.${newStatus.toLowerCase().replace(/ /g, '')}`)) });
       onTaskUpdated();
     } catch (error: any) {
-      toast({ title: 'Update Failed', description: error.message || 'Could not update task status.', variant: 'destructive' });
+      toast({ title: t('common.updateFailed'), description: error.message || t('common.couldNotUpdateStatus'), variant: 'destructive' });
     } finally {
         setIsStatusChanging(false);
     }
@@ -181,18 +181,18 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
 
   const handleDeleteTask = async () => {
     if (!user || !task.id || !canFullyEditOrDeleteThisTask) {
-         toast({ title: 'Permission Denied', description: 'Only the task owner can delete this task.', variant: 'destructive'});
+         toast({ title: t('common.permissionDenied'), description: t('taskCard.cannotDeleteTask'), variant: 'destructive'});
         return;
     }
     setIsDeleting(true);
     try {
       await deleteTask(task.id, user.uid);
-      toast({ title: 'Task Deleted', description: `"${task.name}" has been deleted.` });
+      toast({ title: t('common.taskDeleted'), description: t('common.taskDeletedSuccess').replace('{name}', `"${task.name}"`) });
       onTaskUpdated();
     } catch (error: any) {
       toast({
-        title: 'Deletion Failed',
-        description: error.message || 'Could not delete the task.',
+        title: t('common.deletionFailed'),
+        description: error.message || t('common.couldNotDeleteTask'),
         variant: 'destructive',
       });
     } finally {
@@ -218,7 +218,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
 
   const handleEditTask = () => {
     if (!isOwnerOfThisTask) {
-         toast({ title: 'Permission Denied', description: 'Only the task owner can edit task details.', variant: 'destructive'});
+         toast({ title: t('common.permissionDenied'), description: t('taskCard.cannotEditTask'), variant: 'destructive'});
         return;
     }
     router.push(`/projects/${task.projectId}/tasks/${task.id}/edit`);
@@ -232,6 +232,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   
   const reminderText = () => {
     if (!showReminder || daysRemaining === null) return '';
+    if (daysRemaining <= 0) return t('taskCard.reminderDueToday');
     const key = daysRemaining === 1 ? 'taskCard.reminderDayLeft' : 'taskCard.reminderDaysLeft';
     return t(key).replace('{day}', '1').replace('{days}', daysRemaining.toString());
   };
@@ -360,7 +361,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   disabled={!user || !canChangeSubTaskStatus}
                 >
                   <SelectTrigger className="w-full h-9 text-xs sm:w-[150px]">
-                    <SelectValue placeholder="Change status" />
+                    <SelectValue placeholder={t('common.changeStatus')} />
                   </SelectTrigger>
                   <SelectContent>
                     {taskStatuses.map(status => (

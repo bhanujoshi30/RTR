@@ -29,7 +29,8 @@
   },
   "dashboard": {
     "myProjects": "My Projects",
-    "assignedWork": "My Assigned Work Overview"
+    "assignedWork": "My Assigned Work Overview",
+    "clientProjects": "My Projects"
   },
   "projectList": {
     "noProjects": "No projects yet",
@@ -60,10 +61,14 @@
     "client": "Client",
     "estCost": "Est. Cost:",
     "mainTasks": "Main Tasks",
+    "subTask": "Sub-task",
     "activityTimeline": "Activity Timeline",
     "projectedTimeline": "Projected Timeline",
     "addNewMainTask": "Add New Main Task",
-    "addNewMainTaskDesc": "Add a new main task to this project. You can add sub-tasks and other details later."
+    "addNewMainTaskDesc": "Add a new main task to this project. You can add sub-tasks and other details later.",
+    "clientTimelineDesc": "A high-level history of all main tasks within this project.",
+    "fullTimelineDesc": "A complete history of all main tasks and sub-tasks within this project.",
+    "projectedTimelineDesc": "The planned schedule of all tasks and their due dates for this project."
   },
   "attendance": {
     "pageTitle": "User Attendance Viewer",
@@ -158,11 +163,22 @@
     "subTasks": "{count} Sub-tasks",
     "reminderDaysLeft": "Reminder: {days} days left",
     "reminderDayLeft": "Reminder: {day} day left",
+    "reminderDueToday": "Reminder: Due Today",
     "openIssue": "{count} Open Issue",
     "openIssues": "{count} Open Issues",
     "mainTaskProgress": "Main Task Progress",
     "markComplete": "Mark Complete",
-    "reopenTask": "Reopen"
+    "reopenTask": "Reopen",
+    "taskCompleted": "Task Completed",
+    "taskMarkedComplete": "Task {name} has been marked as complete.",
+    "mainTaskStatusInfo": "Main task status is derived from its sub-tasks.",
+    "cannotChangeStatus": "You cannot change the status of this sub-task.",
+    "cannotComplete": "Cannot Complete Sub-task",
+    "openIssuesExist": "There are still open issues. Please resolve them first.",
+    "couldNotVerifyIssues": "Could not verify issues: {error}",
+    "statusChanged": "Status of {name} changed to {status}.",
+    "cannotDeleteTask": "Only the task owner can delete this task.",
+    "cannotEditTask": "Only the task owner can edit task details."
   },
   "issueCard": {
     "overdue": "Overdue",
@@ -200,7 +216,17 @@
     "created": "Created:",
     "due": "Due:",
     "attachments": "Attachments",
-    "noAttachments": "No attachments for this issue."
+    "noAttachments": "No attachments for this issue.",
+    "changeStatus": "Change status",
+    "taskUpdated": "Task Updated",
+    "updateFailed": "Update Failed",
+    "couldNotUpdateStatus": "Could not update task status.",
+    "permissionDenied": "Permission Denied",
+    "error": "Error",
+    "taskDeleted": "Task Deleted",
+    "taskDeletedSuccess": "Task {name} has been deleted.",
+    "deletionFailed": "Deletion Failed",
+    "couldNotDeleteTask": "Could not delete the task."
   },
   "taskForm": {
     "editSubTask": "Edit Sub-task",
