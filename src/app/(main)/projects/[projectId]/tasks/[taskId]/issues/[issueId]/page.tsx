@@ -91,8 +91,11 @@ export default function IssueDetailsPage() {
   const backPath = `/projects/${projectId}/tasks/${taskId}`;
   const displayAssignedNames = issue.assignedToNames && issue.assignedToNames.length > 0 ? issue.assignedToNames.join(', ') : 'None';
   
-  const formattedCreatedAt = format(issue.createdAt, 'PPP p', { locale: dateLocale });
+  const formattedDatePart = format(issue.createdAt, 'PPP', { locale: dateLocale });
+  const formattedTimePart = format(issue.createdAt, 'h:mm a');
+  const formattedCreatedAt = `${formattedDatePart}, ${formattedTimePart}`;
   const displayCreatedAt = locale === 'hi' ? replaceDevanagariNumerals(formattedCreatedAt) : formattedCreatedAt;
+
   const formattedDueDate = format(issue.dueDate, 'PPP', { locale: dateLocale });
   const displayDueDate = locale === 'hi' ? replaceDevanagariNumerals(formattedDueDate) : formattedDueDate;
 

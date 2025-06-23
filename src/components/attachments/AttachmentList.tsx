@@ -125,7 +125,9 @@ export function AttachmentList({ taskId, projectId }: AttachmentListProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
       {attachments.map((att) => {
-        const createdAtText = format(att.createdAt, 'PPp', { locale: dateLocale });
+        const formattedDatePart = format(att.createdAt, 'PP', { locale: dateLocale });
+        const formattedTimePart = format(att.createdAt, 'h:mm a');
+        const createdAtText = `${formattedDatePart}, ${formattedTimePart}`;
         const displayDate = locale === 'hi' ? replaceDevanagariNumerals(createdAtText) : createdAtText;
 
         return (

@@ -214,7 +214,7 @@ export default function TaskDetailsPage() {
 
   const canSubmitProgress = user && (isOwner || task.assignedToUids?.includes(user.uid));
   
-  const formattedCreatedAt = task.createdAt ? format(task.createdAt, 'PPP p', { locale: dateLocale }) : 'N/A';
+  const formattedCreatedAt = task.createdAt ? `${format(task.createdAt, 'PPP', { locale: dateLocale })}, ${format(task.createdAt, 'h:mm a')}` : 'N/A';
   const displayCreatedAt = locale === 'hi' ? replaceDevanagariNumerals(formattedCreatedAt) : formattedCreatedAt;
   
   const formattedDueDate = task.dueDate ? format(task.dueDate, 'PPP', { locale: dateLocale }) : '';

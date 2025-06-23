@@ -69,7 +69,7 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
       </CardHeader>
       <CardContent className="space-y-6">
         {records.map(record => {
-            const formattedTime = format(record.timestamp, 'p', { locale: dateLocale });
+            const formattedTime = format(record.timestamp, 'h:mm a');
             const displayTime = locale === 'hi' ? replaceDevanagariNumerals(formattedTime) : formattedTime;
             return (
               <div key={record.id} className="rounded-lg border p-4 space-y-4 bg-background">
