@@ -9,6 +9,7 @@ const DprDataSchema = z.object({
   projectId: z.string(),
   projectName: z.string(),
   date: z.string(),
+  language: z.enum(['en', 'hi']).describe('The language for the report output. "en" for English, "hi" for Hindi.'),
   tasksCreated: z.array(z.object({ id: z.string(), name: z.string(), parentId: z.string().nullable() })),
   tasksCompleted: z.array(z.object({ id: z.string(), name: z.string(), parentId: z.string().nullable() })),
   issuesOpened: z.array(z.object({ id: z.string(), title: z.string(), severity: z.string() })),
@@ -38,10 +39,15 @@ const dprPrompt = ai.definePrompt({
     input: { schema: DprDataSchema },
     output: { schema: DprSummarySchema },
     prompt: `
-        You are a senior project manager responsible for writing a Daily Progress Report (DPR) for project stakeholders.
+        You are a senior project manager responsible for writing a Daily Progress Report (DPR).
         Analyze the following raw data for the project "{{projectName}}" on {{date}} and generate a clear, concise, and professional summary.
 
-        ## Raw Data:
+        ***IMPORTANT INSTRUCTION***
+        The entire report summary (executiveSummary, keyAchievements, etc.) MUST be written in the language specified by the 'language' code: {{language}}.
+        - If 'language' is 'hi', write the entire report in Hindi.
+        - If 'language' is 'en', write the entire report in English.
+
+        ## Raw Data (This data is for context and is always in English):
 
         ### Detailed Activity Log (Chronological)
         {{#if timelineEvents}}
@@ -77,7 +83,7 @@ const dprPrompt = ai.definePrompt({
         - New Attachments: {{attachments.length}}
         
         ## Instructions:
-        Based on the data above, generate the following report components. Pay close attention to the Detailed Activity Log for nuanced insights into the day's progress, not just the summary counts.
+        Based on the data above, generate the following report components in the requested language ({{language}}). Pay close attention to the Detailed Activity Log for nuanced insights into the day's progress, not just the summary counts.
 
         1.  **executiveSummary**: A high-level overview of the day. Mention if it was productive, if there were significant accomplishments or new blockers. Use the activity log to understand the flow of work.
         2.  **keyAchievements**: Identify the most significant completed tasks or closed issues from the activity log. If nothing was completed, state that focus was on ongoing work, referencing any status changes from the log.

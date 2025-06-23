@@ -174,6 +174,7 @@ export interface DprData {
   projectId: string;
   projectName: string;
   date: string; // YYYY-MM-DD
+  language: 'en' | 'hi';
   tasksCreated: Pick<Task, 'id' | 'name' | 'parentId'>[];
   tasksCompleted: Pick<Task, 'id' | 'name' | 'parentId'>[];
   issuesOpened: Pick<Issue, 'id' | 'title' | 'severity'>[];

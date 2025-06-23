@@ -44,7 +44,7 @@ export default function DprPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
-    const { t } = useTranslation();
+    const { t, locale } = useTranslation();
 
     // State for controls
     const [projects, setProjects] = useState<Project[]>([]);
@@ -100,7 +100,7 @@ export default function DprPage() {
         setRawReportData(null);
         try {
             const dateString = format(selectedDate, 'yyyy-MM-dd');
-            const rawData = await getDprData(selectedProjectId, dateString);
+            const rawData = await getDprData(selectedProjectId, dateString, locale);
             setRawReportData(rawData);
             
             if (!rawData) {

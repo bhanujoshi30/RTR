@@ -37,12 +37,6 @@ const getEnglishTranslation = (key: string, params?: Record<string, any>): strin
 
 // Helper to generate the description string from a timeline event
 const generateDescriptionFromEvent = (event: TimelineEvent): string => {
-    // The `description` field is deprecated and no longer on the type, but might exist in old data.
-    const legacyDescription = (event as any).description;
-    if (legacyDescription && typeof legacyDescription === 'string') {
-        return legacyDescription;
-    }
-
     const { descriptionKey, details } = event;
     if (!descriptionKey) {
         return 'performed an unknown action.'; // Fallback for malformed events
@@ -59,12 +53,17 @@ const generateDescriptionFromEvent = (event: TimelineEvent): string => {
     if (details.oldStatus) {
         paramsForTranslation.oldStatus = getEnglishTranslation(statusToKey(details.oldStatus));
     }
+    
+    // Use a simplified key for legacy events that don't have all details
+    if (descriptionKey === 'timeline.mainTaskReopened') {
+        return getEnglishTranslation('timeline.mainTaskReopenedLegacy');
+    }
 
     return getEnglishTranslation(descriptionKey, paramsForTranslation);
 };
 
 
-export const getDprData = async (projectId: string, date: string): Promise<DprData | null> => {
+export const getDprData = async (projectId: string, date: string, language: 'en' | 'hi'): Promise<DprData | null> => {
     const targetDate = parseISO(date);
 
     // 1. Get Project Details
@@ -125,6 +124,7 @@ export const getDprData = async (projectId: string, date: string): Promise<DprDa
         projectId,
         projectName: project.name,
         date,
+        language,
         tasksCreated: tasksCreated.map(t => ({ id: t.id, name: t.name, parentId: t.parentId })),
         tasksCompleted: tasksCompleted.map(t => ({ id: t.id, name: t.name, parentId: t.parentId })),
         issuesOpened: issuesOpened.map(i => ({ id: i.id, title: i.title, severity: i.severity })),
