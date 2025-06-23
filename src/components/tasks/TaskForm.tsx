@@ -14,7 +14,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Save, Loader2, Users, Layers, X } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import { enUS, hi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -268,7 +268,10 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
                             mode="single"
                             selected={dueDate}
                             onSelect={setDueDate}
-                            disabled={parentMainTask ? { before: parentMainTask.createdAt, after: parentMainTask.dueDate || undefined } : undefined}
+                            disabled={parentMainTask ? { 
+                                before: parentMainTask.createdAt ? startOfDay(parentMainTask.createdAt) : undefined, 
+                                after: parentMainTask.dueDate ? startOfDay(parentMainTask.dueDate) : undefined 
+                            } : undefined}
                           />
                         </PopoverContent>
                     </Popover>

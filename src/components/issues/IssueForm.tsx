@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Save, Loader2, Users, X, ImagePlus, MapPin, Trash2 } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 import { enUS, hi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -426,7 +426,10 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                     mode="single"
                     selected={dueDate}
                     onSelect={setDueDate}
-                    disabled={mainTaskDetails ? { before: mainTaskDetails.createdAt, after: mainTaskDetails.dueDate || undefined } : undefined}
+                    disabled={mainTaskDetails ? { 
+                        before: mainTaskDetails.createdAt ? startOfDay(mainTaskDetails.createdAt) : undefined, 
+                        after: mainTaskDetails.dueDate ? startOfDay(mainTaskDetails.dueDate) : undefined 
+                    } : undefined}
                    />
                 </PopoverContent>
               </Popover>
