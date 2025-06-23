@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { getAttachmentsForTask, deleteAttachment } from '@/services/attachmentService';
 import type { Attachment } from '@/types';
-import { Loader2, Paperclip, FileImage, Trash2 } from 'lucide-react';
+import { Loader2, Paperclip, FileImage, Trash2, ExternalLink } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import Image from 'next/image';
+import Link from 'next/link';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -26,9 +27,10 @@ import { useToast } from '@/hooks/use-toast';
 
 interface AttachmentListProps {
   taskId: string;
+  projectId: string;
 }
 
-export function AttachmentList({ taskId }: AttachmentListProps) {
+export function AttachmentList({ taskId, projectId }: AttachmentListProps) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +69,27 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
         toast({ title: "Deletion Failed", description: error.message, variant: "destructive" });
     }
   };
+
+  const getTitleForAttachment = (attachment: Attachment): React.ReactNode => {
+      const issueLink = attachment.issueId ? (
+          <Link href={`/projects/${projectId}/tasks/${taskId}/issues/${attachment.issueId}`} className="hover:underline text-primary flex items-center gap-1">
+              Issue Report <ExternalLink className="h-3 w-3" />
+          </Link>
+      ) : null;
+      
+      switch (attachment.reportType) {
+          case 'daily-progress':
+              return 'Daily Progress';
+          case 'completion-proof':
+              return 'Completion Proof';
+          case 'issue-report':
+              return issueLink || 'Issue Report';
+           case 'issue-update-proof':
+               return issueLink ? <>Status Proof for {issueLink}</> : 'Issue Update Proof';
+          default:
+              return 'Attachment';
+      }
+  }
 
 
   if (loading) {
@@ -133,7 +156,7 @@ export function AttachmentList({ taskId }: AttachmentListProps) {
           <CardHeader className="p-3">
              <CardTitle className="text-sm font-semibold truncate flex items-center gap-1.5">
                 <FileImage className="h-4 w-4 text-muted-foreground" />
-                {att.reportType === 'completion-proof' ? 'Completion Proof' : 'Daily Progress'}
+                {getTitleForAttachment(att)}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-3 pt-0 text-xs text-muted-foreground">

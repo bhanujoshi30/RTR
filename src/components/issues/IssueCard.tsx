@@ -5,7 +5,7 @@ import type { Issue, IssueProgressStatus, IssueSeverity, UserRole } from '@/type
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react'; 
+import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle, RotateCcw, Loader2, Eye } from 'lucide-react'; 
 import { formatDistanceToNow, format } from 'date-fns';
 import { deleteIssue, updateIssueStatus } from '@/services/issueService';
 import { getTaskById, updateTaskStatus as updateParentTaskStatus } from '@/services/taskService';
@@ -170,33 +170,35 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
                 <RotateCcw className="mr-2 h-4 w-4" /> Reopen Issue
               </Button>
             )}
-             <Button asChild variant="outline" size="sm" disabled={!canEditOrDeleteThisIssue}>
-               <Link href={`/projects/${projectId}/tasks/${taskId}/issues/${issue.id}/edit`}>
-                  <Edit2 className="mr-2 h-4 w-4" /> Edit
+             <Button asChild variant="outline" size="sm">
+               <Link href={`/projects/${projectId}/tasks/${taskId}/issues/${issue.id}`}>
+                  <Eye className="mr-2 h-4 w-4" /> View
                </Link>
              </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={!canEditOrDeleteThisIssue}>
-                  <Trash2 className="mr-2 h-4 w-4" /> Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete Issue "{issue.title}"?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This action cannot be undone. This will permanently delete the issue.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleDeleteIssue} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
-                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Delete Issue
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+             {canEditOrDeleteThisIssue && (
+                <AlertDialog>
+                <AlertDialogTrigger asChild>
+                    <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={isDeleting}>
+                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Delete Issue "{issue.title}"?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete the issue.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleDeleteIssue} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                        {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Delete Issue
+                    </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+                </AlertDialog>
+             )}
           </div>
         </CardContent>
       </Card>

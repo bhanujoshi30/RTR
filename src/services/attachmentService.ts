@@ -12,6 +12,7 @@ import {
   doc,
   getDoc,
   deleteDoc,
+  where,
 } from 'firebase/firestore';
 import { ref, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { logTimelineEvent } from './timelineService';
@@ -19,6 +20,7 @@ import { logTimelineEvent } from './timelineService';
 export interface AttachmentMetadata {
   projectId: string;
   taskId: string;
+  issueId?: string;
   ownerUid: string;
   ownerName: string;
   url: string;
@@ -71,20 +73,35 @@ export const uploadAttachment = (
 export const addAttachmentMetadata = async (attachmentData: AttachmentMetadata): Promise<string> => {
   const attachmentsCollectionRef = collection(db, 'tasks', attachmentData.taskId, 'attachments');
   
-  const payload = {
+  const payload: any = {
     ...attachmentData,
     createdAt: serverTimestamp() as Timestamp,
   };
+  
+  // Don't save undefined fields to firestore
+  if (!payload.issueId) {
+    delete payload.issueId;
+  }
 
   const docRef = await addDoc(attachmentsCollectionRef, payload);
+  
+  let description = `uploaded an attachment: "${attachmentData.filename}".`;
+  if (attachmentData.issueId) {
+      description = `uploaded an attachment for an issue: "${attachmentData.filename}".`
+  }
   
   // Log timeline event for attachment
   await logTimelineEvent(
     attachmentData.taskId,
     attachmentData.ownerUid,
     'ATTACHMENT_ADDED',
-    `uploaded an attachment: "${attachmentData.filename}".`,
-    { reportType: attachmentData.reportType, url: attachmentData.url, filename: attachmentData.filename }
+    description,
+    { 
+        reportType: attachmentData.reportType, 
+        url: attachmentData.url, 
+        filename: attachmentData.filename,
+        issueId: attachmentData.issueId
+    }
   );
 
   return docRef.id;
@@ -104,6 +121,31 @@ export const getAttachmentsForTask = async (taskId: string): Promise<Attachment[
       createdAt: (data.createdAt as Timestamp).toDate(),
     } as Attachment;
   });
+};
+
+// Gets attachments for a specific issue (by querying attachments on the parent task)
+export const getAttachmentsForIssue = async (taskId: string, issueId: string): Promise<Attachment[]> => {
+    const attachmentsCollectionRef = collection(db, 'tasks', taskId, 'attachments');
+    // This query will require an index
+    const q = query(attachmentsCollectionRef, where('issueId', '==', issueId), orderBy('createdAt', 'desc'));
+
+    try {
+        const querySnapshot = await getDocs(q);
+        return querySnapshot.docs.map(docSnap => {
+            const data = docSnap.data();
+            return {
+            id: docSnap.id,
+            ...data,
+            createdAt: (data.createdAt as Timestamp).toDate(),
+            } as Attachment;
+        });
+    } catch(error: any) {
+        console.error(`attachmentService: Error getting attachments for issue ${issueId}`, error);
+        if (error.message?.includes("index")) {
+            console.error("Firestore index needed for getAttachmentsForIssue: on 'attachments' subcollection, field 'issueId' (ASC), 'createdAt' (DESC).");
+        }
+        throw error;
+    }
 };
 
 // Deletes an attachment from Storage and its metadata from Firestore

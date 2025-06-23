@@ -4,14 +4,14 @@
 import { useEffect, useState, type FormEvent, useRef } from 'react';
 import { createIssue, updateIssue } from '@/services/issueService';
 import { getTaskById, updateTask } from '@/services/taskService';
-import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser, Task } from '@/types';
+import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser, Task, Attachment } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Save, Loader2, Users, X, ImagePlus, MapPin } from 'lucide-react';
+import { CalendarIcon, Save, Loader2, Users, X, ImagePlus, MapPin, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -19,7 +19,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { getAllUsers } from '@/services/userService';
 import Image from 'next/image';
-import { uploadAttachment, addAttachmentMetadata } from '@/services/attachmentService';
+import { uploadAttachment, addAttachmentMetadata, getAttachmentsForIssue, deleteAttachment } from '@/services/attachmentService';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
@@ -62,6 +62,10 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   const [parentSubTask, setParentSubTask] = useState<Task | null>(null);
   const [allAssignableUsers, setAllAssignableUsers] = useState<AppUser[]>([]);
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
+  
+  const [existingAttachments, setExistingAttachments] = useState<Attachment[]>([]);
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+
 
   // Refs
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -129,7 +133,16 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         setLoadingAssignableUsers(false);
       }
     };
-    if (!authLoading && user) fetchPrerequisites();
+    if (!authLoading && user) {
+        fetchPrerequisites();
+        if (issue) { // If editing, fetch existing attachments
+            setLoadingAttachments(true);
+            getAttachmentsForIssue(taskId, issue.id)
+                .then(setExistingAttachments)
+                .catch(err => toast({ title: "Error", description: "Could not load existing attachments.", variant: "destructive" }))
+                .finally(() => setLoadingAttachments(false));
+        }
+    }
   }, [taskId, user, authLoading, toast, issue]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,6 +155,17 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       setPreviewUrl(URL.createObjectURL(file));
     }
   };
+  
+  const handleDeleteAttachment = async (attachment: Attachment) => {
+    if (!user) return;
+    try {
+        await deleteAttachment(attachment.taskId, attachment.id, user.uid);
+        setExistingAttachments(prev => prev.filter(att => att.id !== attachment.id));
+        toast({ title: "Attachment Deleted" });
+    } catch (error: any) {
+        toast({ title: "Error", description: `Failed to delete attachment: ${error.message}`, variant: "destructive" });
+    }
+  }
 
   const handleAddMember = () => {
     if (!selectedUserId) return;
@@ -175,88 +199,6 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
     setLoading(true);
     
-    // --- Photo Upload Logic ---
-    if (selectedFile && canvasRef.current && previewUrl) {
-        toast({ title: 'Processing photo...', description: 'Please wait.' });
-        try {
-            const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-                const img = new window.Image();
-                img.onload = () => resolve(img);
-                img.onerror = (err) => reject(new Error('Failed to load selected image.'));
-                img.src = previewUrl;
-            });
-            
-            const canvas = canvasRef.current;
-            const context = canvas.getContext('2d');
-            if (!context) throw new Error('Could not get canvas context.');
-
-            canvas.width = image.naturalWidth;
-            canvas.height = image.naturalHeight;
-            context.drawImage(image, 0, 0);
-
-            // Stamping logic
-            const userStamp = user.displayName || user.email || 'Unknown User';
-            const timeStamp = new Date().toLocaleString();
-            const fullAddress = location?.address || 'Address data unavailable.';
-            const textLines = [userStamp, timeStamp, fullAddress];
-            
-            const fontSize = Math.max(20, Math.round(canvas.width / 80));
-            context.font = `bold ${fontSize}px Arial`;
-            context.textAlign = 'right';
-            context.textBaseline = 'bottom';
-            
-            // ... (Full stamping logic here) ...
-             const padding = Math.round(fontSize * 0.75);
-            const lineHeight = fontSize * 1.2;
-
-            let maxWidth = 0;
-            textLines.forEach(line => {
-                const metrics = context.measureText(line);
-                if (metrics.width > maxWidth) maxWidth = metrics.width;
-            });
-            
-            const totalTextHeight = lineHeight * textLines.length;
-            context.fillStyle = 'rgba(0, 0, 0, 0.6)';
-            context.fillRect(
-                canvas.width - maxWidth - padding * 2,
-                canvas.height - totalTextHeight - (padding * 1.5),
-                maxWidth + padding * 2,
-                totalTextHeight + padding * 2
-            );
-
-            context.fillStyle = 'white';
-            let currentY = canvas.height - padding;
-            for (let i = textLines.length - 1; i >= 0; i--) {
-                context.fillText(textLines[i], canvas.width - padding, currentY);
-                currentY -= lineHeight;
-            }
-
-            const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.9));
-            const filename = `issue-report-${Date.now()}.jpg`;
-            const stampedFile = new File([blob], filename, { type: 'image/jpeg' });
-            
-            toast({ title: 'Uploading photo...' });
-            const downloadURL = await uploadAttachment(taskId, stampedFile, () => {}); // Progress not shown here
-
-            await addAttachmentMetadata({
-                projectId,
-                taskId,
-                ownerUid: user.uid,
-                ownerName: user.displayName || user.email || 'N/A',
-                url: downloadURL,
-                filename,
-                reportType: 'issue-report',
-                location: location || undefined,
-            });
-
-        } catch (error: any) {
-            toast({ title: 'Photo Upload Failed', description: error.message, variant: 'destructive'});
-            setLoading(false);
-            return;
-        }
-    }
-
-    // --- Issue Creation/Update Logic ---
     const issueDataPayload = { 
         title,
         description,
@@ -266,14 +208,16 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         assignedToUids: assignedUsers.map(u => u.uid),
         assignedToNames: assignedUsers.map(u => u.displayName || u.email || 'N/A'),
     };
-
+    
     try {
+      let issueId: string;
       if (issue) {
+        issueId = issue.id;
         await updateIssue(issue.id, user.uid, taskId, issueDataPayload);
         toast({ title: 'Issue Updated', description: `"${title}" has been updated.` });
       } else {
         const ownerName = user.displayName || user.email || 'Unknown User';
-        await createIssue(projectId, taskId, user.uid, ownerName, issueDataPayload);
+        issueId = await createIssue(projectId, taskId, user.uid, ownerName, issueDataPayload);
         toast({ title: 'Issue Created', description: `"${title}" has been added.` });
 
         if (parentSubTask.status === 'Completed') {
@@ -281,6 +225,80 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           toast({ title: 'Task Status Updated', description: `Parent sub-task "${parentSubTask.name}" was automatically moved to 'In Progress'.` });
         }
       }
+
+      // --- Photo Upload Logic (runs for both create and edit if file is selected) ---
+      if (selectedFile && canvasRef.current && previewUrl) {
+          toast({ title: 'Processing photo...', description: 'Please wait.' });
+          
+          const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const img = new window.Image();
+            img.onload = () => resolve(img);
+            img.onerror = (err) => reject(new Error('Failed to load selected image.'));
+            img.src = previewUrl;
+          });
+          const canvas = canvasRef.current;
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Could not get canvas context.');
+
+          canvas.width = image.naturalWidth;
+          canvas.height = image.naturalHeight;
+          context.drawImage(image, 0, 0);
+
+          const userStamp = user.displayName || user.email || 'Unknown User';
+          const timeStamp = new Date().toLocaleString();
+          const fullAddress = location?.address || 'Address data unavailable.';
+          const textLines = [userStamp, timeStamp, fullAddress];
+          
+          const fontSize = Math.max(20, Math.round(canvas.width / 80));
+          context.font = `bold ${fontSize}px Arial`;
+          context.textAlign = 'right';
+          context.textBaseline = 'bottom';
+          
+          const padding = Math.round(fontSize * 0.75);
+          const lineHeight = fontSize * 1.2;
+
+          let maxWidth = 0;
+          textLines.forEach(line => {
+              const metrics = context.measureText(line);
+              if (metrics.width > maxWidth) maxWidth = metrics.width;
+          });
+          
+          const totalTextHeight = lineHeight * textLines.length;
+          context.fillStyle = 'rgba(0, 0, 0, 0.6)';
+          context.fillRect(
+              canvas.width - maxWidth - padding * 2,
+              canvas.height - totalTextHeight - (padding * 1.5),
+              maxWidth + padding * 2,
+              totalTextHeight + padding * 2
+          );
+
+          context.fillStyle = 'white';
+          let currentY = canvas.height - padding;
+          for (let i = textLines.length - 1; i >= 0; i--) {
+              context.fillText(textLines[i], canvas.width - padding, currentY);
+              currentY -= lineHeight;
+          }
+
+          const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), 'image/jpeg', 0.9));
+          const filename = `issue-report-${Date.now()}.jpg`;
+          const stampedFile = new File([blob], filename, { type: 'image/jpeg' });
+          
+          toast({ title: 'Uploading photo...' });
+          const downloadURL = await uploadAttachment(taskId, stampedFile, () => {});
+
+          await addAttachmentMetadata({
+              projectId,
+              taskId,
+              issueId: issueId, // Pass the new/existing issueId
+              ownerUid: user.uid,
+              ownerName: user.displayName || user.email || 'N/A',
+              url: downloadURL,
+              filename,
+              reportType: 'issue-report',
+              location: location || undefined,
+          });
+      }
+
       onFormSuccess();
     } catch (error: any) {
       toast({ title: issue ? 'Update Failed' : 'Creation Failed', description: error.message, variant: 'destructive' });
@@ -288,6 +306,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       setLoading(false);
     }
   };
+
 
   return (
     <Card className="shadow-lg">
@@ -303,8 +322,34 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             <Textarea id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder="More details about the issue" rows={3} />
           </div>
 
+          {issue && (
+            <div className="space-y-2">
+                <label className="text-sm font-medium">Existing Attachments</label>
+                {loadingAttachments && <p className="text-sm text-muted-foreground">Loading attachments...</p>}
+                {!loadingAttachments && existingAttachments.length === 0 && <p className="text-sm text-muted-foreground">No attachments found for this issue.</p>}
+                {existingAttachments.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                        {existingAttachments.map(att => (
+                            <div key={att.id} className="relative group">
+                                <Image src={att.url} alt={att.filename} width={200} height={200} className="rounded-md object-cover aspect-square border" />
+                                <Button 
+                                    type="button"
+                                    variant="destructive"
+                                    size="icon"
+                                    className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                                    onClick={() => handleDeleteAttachment(att)}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+            )}
+
           <div className="space-y-2">
-            <label className="text-sm font-medium">Photo Proof {issue ? '(Optional)' : '(Required)'}</label>
+            <label className="text-sm font-medium">Photo Proof {issue ? '(Optional: Add new photo)' : '(Required)'}</label>
             <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleFileChange} className="hidden" disabled={loading} />
             <Button type="button" variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()} disabled={loading}>
               <ImagePlus className="mr-2 h-4 w-4" />
@@ -315,7 +360,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                     <Image src={previewUrl} alt="Selected preview" fill className="object-contain" />
                 </div>
             )}
-            {!previewUrl && (
+            {!previewUrl && !issue && (
                 <div className="w-full aspect-video bg-muted rounded-md flex flex-col items-center justify-center border border-dashed">
                     <ImagePlus className="h-12 w-12 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground mt-2">Image preview will appear here</p>
@@ -411,5 +456,3 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Card>
   );
 }
-
-    

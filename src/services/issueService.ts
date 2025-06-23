@@ -218,10 +218,7 @@ export const getIssueById = async (issueId: string, userUid: string): Promise<Is
   const issueSnap = await getDoc(issueDocRef);
 
   if (issueSnap.exists()) {
-    const issueData = mapDocumentToIssue(issueSnap);
-    if (issueData.ownerUid === userUid || issueData.assignedToUids?.includes(userUid)) {
-        return issueData;
-    }
+    return mapDocumentToIssue(issueSnap);
   }
   return null;
 };
@@ -323,6 +320,7 @@ export const updateIssueStatus = async (
       await addAttachmentMetadata({
         projectId: issueData.projectId,
         taskId: issueData.taskId,
+        issueId: issueId, // Pass the issue ID here
         ownerUid: userUid,
         ownerName: ownerName,
         ...proof.attachment

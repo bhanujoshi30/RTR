@@ -71,6 +71,7 @@ export interface Attachment {
   id: string;
   projectId: string;
   taskId: string; // This is the ID of the parent SubTask
+  issueId?: string; // ID of the issue it's related to, if any
   ownerUid: string;
   ownerName: string;
   url: string;
@@ -135,6 +136,17 @@ export interface ProjectAggregatedEvent {
     // The events here are the ones from getTimelineForMainTask
     events: AggregatedEvent[];
   };
+}
+
+export interface User {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  photoURL?: string | null;
+  emailVerified: boolean;
+  role?: UserRole;
+  createdAt?: Date;
+  updatedAt?: Date;
 }
 
 export interface AttendanceRecord {

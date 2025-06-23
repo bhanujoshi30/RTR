@@ -405,7 +405,7 @@ export default function TaskDetailsPage() {
                 <Card>
                     <CardHeader><CardTitle>Attachments</CardTitle></CardHeader>
                     <CardContent>
-                        <AttachmentList taskId={taskId} />
+                        <AttachmentList taskId={taskId} projectId={projectId}/>
                     </CardContent>
                 </Card>
             </TabsContent>
