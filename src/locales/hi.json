@@ -271,6 +271,7 @@
     "createMainTaskBtn": "मुख्य कार्य बनाएं"
   },
   "issueForm": {
+    "addTitle": "नया मुद्दा जोड़ें",
     "title": "शीर्षक",
     "titlePlaceholder": "मुद्दे का वर्णन करें",
     "description": "विवरण (वैकल्पिक)",
@@ -287,6 +288,7 @@
     "imagePreview": "छवि पूर्वावलोकन यहां दिखाई देगा",
     "severity": "गंभीरता",
     "dueDate": "नियत तारीख",
+    "pickDate": "एक तारीख चुनें",
     "dateConstraint": "तारीख {{startDate}} और {{endDate}} के बीच होनी चाहिए।",
     "assignTo": "को सौंपें",
     "assignToDesc": "इस मुद्दे को सौंपने के लिए टीम के सदस्यों का चयन करें।",
@@ -299,56 +301,13 @@
     "saveChanges": "बदलाव सहेजें",
     "createIssue": "मुद्दा बनाएं"
   },
-  "taskDetails": {
-    "backToMainTask": "मुख्य कार्य पर वापस जाएं",
-    "backToProject": "प्रोजेक्ट पर वापस जाएं",
-    "collectionTaskType": "संग्रह",
-    "dailyProgress": "दैनिक प्रगति",
-    "editSubTask": "उप-कार्य संपादित करें",
-    "editMainTask": "मुख्य कार्य संपादित करें",
-    "modifySubTask": "इस उप-कार्य के विवरण को संशोधित करें।",
-    "modifyMainTask": "इस मुख्य कार्य का नाम या विवरण अपडेट करें।",
-    "deleteTaskTitle": "\"{{name}}\" को हटाएं?",
-    "deleteSubTaskDesc": "यह कार्रवाई पूर्ववत नहीं की जा सकती है और यह इस उप-कार्य और इसके मुद्दों को स्थायी रूप से हटा देगी।",
-    "deleteMainTaskDesc": "यह कार्रवाई पूर्ववत नहीं की जा सकती है और यह इस मुख्य कार्य, इसके सभी उप-कार्यों और उनके मुद्दों को स्थायी रूप से हटा देगी।",
-    "cancel": "रद्द करें",
-    "delete": "हटाएं",
-    "subTaskDesc": "यह एक मुख्य कार्य है। इसके उप-कार्यों का प्रबंधन करें और नीचे इसकी पूरी समयरेखा देखें।",
-    "subTaskDescSupervisor": "यदि लागू हो तो आपको सौंपे गए उप-कार्य दिखाई देंगे।",
-    "collectionTaskDesc": "यह एक संग्रह कार्य है, जो भुगतान अनुस्मारक या मील का पत्थर के रूप में कार्य करता है।",
-    "collectionAmount": "संग्रह राशि:",
-    "createdAt": "बनाने की तारीख",
-    "createdLabel": "बनाया गया",
-    "dueByLabel": "देय तिथि",
-    "dueDate": "नियत तारीख",
-    "tabs": {
-      "details": "विवरण",
-      "issues": "मुद्दे",
-      "attachments": "अनुलग्नक",
-      "timeline": "समयरेखा",
-      "subTasks": "उप-कार्य"
-    },
-    "infoTitle": "उप-कार्य सूचना",
-    "infoName": "नाम:",
-    "infoDesc": "विवरण:",
-    "infoStatus": "स्थिति:",
-    "infoAssignedTo": "को सौंपा गया:",
-    "infoCreatedBy": "द्वारा बनाया गया:",
-    "infoCreatedAt": "बनाने की तारीख:",
-    "infoDueDate": "नियत तारीख:",
-    "attachmentsTitle": "अनुलग्नक",
-    "timelineTitle": "समयरेखा",
-    "mainTaskTimelineTitle": "मुख्य कार्य समयरेखा",
-    "mainTaskTimelineDesc": "इस मुख्य कार्य और इसके उप-कार्यों से संबंधित सभी घटनाओं का एक अवलोकन।"
-  },
   "issueDetails": {
     "backToSubTask": "उप-कार्य पर वापस जाएं",
     "editIssue": "मुद्दा संपादित करें"
   },
   "projectedTimeline": {
     "dueDate": "नियत तारीख",
-    "progress": "प्रगति",
-    "collectionTask": "संग्रह कार्य"
+    "progress": "प्रगति"
   },
   "timeline": {
     "attachmentAdded": "अनुलग्नक अपलोड किया: \"{{filename}}\"।",

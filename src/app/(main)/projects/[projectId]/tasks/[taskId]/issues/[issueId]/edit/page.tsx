@@ -9,10 +9,13 @@ import type { Issue } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function EditIssuePage() {
   const params = useParams();
   const router = useRouter();
+  const { t } = useTranslation();
+
   const projectId = params.projectId as string;
   const taskId = params.taskId as string;
   const issueId = params.issueId as string;
@@ -71,10 +74,10 @@ export default function EditIssuePage() {
   return (
     <div className="mx-auto max-w-2xl">
        <Button variant="outline" onClick={() => router.push(backPath)} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Sub-task
+        <ArrowLeft className="mr-2 h-4 w-4" /> {t('issueDetails.backToSubTask')}
       </Button>
       <h1 className="mb-8 font-headline text-3xl font-semibold tracking-tight">
-        Edit Issue
+        {t('issueDetails.editIssue')}
       </h1>
       <IssueForm projectId={projectId} taskId={taskId} issue={issue} onFormSuccess={handleFormSuccess} />
     </div>

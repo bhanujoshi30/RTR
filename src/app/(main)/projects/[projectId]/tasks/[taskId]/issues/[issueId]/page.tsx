@@ -14,10 +14,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
 import Image from 'next/image';
 import Link from 'next/link';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function IssueDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const { t } = useTranslation();
   const projectId = params.projectId as string;
   const taskId = params.taskId as string;
   const issueId = params.issueId as string;
@@ -89,7 +91,7 @@ export default function IssueDetailsPage() {
   return (
     <div className="space-y-6">
        <Button variant="outline" onClick={() => router.push(backPath)} className="mb-6">
-        <ArrowLeft className="mr-2 h-4 w-4" /> Back to Sub-task
+        <ArrowLeft className="mr-2 h-4 w-4" /> {t('issueDetails.backToSubTask')}
       </Button>
 
       <Card>
@@ -99,7 +101,7 @@ export default function IssueDetailsPage() {
                  {canEditIssue && (
                     <Button asChild>
                         <Link href={`/projects/${projectId}/tasks/${taskId}/issues/${issueId}/edit`}>
-                            <Edit className="mr-2 h-4 w-4" /> Edit Issue
+                            <Edit className="mr-2 h-4 w-4" /> {t('issueDetails.editIssue')}
                         </Link>
                     </Button>
                 )}
@@ -108,15 +110,15 @@ export default function IssueDetailsPage() {
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2">
             <div className="space-y-4">
-                <div className="flex items-center gap-2"><Tag className="h-4 w-4 text-muted-foreground" /> <strong>Status:</strong> <Badge className={`${getStatusBadgeColor(issue.status)}`}>{issue.status}</Badge></div>
-                <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-muted-foreground" /> <strong>Severity:</strong> <Badge className={`${getSeverityBadgeColor(issue.severity)}`}>{issue.severity}</Badge></div>
-                <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /> <strong>Created by:</strong> {issue.ownerName || 'N/A'}</div>
-                <div className="flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> <strong>Assigned to:</strong> {displayAssignedNames}</div>
-                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /> <strong>Created:</strong> {format(issue.createdAt, 'PPP p')}</div>
-                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /> <strong>Due:</strong> {format(issue.dueDate, 'PPP')}</div>
+                <div className="flex items-center gap-2"><Tag className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.status')}</strong> <Badge className={`${getStatusBadgeColor(issue.status)}`}>{t(`status.${issue.status.toLowerCase()}`)}</Badge></div>
+                <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.severity')}</strong> <Badge className={`${getSeverityBadgeColor(issue.severity)}`}>{t(`severity.${issue.severity.toLowerCase()}`)}</Badge></div>
+                <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.createdBy')}</strong> {issue.ownerName || 'N/A'}</div>
+                <div className="flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.assignedTo')}</strong> {displayAssignedNames}</div>
+                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.created')}</strong> {format(issue.createdAt, 'PPP p')}</div>
+                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.due')}</strong> {format(issue.dueDate, 'PPP')}</div>
             </div>
             <div>
-                <h4 className="font-semibold mb-2">Attachments</h4>
+                <h4 className="font-semibold mb-2">{t('common.attachments')}</h4>
                 {attachments.length > 0 ? (
                     <div className="grid grid-cols-2 gap-2">
                     {attachments.map(att => (
@@ -129,7 +131,7 @@ export default function IssueDetailsPage() {
                     ))}
                     </div>
                 ) : (
-                    <p className="text-sm text-muted-foreground">No attachments for this issue.</p>
+                    <p className="text-sm text-muted-foreground">{t('common.noAttachments')}</p>
                 )}
             </div>
         </CardContent>

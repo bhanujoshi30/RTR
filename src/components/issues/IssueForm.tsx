@@ -21,6 +21,7 @@ import { getAllUsers } from '@/services/userService';
 import Image from 'next/image';
 import { uploadAttachment, addAttachmentMetadata, getAttachmentsForIssue, deleteAttachment } from '@/services/attachmentService';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 
@@ -40,6 +41,7 @@ interface Location {
 export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueFormProps) {
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
 
   // Form State
   const [title, setTitle] = useState(issue?.title || '');
@@ -319,20 +321,20 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-6 pt-6">
           <div className="space-y-2">
-            <label htmlFor="title" className="text-sm font-medium">Title</label>
-            <Input id="title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Describe the issue" />
+            <label htmlFor="title" className="text-sm font-medium">{t('issueForm.title')}</label>
+            <Input id="title" value={title} onChange={e => setTitle(e.target.value)} placeholder={t('issueForm.titlePlaceholder')} />
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="description" className="text-sm font-medium">Description (Optional)</label>
-            <Textarea id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder="More details about the issue" rows={3} />
+            <label htmlFor="description" className="text-sm font-medium">{t('issueForm.description')}</label>
+            <Textarea id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder={t('issueForm.descriptionPlaceholder')} rows={3} />
           </div>
 
           {issue && (
             <div className="space-y-2">
-                <label className="text-sm font-medium">Existing Attachments</label>
-                {loadingAttachments && <p className="text-sm text-muted-foreground">Loading attachments...</p>}
-                {!loadingAttachments && existingAttachments.length === 0 && <p className="text-sm text-muted-foreground">No attachments found for this issue.</p>}
+                <label className="text-sm font-medium">{t('issueForm.existingAttachments')}</label>
+                {loadingAttachments && <p className="text-sm text-muted-foreground">{t('issueForm.loadingAttachments')}</p>}
+                {!loadingAttachments && existingAttachments.length === 0 && <p className="text-sm text-muted-foreground">{t('issueForm.noAttachments')}</p>}
                 {existingAttachments.length > 0 && (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                         {existingAttachments.map(att => (
@@ -344,6 +346,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                                     size="icon"
                                     className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity z-10"
                                     onClick={() => handleDeleteAttachment(att)}
+                                    title={t('issueForm.deleteAttachment')}
                                 >
                                     <Trash2 className="h-4 w-4" />
                                 </Button>
@@ -355,11 +358,11 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             )}
 
           <div className="space-y-2">
-            <label className="text-sm font-medium">Photo Proof {issue ? '(Optional: Add new photo)' : '(Required)'}</label>
+            <label className="text-sm font-medium">{t('issueForm.photoProof')} {issue ? t('issueForm.photoProofOptional') : t('issueForm.photoProofRequired')}</label>
             <input type="file" accept="image/*" capture="environment" ref={fileInputRef} onChange={handleFileChange} className="hidden" disabled={loading} />
             <Button type="button" variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()} disabled={loading}>
               <ImagePlus className="mr-2 h-4 w-4" />
-              {selectedFile ? 'Change Photo' : 'Select Photo'}
+              {selectedFile ? t('issueForm.changePhoto') : t('issueForm.selectPhoto')}
             </Button>
             {previewUrl && (
                 <div className="relative w-full aspect-video bg-muted rounded-md overflow-hidden flex items-center justify-center border">
@@ -369,7 +372,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             {!previewUrl && !issue && (
                 <div className="w-full aspect-video bg-muted rounded-md flex flex-col items-center justify-center border border-dashed">
                     <ImagePlus className="h-12 w-12 text-muted-foreground" />
-                    <p className="text-sm text-muted-foreground mt-2">Image preview will appear here</p>
+                    <p className="text-sm text-muted-foreground mt-2">{t('issueForm.imagePreview')}</p>
                 </div>
             )}
             {locationError && (
@@ -386,21 +389,21 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <div className="space-y-2">
-              <label className="text-sm font-medium">Severity</label>
+              <label className="text-sm font-medium">{t('issueForm.severity')}</label>
               <Select onValueChange={(val: IssueSeverity) => setSeverity(val)} value={severity}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {issueSeverities.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                  {issueSeverities.map(s => <SelectItem key={s} value={s}>{t(`severity.${s.toLowerCase()}`)}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">Due Date</label>
+              <label className="text-sm font-medium">{t('issueForm.dueDate')}</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                    {dueDate ? format(dueDate, "PPP") : <span>{t('issueForm.pickDate')}</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -414,25 +417,25 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               </Popover>
                {mainTaskDetails?.dueDate && (
                 <p className="text-xs text-muted-foreground pt-1">
-                    Date must be between {format(mainTaskDetails.createdAt!, 'PP')} and {format(mainTaskDetails.dueDate, 'PP')}.
+                    {t('issueForm.dateConstraint', { startDate: format(mainTaskDetails.createdAt!, 'PP'), endDate: format(mainTaskDetails.dueDate, 'PP') })}
                 </p>
               )}
             </div>
           </div>
           
           <div className="space-y-2">
-              <label className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> Assign To</label>
-              <p className="text-sm text-muted-foreground">Select team members to assign this issue to.</p>
+              <label className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> {t('issueForm.assignTo')}</label>
+              <p className="text-sm text-muted-foreground">{t('issueForm.assignToDesc')}</p>
               {loadingAssignableUsers ? (
-                  <p className="text-sm text-muted-foreground">Loading users...</p>
+                  <p className="text-sm text-muted-foreground">{t('issueForm.loadingUsers')}</p>
               ) : allAssignableUsers.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No assignable users found for the parent task.</p>
+                  <p className="text-sm text-muted-foreground">{t('issueForm.noAssignableUsers')}</p>
               ) : (
                 <>
                     <div className="flex gap-2">
                         <Select value={selectedUserId} onValueChange={setSelectedUserId}>
                             <SelectTrigger>
-                                <SelectValue placeholder="Select a user to add..."/>
+                                <SelectValue placeholder={t('issueForm.selectUser')}/>
                             </SelectTrigger>
                             <SelectContent>
                                 {availableUsersToAssign.map(u => (
@@ -440,18 +443,18 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                                 ))}
                             </SelectContent>
                         </Select>
-                        <Button type="button" onClick={handleAddMember} disabled={!selectedUserId}>Add</Button>
+                        <Button type="button" onClick={handleAddMember} disabled={!selectedUserId}>{t('issueForm.add')}</Button>
                     </div>
                     {assignedUsers.length > 0 && (
                         <div className="space-y-2 rounded-md border p-2">
-                            <h4 className="text-xs font-semibold text-muted-foreground">Assigned:</h4>
+                            <h4 className="text-xs font-semibold text-muted-foreground">{t('issueForm.assigned')}</h4>
                             <ul className="flex flex-wrap gap-2">
                                 {assignedUsers.map(u => (
                                     <li key={u.uid} className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm text-secondary-foreground">
                                         {u.displayName}
                                         <button type="button" onClick={() => handleRemoveMember(u.uid)} className="rounded-full hover:bg-muted p-0.5">
                                             <X className="h-3 w-3" />
-                                            <span className="sr-only">Remove {u.displayName}</span>
+                                            <span className="sr-only">{t('issueForm.removeUser', { name: u.displayName || 'user' })}</span>
                                         </button>
                                     </li>
                                 ))}
@@ -465,7 +468,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         <CardFooter>
           <Button type="submit" disabled={loading || !user || loadingAssignableUsers}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {issue ? 'Save Changes' : 'Create Issue'}
+            {issue ? t('issueForm.saveChanges') : t('issueForm.createIssue')}
           </Button>
         </CardFooter>
       </form>
