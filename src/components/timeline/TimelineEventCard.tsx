@@ -40,7 +40,7 @@ const eventIcons: Record<TimelineEventType, React.ElementType> = {
 };
 
 const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) => string) => {
-  // If descriptionKey exists, use the new translation system
+  // Use the stored key if it exists.
   if (event.descriptionKey) {
     const statusToKey = (status: string) => `status.${status.toLowerCase().replace(/ /g, '')}`;
 
