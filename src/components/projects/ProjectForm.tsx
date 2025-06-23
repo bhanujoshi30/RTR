@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Save, Loader2, ImagePlus, User as UserIcon } from 'lucide-react';
 import Image from 'next/image';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const projectSchema = z.object({
   name: z.string().min(3, { message: 'Project name must be at least 3 characters' }).max(100),
@@ -36,6 +37,7 @@ interface ProjectFormProps {
 export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const { user } = useAuth();
   
@@ -149,11 +151,11 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)}>
           <CardHeader>
-            <CardTitle className="font-headline text-2xl">{project ? 'Edit Project' : 'New Project Details'}</CardTitle>
+            <CardTitle className="font-headline text-2xl">{t(project ? 'projectForm.editTitle' : 'projectForm.newTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <FormItem>
-              <FormLabel>Project Photo (Optional)</FormLabel>
+              <FormLabel>{t('projectForm.photoLabel')}</FormLabel>
               <FormControl>
                 <div className="w-full">
                   <label htmlFor="photo-upload" className="cursor-pointer">
@@ -170,7 +172,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
                         <div className="text-center">
                           <ImagePlus className="mx-auto h-12 w-12 text-muted-foreground" />
                           <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                            Upload a photo
+                            {t('projectForm.photoUpload')}
                           </p>
                           <p className="text-xs leading-5 text-muted-foreground">PNG, JPG up to 5MB</p>
                         </div>
@@ -187,9 +189,9 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Project Name</FormLabel>
+                  <FormLabel>{t('projectForm.nameLabel')}</FormLabel>
                   <FormControl>
-                    <Input placeholder="E.g., Website Redesign" {...field} />
+                    <Input placeholder={t('projectForm.namePlaceholder')} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -200,9 +202,9 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormLabel>{t('projectForm.descriptionLabel')}</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="Briefly describe the project" {...field} value={field.value ?? ''} rows={4} />
+                    <Textarea placeholder={t('projectForm.descriptionPlaceholder')} {...field} value={field.value ?? ''} rows={4} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -215,15 +217,15 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
                   name="clientUid"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="flex items-center gap-2"><UserIcon className="h-4 w-4 text-muted-foreground" />Assign Client (Optional)</FormLabel>
+                      <FormLabel className="flex items-center gap-2"><UserIcon className="h-4 w-4 text-muted-foreground" />{t('projectForm.assignClientLabel')}</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value || ""}>
                         <FormControl>
                           <SelectTrigger>
-                            <SelectValue placeholder="Select a client" />
+                            <SelectValue placeholder={t('projectForm.selectClientPlaceholder')} />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                           <SelectItem value="none">No Client</SelectItem>
+                           <SelectItem value="none">{t('projectForm.noClient')}</SelectItem>
                            {clients.map(c => (
                             <SelectItem key={c.uid} value={c.uid}>
                                 {c.displayName} ({c.email})
@@ -241,7 +243,7 @@ export function ProjectForm({ project, onFormSuccess }: ProjectFormProps) {
           <CardFooter>
             <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {project ? 'Save Changes' : 'Create Project'}
+              {project ? t('projectForm.saveChanges') : t('projectForm.createProject')}
             </Button>
           </CardFooter>
         </form>

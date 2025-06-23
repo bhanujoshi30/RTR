@@ -4,12 +4,14 @@
 import { ProjectForm } from '@/components/projects/ProjectForm';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function CreateProjectPage() {
   const { user, loading } = useAuth();
   const router = useRouter();
+  const { t } = useTranslation();
 
   useEffect(() => {
     if (!loading && (user?.role === 'supervisor' || user?.role === 'member')) {
@@ -29,7 +31,7 @@ export default function CreateProjectPage() {
   if (!loading && user && user.role !== 'supervisor' && user.role !== 'member') {
     return (
       <div className="mx-auto max-w-2xl">
-        <h1 className="mb-8 font-headline text-3xl font-semibold tracking-tight">Create New Project</h1>
+        <h1 className="mb-8 font-headline text-3xl font-semibold tracking-tight">{t('projectForm.pageTitle')}</h1>
         <ProjectForm />
       </div>
     );

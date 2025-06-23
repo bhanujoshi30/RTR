@@ -53,6 +53,22 @@
     "subTaskAssignedToYou": "{{count}} sub-task assigned to you",
     "subTasksAssignedToYou": "{{count}} sub-tasks assigned to you"
   },
+  "projectForm": {
+    "pageTitle": "Create New Project",
+    "editTitle": "Edit Project",
+    "newTitle": "New Project Details",
+    "photoLabel": "Project Photo (Optional)",
+    "photoUpload": "Upload a photo",
+    "nameLabel": "Project Name",
+    "namePlaceholder": "E.g., Website Redesign",
+    "descriptionLabel": "Description (Optional)",
+    "descriptionPlaceholder": "Briefly describe the project",
+    "assignClientLabel": "Assign Client (Optional)",
+    "selectClientPlaceholder": "Select a client",
+    "noClient": "No Client",
+    "saveChanges": "Save Changes",
+    "createProject": "Create Project"
+  },
   "projectDetails": {
     "backToDashboard": "Back to Dashboard",
     "submitAttendance": "Submit Attendance",
@@ -208,8 +224,8 @@
     "subTasksAssignedToYou": "{{count}} sub-tasks assigned to you",
     "subTask": "{{count}} sub-task",
     "subTasks": "{{count}} sub-tasks",
-    "reminderDaysLeft": "Reminder: {{days}} days left",
-    "reminderDayLeft": "Reminder: {{day}} day left",
+    "reminderDaysLeft": "Reminder: {{count}} days left",
+    "reminderDayLeft": "Reminder: {{count}} day left",
     "reminderDueToday": "Reminder: Due Today",
     "openIssue": "{{count}} Open Issue",
     "openIssues": "{{count}} Open Issues",

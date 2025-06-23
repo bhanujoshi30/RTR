@@ -53,6 +53,22 @@
     "subTaskAssignedToYou": "{{count}} उप-कार्य (आपको सौंपा गया)",
     "subTasksAssignedToYou": "{{count}} उप-कार्य (आपको सौंपे गए)"
   },
+  "projectForm": {
+    "pageTitle": "नया प्रोजेक्ट बनाएं",
+    "editTitle": "प्रोजेक्ट संपादित करें",
+    "newTitle": "नए प्रोजेक्ट का विवरण",
+    "photoLabel": "प्रोजेक्ट फोटो (वैकल्पिक)",
+    "photoUpload": "एक फोटो अपलोड करें",
+    "nameLabel": "प्रोजेक्ट का नाम",
+    "namePlaceholder": "उदा., वेबसाइट रीडिज़ाइन",
+    "descriptionLabel": "विवरण (वैकल्पिक)",
+    "descriptionPlaceholder": "प्रोजेक्ट का संक्षिप्त विवरण दें",
+    "assignClientLabel": "ग्राहक सौंपें (वैकल्पिक)",
+    "selectClientPlaceholder": "एक ग्राहक चुनें",
+    "noClient": "कोई ग्राहक नहीं",
+    "saveChanges": "बदलाव सहेजें",
+    "createProject": "प्रोजेक्ट बनाएं"
+  },
   "projectDetails": {
     "backToDashboard": "डैशबोर्ड पर वापस जाएं",
     "submitAttendance": "उपस्थिति दर्ज करें",
