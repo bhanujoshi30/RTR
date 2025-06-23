@@ -294,7 +294,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
           {canViewFinancials && isCollectionTask && task.cost && task.cost > 0 && (
             <div className="flex items-baseline gap-2 text-sm text-foreground pt-1">
                 <IndianRupee className="h-4 w-4 text-green-600 self-center" />
-                <span className="font-semibold text-green-700 dark:text-green-500">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(task.cost)}</span>
+                <span className="font-semibold text-green-700 dark:text-green-500">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(task.cost)}</span>
             </div>
           )}
         </CardHeader>
