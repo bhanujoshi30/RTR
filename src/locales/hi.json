@@ -30,7 +30,8 @@
   "dashboard": {
     "myProjects": "मेरे प्रोजेक्ट",
     "assignedWork": "मेरे सौंपे गए काम का अवलोकन",
-    "clientProjects": "मेरे प्रोजेक्ट"
+    "clientProjects": "मेरे प्रोजेक्ट",
+    "loading": "डैशबोर्ड लोड हो रहा है..."
   },
   "projectList": {
     "noProjects": "अभी तक कोई प्रोजेक्ट नहीं है",

@@ -30,7 +30,8 @@
   "dashboard": {
     "myProjects": "My Projects",
     "assignedWork": "My Assigned Work Overview",
-    "clientProjects": "My Projects"
+    "clientProjects": "My Projects",
+    "loading": "Loading dashboard..."
   },
   "projectList": {
     "noProjects": "No projects yet",
