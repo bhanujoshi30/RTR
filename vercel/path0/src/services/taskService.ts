@@ -20,7 +20,7 @@ import {
   getCountFromServer,
   documentId,
 } from 'firebase/firestore';
-import { deleteIssuesForTask, hasOpenIssues } from './issueService';
+import { deleteIssuesForTask, hasOpenIssues } from '@/services/issueService';
 
 const tasksCollection = collection(db, 'tasks');
 
@@ -605,6 +605,7 @@ export const countProjectMainTasks = async (projectId: string): Promise<number> 
     
     
   
+
 
 
 
