@@ -326,54 +326,43 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   />
                 </div>
                 
-                <FormItem>
-                  <div className="mb-4">
-                      <Label className="flex items-center text-base font-medium"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</Label>
-                    <FormDescription>
-                      Select team members to assign this sub-task to.
-                    </FormDescription>
-                  </div>
-                  <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                    {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
-                    {assignableUsers.map((item) => (
-                      <FormField
-                        key={item.uid}
-                        control={form.control}
-                        name="assignedToUids"
-                        render={({ field }) => {
-                          return (
-                            <FormItem
-                              key={item.uid}
-                              className="flex flex-row items-start space-x-3 space-y-0"
-                            >
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value?.includes(item.uid)}
-                                  onCheckedChange={(checked) => {
-                                    return checked
-                                      ? field.onChange([
-                                          ...(field.value || []),
-                                          item.uid,
-                                        ])
-                                      : field.onChange(
-                                          field.value?.filter(
-                                            (value) => value !== item.uid
-                                          )
+                <FormField
+                  control={form.control}
+                  name="assignedToUids"
+                  render={({ field }) => (
+                    <FormItem>
+                      <div className="mb-4">
+                        <Label className="flex items-center text-base font-medium"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</Label>
+                        <FormDescription>Select team members to assign this sub-task to.</FormDescription>
+                      </div>
+                      <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                        {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
+                        {assignableUsers.map((item) => (
+                          <FormItem key={item.uid} className="flex flex-row items-start space-x-3 space-y-0">
+                            <FormControl>
+                              <Checkbox
+                                checked={field.value?.includes(item.uid)}
+                                onCheckedChange={(checked) => {
+                                  return checked
+                                    ? field.onChange([...(field.value || []), item.uid])
+                                    : field.onChange(
+                                        field.value?.filter(
+                                          (value) => value !== item.uid
                                         )
-                                  }}
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-normal cursor-pointer">
-                                {item.displayName || item.email} ({item.role})
-                              </FormLabel>
-                            </FormItem>
-                          )
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <FormMessage />
-                </FormItem>
+                                      );
+                                }}
+                              />
+                            </FormControl>
+                            <FormLabel className="text-sm font-normal cursor-pointer">
+                              {item.displayName || item.email} ({item.role})
+                            </FormLabel>
+                          </FormItem>
+                        ))}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </>
             )}
             {!isSubTask && (
