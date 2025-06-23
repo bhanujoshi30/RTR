@@ -14,18 +14,10 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState<Locale>('en');
-
-  useEffect(() => {
-    const storedLocale = localStorage.getItem('locale') as Locale | null;
-    if (storedLocale && ['en', 'hi'].includes(storedLocale)) {
-      setLocale(storedLocale);
-    }
-  }, []);
+  const [locale, setLocale] = useState<Locale>('en'); // Default to English
 
   const handleSetLocale = (newLocale: Locale) => {
     setLocale(newLocale);
-    localStorage.setItem('locale', newLocale);
     document.documentElement.lang = newLocale;
   };
 

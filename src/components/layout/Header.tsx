@@ -25,11 +25,14 @@ import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users,
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState, useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { updateUserLanguagePreference } from '@/services/userService';
+import { useToast } from '@/hooks/use-toast';
 
 export function Header() {
   const { user } = useAuth();
   const { t, locale, setLocale } = useTranslation();
   const router = useRouter();
+  const { toast } = useToast();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loadingLink, setLoadingLink] = useState<string | null>(null);
@@ -47,6 +50,22 @@ export function Header() {
       router.push('/login');
     } catch (error) {
       console.error('Logout failed:', error);
+    }
+  };
+
+  const handleLanguageChange = async (value: string) => {
+    const newLocale = value as 'en' | 'hi';
+    setLocale(newLocale);
+    if (user) {
+      try {
+        await updateUserLanguagePreference(user.uid, newLocale);
+      } catch (error) {
+        toast({
+          title: "Language Error",
+          description: "Could not save your language preference.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -145,7 +164,7 @@ export function Header() {
                     <span>{t('header.language')}</span>
                   </DropdownMenuSubTrigger>
                   <DropdownMenuSubContent>
-                     <DropdownMenuRadioGroup value={locale} onValueChange={(value) => setLocale(value as 'en' | 'hi')}>
+                     <DropdownMenuRadioGroup value={locale} onValueChange={handleLanguageChange}>
                         <DropdownMenuRadioItem value="en">{t('header.english')}</DropdownMenuRadioItem>
                         <DropdownMenuRadioItem value="hi">{t('header.hindi')}</DropdownMenuRadioItem>
                       </DropdownMenuRadioGroup>

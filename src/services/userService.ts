@@ -1,7 +1,7 @@
 
 import { db } from '@/lib/firebase';
 import type { User, UserRole } from '@/types';
-import { collection, query, where, getDocs, orderBy, doc, setDoc, getDoc, deleteDoc, serverTimestamp, Timestamp, documentId } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, doc, setDoc, getDoc, deleteDoc, serverTimestamp, Timestamp, documentId, updateDoc } from 'firebase/firestore';
 
 const usersCollection = collection(db, 'users');
 
@@ -16,7 +16,22 @@ const mapDocumentToUser = (docSnap: any): User => {
     role: data.role as UserRole,
     createdAt: data.createdAt ? (data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date(data.createdAt)) : undefined,
     updatedAt: data.updatedAt ? (data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : new Date(data.updatedAt)) : undefined,
+    preferredLanguage: data.preferredLanguage || 'en',
   };
+};
+
+export const updateUserLanguagePreference = async (uid: string, locale: 'en' | 'hi'): Promise<void> => {
+    if (!uid) throw new Error("User UID is required to update language preference.");
+    const userDocRef = doc(db, 'users', uid);
+    try {
+        await updateDoc(userDocRef, {
+            preferredLanguage: locale,
+            updatedAt: serverTimestamp(),
+        });
+    } catch (error) {
+        console.error(`userService: Failed to update language for UID ${uid}`, error);
+        throw error;
+    }
 };
 
 export const getUserDisplayName = async (uid: string): Promise<string | null> => {
@@ -88,6 +103,7 @@ export interface UserDocumentData {
   role: UserRole;
   photoURL?: string | null;
   emailVerified?: boolean;
+  preferredLanguage?: 'en' | 'hi';
 }
 
 export const upsertUserDocument = async (
@@ -113,6 +129,7 @@ export const upsertUserDocument = async (
     } else {
       payload.createdAt = serverTimestamp() as Timestamp;
       payload.updatedAt = serverTimestamp() as Timestamp;
+      payload.preferredLanguage = 'en'; // Set default language only for new users
     }
 
     await setDoc(userDocRef, payload, { merge: true });

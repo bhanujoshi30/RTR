@@ -150,6 +150,7 @@ export interface User {
   role?: UserRole;
   createdAt?: Date;
   updatedAt?: Date;
+  preferredLanguage?: 'en' | 'hi';
 }
 
 export interface AttendanceRecord {
