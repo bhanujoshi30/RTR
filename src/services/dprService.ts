@@ -10,11 +10,59 @@ import { getUsersByIds } from './userService';
 import { getAttachmentsForTask } from './attachmentService';
 import { isSameDay, parseISO } from 'date-fns';
 import { getTimelineForTask } from './timelineService';
+import en from '@/locales/en.json';
 
 const isActivityOnDate = (activityDate: Date | undefined, targetDate: Date): boolean => {
     if (!activityDate) return false;
     return isSameDay(activityDate, targetDate);
 }
+
+// Helper function to get a nested value from an object based on a key path (e.g., 'timeline.issueCreated')
+const getEnglishTranslation = (key: string, params?: Record<string, any>): string => {
+    const getNestedValue = (obj: any, path: string): string | undefined => {
+        if (!path) return undefined;
+        return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+    };
+    
+    let translation = getNestedValue(en, key) || key;
+
+    if (params) {
+      Object.keys(params).forEach(paramKey => {
+        translation = translation.replace(new RegExp(`{{${paramKey}}}`, 'g'), params[paramKey]);
+      });
+    }
+    
+    return translation;
+};
+
+// Helper to generate the description string from a timeline event
+const generateDescriptionFromEvent = (event: TimelineEvent): string => {
+    // The `description` field is deprecated and no longer on the type, but might exist in old data.
+    const legacyDescription = (event as any).description;
+    if (legacyDescription && typeof legacyDescription === 'string') {
+        return legacyDescription;
+    }
+
+    const { descriptionKey, details } = event;
+    if (!descriptionKey) {
+        return 'performed an unknown action.'; // Fallback for malformed events
+    }
+    
+    // For status changes, the details contain the raw status string (e.g., "In Progress").
+    // The translation file has keys like "status.inprogress". We need to map this for the AI prompt.
+    const statusToKey = (status: string) => `status.${status.toLowerCase().replace(/ /g, '')}`;
+
+    const paramsForTranslation = { ...details };
+    if (details.newStatus) {
+        paramsForTranslation.newStatus = getEnglishTranslation(statusToKey(details.newStatus));
+    }
+    if (details.oldStatus) {
+        paramsForTranslation.oldStatus = getEnglishTranslation(statusToKey(details.oldStatus));
+    }
+
+    return getEnglishTranslation(descriptionKey, paramsForTranslation);
+};
+
 
 export const getDprData = async (projectId: string, date: string): Promise<DprData | null> => {
     const targetDate = parseISO(date);
@@ -49,7 +97,7 @@ export const getDprData = async (projectId: string, date: string): Promise<DprDa
 
     allDailyEvents.forEach(event => {
         dailyTimelineEvents.push({
-            description: event.description,
+            description: generateDescriptionFromEvent(event),
             authorName: event.author.name
         });
     });
