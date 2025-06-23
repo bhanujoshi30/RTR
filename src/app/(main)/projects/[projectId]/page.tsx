@@ -107,14 +107,12 @@ export default function ProjectDetailsPage() {
                   
                   if (isAssignedToThisProject) {
                       setCanSubmitAttendance(true);
-                      const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
+                      const today = format(new Date(), 'yyyy-MM-dd'); // Use local date
                       const record = await getTodaysAttendanceForUserInProject(user.uid, projectId, today);
                       if (record) {
                           setAttendanceStatus({ submitted: true, timestamp: record.timestamp });
-                          setShowAttendanceDialog(false);
                       } else {
                           setAttendanceStatus({ submitted: false, timestamp: null });
-                          setShowAttendanceDialog(false); // Prevent dialog from opening automatically
                       }
                   } else {
                       setCanSubmitAttendance(false);
