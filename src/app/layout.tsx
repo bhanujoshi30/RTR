@@ -1,7 +1,9 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/context/AuthContext';
 import { AuthContentWrapper } from '@/components/layout/AuthContentWrapper';
+import { LanguageProvider } from '@/context/LanguageContext';
 
 export const metadata: Metadata = {
   title: 'TaskFlow',
@@ -23,7 +25,9 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <AuthProvider>
-          <AuthContentWrapper>{children}</AuthContentWrapper>
+          <LanguageProvider>
+            <AuthContentWrapper>{children}</AuthContentWrapper>
+          </LanguageProvider>
         </AuthProvider>
       </body>
     </html>

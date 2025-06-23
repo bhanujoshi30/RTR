@@ -13,6 +13,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { numberToWordsInr } from '@/lib/currencyUtils';
 import { useAuth } from '@/hooks/useAuth';
 import { useState } from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ProjectCardProps {
   project: Project;
@@ -20,6 +21,7 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project }: ProjectCardProps) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
   const [isNavigating, setIsNavigating] = useState(false);
 
@@ -63,7 +65,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
             {canViewFinancials && project.hasUpcomingReminder && (
                 <Badge variant="destructive" className="animate-pulse">
                     <Wallet className="mr-1.5 h-3.5 w-3.5" />
-                    Payment Due Soon
+                    {t('projectCard.paymentDue')}
                 </Badge>
             )}
             <Badge variant="secondary" className={`${getStatusColor(displayStatus)} text-primary-foreground`}>
@@ -86,7 +88,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
       <CardContent className="flex-grow space-y-3">
         <div>
           <div className="flex justify-between text-sm text-muted-foreground">
-            <span>Progress</span>
+            <span>{t('projectDetails.progress')}</span>
             <span>{Math.round(project.progress)}%</span>
           </div>
           <Progress value={project.progress} className="h-2 w-full" aria-label={`Project progress: ${project.progress}%`} />
@@ -118,7 +120,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 <div className="pt-1">
                     <div className="flex items-center text-sm">
                         <IndianRupee className="mr-2 h-4 w-4 text-green-600" />
-                        <span className="text-foreground font-medium">Est. Cost: {new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(project.totalCost)}</span>
+                        <span className="text-foreground font-medium">{t('projectDetails.estCost')} {new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(project.totalCost)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost)}</p>
                 </div>
@@ -132,7 +134,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/projects/${project.id}`} onClick={handleNavigation}>
-            View Project
+            {t('projectCard.viewProject')}
             <ExternalLink className="ml-2 h-4 w-4" />
           </Link>
         </Button>

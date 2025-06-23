@@ -11,12 +11,11 @@ import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, UserPlus, Workflow, Loader2 } from 'lucide-react';
-
+import { useTranslation } from '@/hooks/useTranslation';
 
 const registerSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -32,6 +31,7 @@ type RegisterFormValues = z.infer<typeof registerSchema>;
 export function RegisterForm() {
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -65,8 +65,8 @@ export function RegisterForm() {
     <Card className="w-full max-w-md shadow-xl">
       <CardHeader className="items-center text-center">
         <Workflow className="mb-4 h-16 w-16 text-primary" />
-        <CardTitle className="font-headline text-3xl">Create Account</CardTitle>
-        <CardDescription>Join TaskFlow and start managing your projects.</CardDescription>
+        <CardTitle className="font-headline text-3xl">{t('auth.createAccount')}</CardTitle>
+        <CardDescription>{t('auth.joinTaskFlow')}</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -76,7 +76,7 @@ export function RegisterForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>{t('auth.email')}</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="your@email.com" {...field} />
                   </FormControl>
@@ -89,7 +89,7 @@ export function RegisterForm() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel>{t('auth.password')}</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Input 
@@ -118,7 +118,7 @@ export function RegisterForm() {
               name="confirmPassword"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
+                  <FormLabel>{t('auth.confirmPassword')}</FormLabel>
                   <FormControl>
                     <div className="relative">
                       <Input 
@@ -146,11 +146,11 @@ export function RegisterForm() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating Account...
+                  {t('auth.creatingAccount')}
                 </>
               ) : (
                 <>
-                  Sign Up
+                  {t('auth.signUp')}
                   <UserPlus className="ml-2 h-4 w-4" />
                 </>
               )}
@@ -160,9 +160,9 @@ export function RegisterForm() {
       </CardContent>
       <CardFooter className="flex flex-col items-center space-y-2">
         <p className="text-sm text-muted-foreground">
-          Already have an account?{' '}
+          {t('auth.haveAccount')}{' '}
           <Button variant="link" asChild className="p-0 h-auto">
-            <Link href="/login">Log in</Link>
+            <Link href="/login">{t('auth.login')}</Link>
           </Button>
         </p>
       </CardFooter>

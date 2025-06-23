@@ -35,12 +35,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectTimeline } from '@/components/timeline/ProjectTimeline';
 import { ProjectedTimeline } from '@/components/timeline/ProjectedTimeline';
 import { numberToWordsInr } from '@/lib/currencyUtils';
+import { useTranslation } from '@/hooks/useTranslation';
 
 
 export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const projectId = params.projectId as string;
   
   const [project, setProject] = useState<Project | null>(null);
@@ -111,10 +113,10 @@ export default function ProjectDetailsPage() {
                       const record = await getTodaysAttendanceForUserInProject(user.uid, projectId, today);
                       if (record) {
                           setAttendanceStatus({ submitted: true, timestamp: record.timestamp });
-                          setShowAttendanceDialog(false); // Make sure dialog is closed if already submitted
+                          setShowAttendanceDialog(false);
                       } else {
                           setAttendanceStatus({ submitted: false, timestamp: null });
-                          setShowAttendanceDialog(true); // Open the dialog if not submitted
+                          setShowAttendanceDialog(true);
                       }
                   } else {
                       setCanSubmitAttendance(false);
@@ -134,7 +136,7 @@ export default function ProjectDetailsPage() {
 
 
   const handleDeleteProject = async () => {
-    if (!project || !user || isSupervisor || isMember || isClient) return; // Non-owners cannot delete
+    if (!project || !user || isSupervisor || isMember || isClient) return;
     setIsDeleting(true);
     try {
       await deleteProject(project.id, user.uid);
@@ -209,12 +211,12 @@ export default function ProjectDetailsPage() {
                       {attendanceStatus.submitted ? (
                           <Button variant="outline" size="sm" disabled>
                               <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                              Submitted at {attendanceStatus.timestamp ? format(attendanceStatus.timestamp, 'p') : ''}
+                              {t('projectDetails.submittedAt')} {attendanceStatus.timestamp ? format(attendanceStatus.timestamp, 'p') : ''}
                           </Button>
                       ) : (
                           <Button variant="outline" size="sm" onClick={() => setShowAttendanceDialog(true)}>
                               <Camera className="mr-2 h-4 w-4" />
-                              Submit Attendance
+                              {t('projectDetails.submitAttendance')}
                           </Button>
                       )}
                     </>
@@ -224,12 +226,12 @@ export default function ProjectDetailsPage() {
                     <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm">
-                          <Edit className="mr-2 h-4 w-4" /> Edit
+                          <Edit className="mr-2 h-4 w-4" /> {t('projectDetails.edit')}
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-2xl">
                         <DialogHeader>
-                          <DialogTitle className="font-headline text-2xl">Edit Project</DialogTitle>
+                          <DialogTitle className="font-headline text-2xl">{t('projectDetails.edit')} Project</DialogTitle>
                           <DialogDescription>Make changes to your project details. Click 'Save Changes' when you're done.</DialogDescription>
                         </DialogHeader>
                         <ProjectForm project={project} onFormSuccess={handleProjectFormSuccess} />
@@ -237,21 +239,20 @@ export default function ProjectDetailsPage() {
                     </Dialog>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <Button variant="destructive" size="sm" disabled={isDeleting}><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                        <Button variant="destructive" size="sm" disabled={isDeleting}><Trash2 className="mr-2 h-4 w-4"/>{t('projectDetails.delete')}</Button>
                       </AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogTitle>{t('projectDetails.areYouSure')}</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the project
-                            and all associated tasks (main tasks, sub-tasks, and issues).
+                            {t('projectDetails.deleteProjectWarning')}
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogCancel>{t('projectDetails.cancel')}</AlertDialogCancel>
                           <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
                             {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            Delete Project
+                            {t('projectDetails.deleteProject')}
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
@@ -265,20 +266,20 @@ export default function ProjectDetailsPage() {
         <CardContent className="space-y-6">
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Status</p>
+              <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.status')}</p>
               <Badge variant="secondary" className={`${getStatusColor(displayStatus)} text-primary-foreground text-base px-3 py-1`}>
                 {displayStatus}
               </Badge>
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Progress</p>
+              <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.progress')}</p>
               <div className="flex items-center gap-2">
                 <Progress value={displayProgress} className="h-3 w-full" aria-label={`Project progress: ${displayProgress}%`} />
                 <span className="text-sm font-semibold text-primary">{displayProgress}%</span>
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">Created At</p>
+              <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.createdAt')}</p>
               <div className="flex items-center text-base">
                 <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
                 {project.createdAt ? format(project.createdAt, 'PPP') : 'N/A'}
@@ -286,7 +287,7 @@ export default function ProjectDetailsPage() {
             </div>
             {project.clientName && (
                  <div className="space-y-1">
-                    <p className="text-sm font-medium text-muted-foreground">Client</p>
+                    <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.client')}</p>
                     <div className="flex items-center text-base">
                         <User className="mr-2 h-4 w-4 text-muted-foreground" />
                         {project.clientName}
@@ -297,7 +298,7 @@ export default function ProjectDetailsPage() {
                 <div className="space-y-1">
                     <div className="flex items-center text-base">
                         <IndianRupee className="mr-2 h-4 w-4 text-green-600" />
-                        <span className="text-muted-foreground">Est. Cost:&nbsp;</span>
+                        <span className="text-muted-foreground">{t('projectDetails.estCost')}&nbsp;</span>
                         <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(project.totalCost)}</span>
                     </div>
                     <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost)}</p>
@@ -324,16 +325,16 @@ export default function ProjectDetailsPage() {
         )}
       <div className="space-y-8">
         <Button variant="outline" onClick={() => router.push('/dashboard')} className="mb-6">
-          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+          <ArrowLeft className="mr-2 h-4 w-4" /> {t('projectDetails.backToDashboard')}
         </Button>
 
         <ProjectDetailsCard />
 
         <Tabs defaultValue={defaultTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
-              {!isClient && <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> Main Tasks</TabsTrigger>}
-              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Activity Timeline</TabsTrigger>
-              <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> Projected Timeline</TabsTrigger>
+              {!isClient && <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> {t('projectDetails.mainTasks')}</TabsTrigger>}
+              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> {t('projectDetails.activityTimeline')}</TabsTrigger>
+              <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> {t('projectDetails.projectedTimeline')}</TabsTrigger>
             </TabsList>
             
             {!isClient && (
@@ -342,20 +343,20 @@ export default function ProjectDetailsPage() {
                       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                           <h2 className="font-headline text-2xl font-semibold flex items-center">
                               <Layers className="mr-3 h-7 w-7 text-primary" />
-                              Main Tasks
+                              {t('projectDetails.mainTasks')}
                           </h2>
                           {canManageProject && (
                             <Dialog open={showAddMainTaskModal} onOpenChange={setShowAddMainTaskModal}>
                               <DialogTrigger asChild>
                                   <Button>
                                       <PlusCircle className="mr-2 h-4 w-4" />
-                                      Add New Main Task
+                                      {t('projectDetails.addNewMainTask')}
                                   </Button>
                               </DialogTrigger>
                               <DialogContent className="sm:max-w-2xl">
                                   <DialogHeader>
-                                      <DialogTitle className="font-headline text-2xl">Add New Main Task</DialogTitle>
-                                      <DialogDescription>Add a new main task to this project. You can add sub-tasks and other details later.</DialogDescription>
+                                      <DialogTitle className="font-headline text-2xl">{t('projectDetails.addNewMainTask')}</DialogTitle>
+                                      <DialogDescription>{t('projectDetails.addNewMainTaskDesc')}</DialogDescription>
                                   </DialogHeader>
                                   <TaskForm projectId={projectId} onFormSuccess={handleTaskFormSuccess} />
                               </DialogContent>
@@ -370,11 +371,11 @@ export default function ProjectDetailsPage() {
             <TabsContent value="timeline" className="mt-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Activity Timeline</CardTitle>
+                        <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> {t('projectDetails.activityTimeline')}</CardTitle>
                         <CardDescription>
                           {isClient
-                            ? "A high-level history of all main tasks within this project."
-                            : "A complete history of all main tasks and sub-tasks within this project."
+                            ? t('projectDetails.clientTimelineDesc')
+                            : t('projectDetails.fullTimelineDesc')
                           }
                         </CardDescription>
                     </CardHeader>
@@ -387,8 +388,8 @@ export default function ProjectDetailsPage() {
             <TabsContent value="projected" className="mt-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="flex items-center"><GanttChartSquare className="mr-2 h-5 w-5" /> Projected Timeline</CardTitle>
-                        <CardDescription>The planned schedule of all tasks and their due dates for this project.</CardDescription>
+                        <CardTitle className="flex items-center"><GanttChartSquare className="mr-2 h-5 w-5" /> {t('projectDetails.projectedTimeline')}</CardTitle>
+                        <CardDescription>{t('projectDetails.projectedTimelineDesc')}</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ProjectedTimeline projectId={projectId} />

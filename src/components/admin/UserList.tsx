@@ -20,6 +20,7 @@ import {
 import { deleteUserDocument } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
 import { useState } from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface UserListProps {
   users: AppUser[];
@@ -30,6 +31,7 @@ interface UserListProps {
 
 export function UserList({ users, onEditUser, currentAdminUid, onUsersChanged }: UserListProps) {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [deletingUid, setDeletingUid] = useState<string | null>(null);
 
   const handleDeleteUser = async (targetUserUid: string, targetUserDisplayName?: string) => {
@@ -71,9 +73,9 @@ export function UserList({ users, onEditUser, currentAdminUid, onUsersChanged }:
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <DefaultUserIcon className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-3 font-headline text-lg font-semibold">No Users Found</h3>
+        <h3 className="mt-3 font-headline text-lg font-semibold">{t('users.noUsersFound')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Add users to start managing roles and assignments.
+          {t('users.noUsersDesc')}
         </p>
       </div>
     );
@@ -84,11 +86,11 @@ export function UserList({ users, onEditUser, currentAdminUid, onUsersChanged }:
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Display Name</TableHead>
-            <TableHead>Email</TableHead>
-            <TableHead>UID</TableHead>
-            <TableHead>Role</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead>{t('users.displayName')}</TableHead>
+            <TableHead>{t('users.email')}</TableHead>
+            <TableHead>{t('users.uid')}</TableHead>
+            <TableHead>{t('users.role')}</TableHead>
+            <TableHead className="text-right">{t('users.actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -104,32 +106,31 @@ export function UserList({ users, onEditUser, currentAdminUid, onUsersChanged }:
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
-                <Button variant="ghost" size="icon" onClick={() => onEditUser(user)} title="Edit User">
+                <Button variant="ghost" size="icon" onClick={() => onEditUser(user)} title={t('users.editUser')}>
                   <Edit2 className="h-4 w-4" />
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" title="Delete User Document" disabled={currentAdminUid === user.uid}>
+                    <Button variant="ghost" size="icon" title={t('users.deleteUser')} disabled={currentAdminUid === user.uid}>
                       <Trash2 className="h-4 w-4 text-destructive" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete User Document "{user.displayName || user.uid}"?</AlertDialogTitle>
+                      <AlertDialogTitle>{t('users.deleteUser')} "{user.displayName || user.uid}"?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action will delete the user's role and metadata from this application's database.
-                        It will NOT delete the user from Firebase Authentication. This action cannot be undone.
+                        {t('users.deleteUserWarning')}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel>{t('projectDetails.cancel')}</AlertDialogCancel>
                       <AlertDialogAction
                         onClick={() => handleDeleteUser(user.uid, user.displayName || undefined)}
                         className="bg-destructive hover:bg-destructive/90"
                         disabled={deletingUid === user.uid}
                       >
                         {deletingUid === user.uid && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Delete Document
+                        {t('users.deleteDocument')}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

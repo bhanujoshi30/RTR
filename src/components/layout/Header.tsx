@@ -14,20 +14,26 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users, CalendarCheck, ClipboardList, Loader2 } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users, CalendarCheck, ClipboardList, Loader2, Language as LanguageIcon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState, useEffect } from 'react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export function Header() {
   const { user } = useAuth();
+  const { t, locale, setLocale } = useTranslation();
   const router = useRouter();
   const pathname = usePathname();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [loadingLink, setLoadingLink] = useState<string | null>(null);
 
-  // When route changes, clear the loader
   useEffect(() => {
     if (loadingLink) {
       setLoadingLink(null);
@@ -50,17 +56,17 @@ export function Header() {
   const isClient = user?.role === 'client';
 
   const baseNavLinks = [
-    { href: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard className="mr-2 h-4 w-4" /> },
+    { href: '/dashboard', labelKey: 'header.dashboard', icon: <LayoutDashboard className="mr-2 h-4 w-4" /> },
   ];
 
   const conditionalNavLinks = [];
   if (user && !isSupervisor && !isMember && !isClient) { 
-    conditionalNavLinks.push({ href: '/projects/create', label: 'New Project', icon: <FolderPlus className="mr-2 h-4 w-4" /> });
+    conditionalNavLinks.push({ href: '/projects/create', labelKey: 'header.newProject', icon: <FolderPlus className="mr-2 h-4 w-4" /> });
   }
   if (isAdmin) {
-    conditionalNavLinks.push({ href: '/users', label: 'Users', icon: <Users className="mr-2 h-4 w-4" /> });
-    conditionalNavLinks.push({ href: '/attendance', label: 'Attendance', icon: <CalendarCheck className="mr-2 h-4 w-4" /> });
-    conditionalNavLinks.push({ href: '/dpr', label: 'DPR', icon: <ClipboardList className="mr-2 h-4 w-4" /> });
+    conditionalNavLinks.push({ href: '/users', labelKey: 'header.users', icon: <Users className="mr-2 h-4 w-4" /> });
+    conditionalNavLinks.push({ href: '/attendance', labelKey: 'header.attendance', icon: <CalendarCheck className="mr-2 h-4 w-4" /> });
+    conditionalNavLinks.push({ href: '/dpr', labelKey: 'header.dpr', icon: <ClipboardList className="mr-2 h-4 w-4" /> });
   }
   
   const navLinks = [...baseNavLinks, ...conditionalNavLinks];
@@ -91,7 +97,7 @@ export function Header() {
           >
             <Link href={link.href} className={`flex items-center ${isMobile ? 'justify-start w-full text-lg py-3' : ''}`}>
               {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : link.icon}
-              {link.label}
+              {t(link.labelKey)}
             </Link>
           </Button>
         );
@@ -129,19 +135,32 @@ export function Header() {
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{user.displayName || user.email}</p>
                     {user.displayName && user.email && <p className="text-xs leading-none text-muted-foreground">{user.email}</p>}
-                     {user.role && <p className="text-xs leading-none text-muted-foreground capitalize">Role: {user.role}</p>}
+                     {user.role && <p className="text-xs leading-none text-muted-foreground capitalize">{t('header.role')}: {user.role}</p>}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <LanguageIcon className="mr-2 h-4 w-4" />
+                    <span>{t('header.language')}</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                     <DropdownMenuRadioGroup value={locale} onValueChange={(value) => setLocale(value as 'en' | 'hi')}>
+                        <DropdownMenuRadioItem value="en">{t('header.english')}</DropdownMenuRadioItem>
+                        <DropdownMenuRadioItem value="hi">{t('header.hindi')}</DropdownMenuRadioItem>
+                      </DropdownMenuRadioGroup>
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive-foreground focus:bg-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Log out
+                  {t('header.logout')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
              <Button asChild>
-                <Link href="/login">Log In</Link>
+                <Link href="/login">{t('auth.login')}</Link>
              </Button>
           )}
            <div className="md:hidden">

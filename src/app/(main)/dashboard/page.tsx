@@ -12,9 +12,11 @@ import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks 
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
 import { getProjectsByIds, getUserProjects, getClientProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
   const [projectsToDisplay, setProjectsToDisplay] = useState<Project[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
@@ -164,11 +166,11 @@ export default function DashboardPage() {
   const isMember = user?.role === 'member';
   const isClient = user?.role === 'client';
   
-  let pageTitle = "My Projects";
+  let pageTitle = t('dashboard.myProjects');
   if (isSupervisor || isMember) {
-    pageTitle = "My Assigned Work Overview";
+    pageTitle = t('dashboard.assignedWork');
   } else if (isClient) {
-    pageTitle = "My Projects";
+    pageTitle = t('dashboard.myProjects');
   }
 
   const canCreateProject = user && !isSupervisor && !isMember && !isClient;
@@ -191,7 +193,7 @@ export default function DashboardPage() {
             <Button asChild>
               <Link href="/projects/create">
                 <FolderPlus className="mr-2 h-4 w-4" />
-                New Project
+                {t('header.newProject')}
               </Link>
             </Button>
           )}

@@ -1,33 +1,32 @@
 
 "use client";
 
-// This component now receives projects directly via props.
-// The logic to determine which projects to show (owned vs. assigned)
-// is handled by the parent component (e.g., DashboardPage).
-
 import type { Project } from '@/types';
 import { ProjectCard } from './ProjectCard';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { FolderOpen, PlusCircle } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ProjectListProps {
   projects: Project[];
-  isSupervisorView?: boolean; // To adjust messages if needed
+  isSupervisorView?: boolean;
   isClientView?: boolean;
 }
 
 export function ProjectList({ projects, isSupervisorView = false, isClientView = false }: ProjectListProps) {
+  const { t } = useTranslation();
+
   if (projects.length === 0) {
-    let title = "No projects yet";
-    let message = "Get started by creating your first project.";
+    let title = t('projectList.noProjects');
+    let message = t('projectList.getStarted');
     
     if (isSupervisorView) {
-      title = "Welcome to TaskFlow!";
-      message = "You are ready to go. Please contact your administrator to be assigned to projects and tasks.";
+      title = t('projectList.welcome');
+      message = t('projectList.contactAdmin');
     } else if (isClientView) {
-      title = "No Projects Assigned";
-      message = "You have not been assigned to any projects yet.";
+      title = t('projectList.noAssignedProjects');
+      message = t('projectList.notAssigned');
     }
 
     return (
@@ -41,7 +40,7 @@ export function ProjectList({ projects, isSupervisorView = false, isClientView =
           <Button asChild variant="default">
             <Link href="/projects/create">
               <PlusCircle className="mr-2 h-4 w-4" />
-              Create Project
+              {t('projectList.createProject')}
             </Link>
           </Button>
         )}
@@ -57,5 +56,3 @@ export function ProjectList({ projects, isSupervisorView = false, isClientView =
     </div>
   );
 }
-
-    

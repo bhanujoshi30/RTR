@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -11,11 +12,13 @@ import { Loader2, PlusCircle, Users as UsersIcon } from 'lucide-react';
 import type { User as AppUser, UserRole } from '@/types';
 import { upsertUserDocument, getAllUsers } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from '@/hooks/useTranslation';
 
 export default function UsersPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useTranslation();
 
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -88,18 +91,18 @@ export default function UsersPage() {
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <h1 className="font-headline text-3xl font-semibold tracking-tight flex items-center">
           <UsersIcon className="mr-3 h-8 w-8 text-primary" />
-          User Management
+          {t('users.pageTitle')}
         </h1>
         <Button onClick={handleAddUserClick} disabled={loadingUsers}>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add User
+          {t('users.addUser')}
         </Button>
       </div>
 
       {loadingUsers && (
         <div className="flex justify-center items-center py-10">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="ml-2 text-lg">Loading users...</p>
+          <p className="ml-2 text-lg">{t('users.loadingUsers')}</p>
         </div>
       )}
       {error && <p className="text-center text-destructive py-4">{error}</p>}
@@ -120,7 +123,7 @@ export default function UsersPage() {
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="font-headline text-xl">
-              {editingUser ? 'Edit User' : 'Add New User'}
+              {editingUser ? t('users.editUser') : t('users.addUser')}
             </DialogTitle>
             <DialogDescription>
               {editingUser ? 'Modify the details of this user.' : "Enter the user's details. Ensure the UID matches an existing Firebase Auth user."}

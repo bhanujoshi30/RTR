@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -10,11 +11,11 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, LogIn, Workflow, Loader2 } from 'lucide-react';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address' }),
@@ -26,6 +27,7 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 export function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -57,8 +59,8 @@ export function LoginForm() {
     <Card className="w-full max-w-md shadow-xl">
       <CardHeader className="items-center text-center">
         <Workflow className="mb-4 h-16 w-16 text-primary" />
-        <CardTitle className="font-headline text-3xl">Welcome Back!</CardTitle>
-        <CardDescription>Log in to your TaskFlow account.</CardDescription>
+        <CardTitle className="font-headline text-3xl">{t('auth.welcomeBack')}</CardTitle>
+        <CardDescription>{t('auth.loginToAccount')}</CardDescription>
       </CardHeader>
       <CardContent>
         <Form {...form}>
@@ -68,7 +70,7 @@ export function LoginForm() {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Email</FormLabel>
+                  <FormLabel>{t('auth.email')}</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="your@email.com" {...field} />
                   </FormControl>
@@ -81,7 +83,7 @@ export function LoginForm() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Password</FormLabel>
+                  <FormLabel>{t('auth.password')}</FormLabel>
                   <FormControl>
                     <div className="relative">
                        <Input 
@@ -109,11 +111,11 @@ export function LoginForm() {
               {loading ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Logging in...
+                  {t('auth.loggingIn')}
                 </>
               ) : (
                 <>
-                  Log In
+                  {t('auth.login')}
                   <LogIn className="ml-2 h-4 w-4" />
                 </>
               )}
@@ -123,9 +125,9 @@ export function LoginForm() {
       </CardContent>
       <CardFooter className="flex flex-col items-center space-y-2">
         <p className="text-sm text-muted-foreground">
-          Don&apos;t have an account?{' '}
+          {t('auth.noAccount')}{' '}
           <Button variant="link" asChild className="p-0 h-auto">
-            <Link href="/register">Sign up</Link>
+            <Link href="/register">{t('auth.signUp')}</Link>
           </Button>
         </p>
       </CardFooter>
