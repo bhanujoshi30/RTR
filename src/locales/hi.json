@@ -293,7 +293,7 @@
     "selectUser": "जोड़ने के लिए एक उपयोगकर्ता चुनें...",
     "add": "जोड़ें",
     "assigned": "सौंपा गया:",
-    "removeUser": "{{name}} को हटाएं",
+    "removeUser": "{{name}} को हटायें",
     "saveChanges": "बदलाव सहेजें",
     "createIssue": "मुद्दा बनाएं"
   },

@@ -58,11 +58,11 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
             const assignedSubtasks = relatedSubTasks.filter(st => st.assignedToUids?.includes(user!.uid));
             const count = assignedSubtasks.length;
             const labelKey = count === 1 ? 'taskCard.subTaskAssignedToYou' : 'taskCard.subTasksAssignedToYou';
-            displaySubTaskCountLabel = t(labelKey).replace('{count}', count.toString());
+            displaySubTaskCountLabel = t(labelKey, { count: count });
           } else { // Admin or Owner
             const count = relatedSubTasks.length;
             const labelKey = count === 1 ? 'taskCard.subTask' : 'taskCard.subTasks';
-            displaySubTaskCountLabel = t(labelKey).replace('{count}', count.toString());
+            displaySubTaskCountLabel = t(labelKey, { count: count });
           }
           
           return { ...mainTask, displaySubTaskCountLabel };
