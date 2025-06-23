@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getAllUsers } from '@/services/userService';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 const taskTypes = ['standard', 'collection'] as const;
@@ -34,6 +35,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
+  const { t } = useTranslation();
   const isSubTask = !!(parentId || task?.parentId);
 
   // Form State
@@ -176,8 +178,12 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   };
 
   const formTitle = task
-    ? (isSubTask ? "Edit Sub-task" : "Edit Main Task")
-    : (isSubTask ? "Add New Sub-task" : "New Main Task");
+    ? (isSubTask ? t("taskForm.editSubTask") : t("taskForm.editMainTask"))
+    : (isSubTask ? t("taskForm.addSubTask") : t("taskForm.addMainTask"));
+    
+  const buttonText = task 
+    ? t("taskForm.saveChanges")
+    : (isSubTask ? t("taskForm.addSubTaskBtn") : t("taskForm.createMainTaskBtn"));
 
   return (
     <Card className="shadow-lg">
@@ -188,19 +194,20 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
         <CardContent className="space-y-6">
           {!isSubTask && (
             <div className="space-y-3">
-              <label className="text-sm font-medium">Main Task Type</label>
+              <label className="text-sm font-medium">{t("taskForm.taskType")}</label>
               <RadioGroup value={taskType} onValueChange={(val: 'standard' | 'collection') => setTaskType(val)} className="flex flex-col space-y-1">
                   <div className="flex items-center space-x-3">
                       <RadioGroupItem value="standard" id="standard" />
                       <label htmlFor="standard" className="font-normal flex items-center gap-2">
-                          <Layers className="h-4 w-4 text-muted-foreground" /> Standard Task (with sub-tasks)
+                          <Layers className="h-4 w-4 text-muted-foreground" />
+                          {t("taskForm.standardTask")}
                       </label>
                   </div>
                   <div className="flex items-center space-x-3">
                       <RadioGroupItem value="collection" id="collection" />
                        <label htmlFor="collection" className="font-normal flex items-center gap-2">
                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
-                           Collection Task (payment reminder)
+                           {t("taskForm.collectionTask")}
                        </label>
                   </div>
               </RadioGroup>
@@ -208,34 +215,34 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
           )}
 
           <div className="space-y-2">
-            <label htmlFor="name" className="text-sm font-medium">Name</label>
-            <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder={isSubTask ? "Sub-task name" : "Main task name"} />
+            <label htmlFor="name" className="text-sm font-medium">{t("taskForm.name")}</label>
+            <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder={isSubTask ? t("taskForm.subTaskNamePlaceholder") : t("taskForm.mainTaskNamePlaceholder")} />
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="description" className="text-sm font-medium">Description (Optional)</label>
-            <Textarea id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder={isSubTask ? "Detailed information about the sub-task" : "Brief description of the main task"} rows={4} />
+            <label htmlFor="description" className="text-sm font-medium">{t("taskForm.description")}</label>
+            <Textarea id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder={isSubTask ? t("taskForm.subTaskDescPlaceholder") : t("taskForm.mainTaskDescPlaceholder")} rows={4} />
           </div>
 
           {isSubTask && (
             <>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Status</label>
+                    <label className="text-sm font-medium">{t("taskForm.status")}</label>
                     <Select value={status} onValueChange={(v: TaskStatus) => setStatus(v)}>
                         <SelectTrigger><SelectValue/></SelectTrigger>
                         <SelectContent>
-                            {taskStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                            {taskStatuses.map(s => <SelectItem key={s} value={s}>{t(`status.${s.toLowerCase().replace(/ /g, '')}`)}</SelectItem>)}
                         </SelectContent>
                     </Select>
                 </div>
                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Due Date</label>
+                    <label className="text-sm font-medium">{t("taskForm.dueDate")}</label>
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                                 <CalendarIcon className="mr-2 h-4 w-4"/>
-                                {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                                {dueDate ? format(dueDate, "PPP") : <span>{t("taskForm.pickDate")}</span>}
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
@@ -249,30 +256,30 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                     </Popover>
                     {parentMainTask?.dueDate && (
                       <p className="text-xs text-muted-foreground pt-1">
-                          Date must be between {format(parentMainTask.createdAt!, 'PP')} and {format(parentMainTask.dueDate, 'PP')}.
+                          {t("taskForm.dateConstraint", { startDate: format(parentMainTask.createdAt!, 'PP'), endDate: format(parentMainTask.dueDate, 'PP') })}
                       </p>
                     )}
                 </div>
               </div>
               <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4"/>Assign To</label>
-                  <p className="text-sm text-muted-foreground">Select team members to assign this sub-task to.</p>
+                  <label className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4"/>{t("taskForm.assignTo")}</label>
+                  <p className="text-sm text-muted-foreground">{t("taskForm.assignToDesc")}</p>
                   {loadingAssignableUsers ? (
-                      <p className="text-sm text-muted-foreground">Loading users...</p>
+                      <p className="text-sm text-muted-foreground">{t("taskForm.loadingUsers")}</p>
                   ) : allAssignableUsers.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No users available for assignment.</p>
+                      <p className="text-sm text-muted-foreground">{t("taskForm.noUsers")}</p>
                   ) : (
                       <>
                           <div className="flex gap-2">
                               <select value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                                  <option value="">Select a user...</option>
+                                  <option value="">{t("taskForm.selectUser")}</option>
                                   {availableUsersToAssign.map(u => <option key={u.uid} value={u.uid}>{u.displayName} ({u.role})</option>)}
                               </select>
-                              <Button type="button" onClick={handleAddMember} disabled={!selectedUserId}>Add</Button>
+                              <Button type="button" onClick={handleAddMember} disabled={!selectedUserId}>{t("taskForm.add")}</Button>
                           </div>
                            {assignedUsers.length > 0 && (
                                <div className="space-y-2 rounded-md border p-2">
-                                   <h4 className="text-xs font-semibold text-muted-foreground">Assigned:</h4>
+                                   <h4 className="text-xs font-semibold text-muted-foreground">{t("taskForm.assigned")}</h4>
                                    <ul className="flex flex-wrap gap-2">
                                        {assignedUsers.map(u => (
                                            <li key={u.uid} className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm">
@@ -291,12 +298,12 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
 
           {!isSubTask && (
               <div className="space-y-2">
-                  <label className="text-sm font-medium">Due Date</label>
+                  <label className="text-sm font-medium">{t("taskForm.dueDate")}</label>
                   <Popover>
                       <PopoverTrigger asChild>
                           <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                               <CalendarIcon className="mr-2 h-4 w-4"/>
-                              {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                              {dueDate ? format(dueDate, "PPP") : <span>{t("taskForm.pickDate")}</span>}
                           </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dueDate} onSelect={setDueDate}/></PopoverContent>
@@ -307,12 +314,12 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
           {taskType === 'collection' && !isSubTask && (
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Cost Amount (INR)</label>
-                    <Input type="number" value={cost || ''} onChange={e => setCost(e.target.value ? Number(e.target.value) : null)} placeholder="E.g., 10000" />
+                    <label className="text-sm font-medium">{t("taskForm.cost")}</label>
+                    <Input type="number" value={cost || ''} onChange={e => setCost(e.target.value ? Number(e.target.value) : null)} placeholder={t("taskForm.costPlaceholder")} />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-sm font-medium">Reminder (Days Before Due)</label>
-                    <Input type="number" value={reminderDays || ''} onChange={e => setReminderDays(e.target.value ? Number(e.target.value) : null)} placeholder="E.g., 7" />
+                    <label className="text-sm font-medium">{t("taskForm.reminder")}</label>
+                    <Input type="number" value={reminderDays || ''} onChange={e => setReminderDays(e.target.value ? Number(e.target.value) : null)} placeholder={t("taskForm.reminderPlaceholder")} />
                 </div>
             </div>
           )}
@@ -320,7 +327,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
         <CardFooter>
           <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {task ? 'Save Changes' : (isSubTask ? 'Add Sub-task' : 'Create Main Task')}
+            {buttonText}
           </Button>
         </CardFooter>
       </form>

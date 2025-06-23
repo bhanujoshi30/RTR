@@ -345,7 +345,8 @@
   },
   "projectedTimeline": {
     "dueDate": "नियत तारीख",
-    "progress": "प्रगति"
+    "progress": "प्रगति",
+    "collectionTask": "संग्रह कार्य"
   },
   "timeline": {
     "attachmentAdded": "अनुलग्नक अपलोड किया: \"{{filename}}\"।",
