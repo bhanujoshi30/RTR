@@ -9,6 +9,7 @@ import { Loader2, GanttChartSquare, Layers } from 'lucide-react';
 import { ProjectedTimelineItem } from './ProjectedTimelineItem';
 import { useAuth } from '@/hooks/useAuth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface MainTaskWithSubTasks extends Task {
     subTasks: Task[];
@@ -23,6 +24,7 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchAndGroupTasks = async () => {
@@ -99,7 +101,7 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Loading timeline...</p>
+        <p className="ml-2">{t('common.loadingTimeline')}</p>
       </div>
     );
   }
@@ -112,9 +114,9 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <GanttChartSquare className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-3 font-headline text-lg font-semibold">No Tasks with Due Dates</h3>
+        <h3 className="mt-3 font-headline text-lg font-semibold">{t('projectedTimeline.noTasksTitle')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          This project has no tasks with scheduled due dates to build a timeline.
+          {t('projectedTimeline.noTasksDesc')}
         </p>
       </div>
     );

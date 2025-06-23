@@ -262,6 +262,17 @@
     "view": "देखें",
     "delete": "हटाएं"
   },
+  "issueList": {
+    "title": "कार्य के मुद्दे",
+    "addNew": "नया मुद्दा जोड़ें",
+    "noIssuesTitle": "इस कार्य के लिए अभी तक कोई मुद्दा नहीं है",
+    "noIssuesDescOwner": "उन्हें ट्रैक करना शुरू करने के लिए इस कार्य में मुद्दे जोड़ें।",
+    "noIssuesDescMember": "इस कार्य के लिए कोई मुद्दा रिपोर्ट नहीं किया गया है।"
+  },
+  "attachmentList": {
+    "noAttachmentsTitle": "कोई अनुलग्नक नहीं",
+    "noAttachmentsDesc": "इस उप-कार्य के लिए अभी तक कोई अनुलग्नक नहीं है।"
+  },
   "attendanceDialog": {
     "title": "दैनिक उपस्थिति दर्ज करें",
     "description": "प्रोजेक्ट के लिए उपस्थिति दर्ज करें: {{projectName}}।",
@@ -304,7 +315,10 @@
     "taskDeleted": "कार्य हटा दिया गया",
     "taskDeletedSuccess": "कार्य {{name}} हटा दिया गया है।",
     "deletionFailed": "हटाना विफल",
-    "couldNotDeleteTask": "कार्य को हटाया नहीं जा सका।"
+    "couldNotDeleteTask": "कार्य को हटाया नहीं जा सका।",
+    "loadingAttachments": "अनुलग्नक लोड हो रहे हैं...",
+    "loadingIssues": "मुद्दे लोड हो रहे हैं...",
+    "loadingTimeline": "समयरेखा लोड हो रही है..."
   },
   "taskForm": {
     "editSubTask": "उप-कार्य संपादित करें",
@@ -377,9 +391,15 @@
   },
   "projectedTimeline": {
     "dueDate": "नियत तारीख",
-    "progress": "प्रगति"
+    "progress": "प्रगति",
+    "noTasksTitle": "नियत तारीखों वाले कोई कार्य नहीं",
+    "noTasksDesc": "इस प्रोजेक्ट में समयरेखा बनाने के लिए निर्धारित नियत तारीखों वाले कोई कार्य नहीं हैं।"
   },
   "timeline": {
+    "noHistoryTitle": "अभी तक कोई इतिहास नहीं",
+    "noHistoryProject": "इस प्रोजेक्ट के लिए अभी तक कोई घटना दर्ज नहीं की गई है।",
+    "noHistoryMainTask": "इस मुख्य कार्य के लिए समयरेखा खाली है।",
+    "noHistorySubTask": "इस उप-कार्य के लिए समयरेखा खाली है।",
     "attachmentAdded": "अनुलग्नक अपलोड किया: \"{{filename}}\"।",
     "attachmentAddedToIssue": "मुद्दे के लिए एक अनुलग्नक अपलोड किया: \"{{filename}}\"।",
     "attachmentDeleted": "अनुलग्नक हटा दिया: \"{{filename}}\"।",

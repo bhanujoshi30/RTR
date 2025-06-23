@@ -16,7 +16,7 @@ export function MainTaskTimeline({ mainTaskId }: MainTaskTimelineProps) {
   const [events, setEvents] = useState<AggregatedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  useTranslation(); // Makes the component reactive to language changes
+  const { t } = useTranslation();
 
   useEffect(() => {
     const fetchTimeline = async () => {
@@ -40,7 +40,7 @@ export function MainTaskTimeline({ mainTaskId }: MainTaskTimelineProps) {
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Loading timeline...</p>
+        <p className="ml-2">{t('common.loadingTimeline')}</p>
       </div>
     );
   }
@@ -53,9 +53,9 @@ export function MainTaskTimeline({ mainTaskId }: MainTaskTimelineProps) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <History className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-3 font-headline text-lg font-semibold">No History Yet</h3>
+        <h3 className="mt-3 font-headline text-lg font-semibold">{t('timeline.noHistoryTitle')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          The timeline for this main task is empty.
+          {t('timeline.noHistoryMainTask')}
         </p>
       </div>
     );

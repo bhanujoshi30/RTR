@@ -11,6 +11,7 @@ import { Loader2, PlusCircle, Bug } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface IssueListProps {
   projectId: string;
@@ -26,6 +27,7 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
   const [parentTask, setParentTask] = useState<Task | null>(null);
   const router = useRouter();
   const [isCreatingIssue, setIsCreatingIssue] = useState(false);
+  const { t } = useTranslation();
 
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
@@ -71,7 +73,7 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Loading issues...</p>
+        <p className="ml-2">{t('common.loadingIssues')}</p>
       </div>
     );
   }
@@ -85,7 +87,7 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <h3 className="font-headline text-xl font-semibold flex items-center">
           <Bug className="mr-3 h-6 w-6 text-primary" />
-          Task Issues
+          {t('issueList.title')}
         </h3>
         {canManageIssuesForThisTask && (
           <Button
@@ -101,7 +103,7 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
             ) : (
               <PlusCircle className="mr-2 h-4 w-4" />
             )}
-            Add New Issue
+            {t('issueList.addNew')}
           </Button>
         )}
       </div>
@@ -109,9 +111,9 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
       {issues.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
           <Bug className="mx-auto h-12 w-12 text-muted-foreground/50" />
-          <h3 className="mt-3 font-headline text-lg font-semibold">No issues for this task yet</h3>
+          <h3 className="mt-3 font-headline text-lg font-semibold">{t('issueList.noIssuesTitle')}</h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            {canManageIssuesForThisTask ? "Add issues to this task to start tracking them." : "No issues reported for this task."}
+            {canManageIssuesForThisTask ? t('issueList.noIssuesDescOwner') : t('issueList.noIssuesDescMember')}
           </p>
         </div>
       ) : (

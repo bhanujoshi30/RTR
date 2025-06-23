@@ -262,6 +262,17 @@
     "view": "View",
     "delete": "Delete"
   },
+  "issueList": {
+    "title": "Task Issues",
+    "addNew": "Add New Issue",
+    "noIssuesTitle": "No issues for this task yet",
+    "noIssuesDescOwner": "Add issues to this task to start tracking them.",
+    "noIssuesDescMember": "No issues reported for this task."
+  },
+  "attachmentList": {
+    "noAttachmentsTitle": "No Attachments",
+    "noAttachmentsDesc": "There are no attachments for this sub-task yet."
+  },
   "attendanceDialog": {
     "title": "Submit Daily Attendance",
     "description": "Submit attendance for project: {{projectName}}.",
@@ -304,7 +315,10 @@
     "taskDeleted": "Task Deleted",
     "taskDeletedSuccess": "Task \"{{name}}\" has been deleted.",
     "deletionFailed": "Deletion Failed",
-    "couldNotDeleteTask": "Could not delete the task."
+    "couldNotDeleteTask": "Could not delete the task.",
+    "loadingAttachments": "Loading attachments...",
+    "loadingIssues": "Loading issues...",
+    "loadingTimeline": "Loading timeline..."
   },
   "taskForm": {
     "editSubTask": "Edit Sub-task",
@@ -377,9 +391,15 @@
   },
   "projectedTimeline": {
     "dueDate": "Due Date",
-    "progress": "Progress"
+    "progress": "Progress",
+    "noTasksTitle": "No Tasks with Due Dates",
+    "noTasksDesc": "This project has no tasks with scheduled due dates to build a timeline."
   },
   "timeline": {
+    "noHistoryTitle": "No History Yet",
+    "noHistoryProject": "No events have been recorded for this project yet.",
+    "noHistoryMainTask": "The timeline for this main task is empty.",
+    "noHistorySubTask": "The timeline for this sub-task is empty.",
     "attachmentAdded": "uploaded an attachment: \"{{filename}}\".",
     "attachmentAddedToIssue": "uploaded an attachment for an issue: \"{{filename}}\".",
     "attachmentDeleted": "deleted an attachment: \"{{filename}}\".",

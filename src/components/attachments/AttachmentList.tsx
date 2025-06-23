@@ -101,7 +101,7 @@ export function AttachmentList({ taskId, projectId }: AttachmentListProps) {
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Loading attachments...</p>
+        <p className="ml-2">{t('common.loadingAttachments')}</p>
       </div>
     );
   }
@@ -114,9 +114,9 @@ export function AttachmentList({ taskId, projectId }: AttachmentListProps) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <Paperclip className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="font-headline text-lg font-semibold">No Attachments</h3>
+        <h3 className="font-headline text-lg font-semibold">{t('attachmentList.noAttachmentsTitle')}</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          There are no attachments for this sub-task yet.
+          {t('attachmentList.noAttachmentsDesc')}
         </p>
       </div>
     );
