@@ -9,8 +9,7 @@ import { IssueCard } from '@/components/issues/IssueCard';
 import { Button } from '@/components/ui/button';
 import { Loader2, PlusCircle, Bug } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
-import { IssueForm } from '@/components/issues/IssueForm';
+import Link from 'next/link';
 
 interface IssueListProps {
   projectId: string;
@@ -23,7 +22,6 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
-  const [showCreateModal, setShowCreateModal] = useState(false);
   const [parentTask, setParentTask] = useState<Task | null>(null);
 
   const isSupervisor = user?.role === 'supervisor';
@@ -60,14 +58,6 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, user, authLoading]);
 
-  const handleFormSuccess = async () => {
-    setShowCreateModal(false);
-    await fetchParentTaskAndIssues(); 
-    if (onIssueListChange) {
-      onIssueListChange();
-    }
-  };
-
   const handleIssueCardUpdate = async () => {
     await fetchParentTaskAndIssues(); 
     if (onIssueListChange) {
@@ -97,21 +87,12 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
           Task Issues
         </h3>
         {canManageIssuesForThisTask && (
-          <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-            <DialogTrigger asChild>
-              <Button size="sm">
+           <Button asChild size="sm">
+              <Link href={`/projects/${projectId}/tasks/${taskId}/issues/create`}>
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Add New Issue
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-lg">
-              <DialogHeader>
-                <DialogTitle className="font-headline text-xl">Add New Issue</DialogTitle>
-                <DialogDescription>Fill in the details below to create a new issue for this task.</DialogDescription>
-              </DialogHeader>
-              {user && <IssueForm projectId={projectId} taskId={taskId} onFormSuccess={handleFormSuccess} />}
-            </DialogContent>
-          </Dialog>
+              </Link>
+           </Button>
         )}
       </div>
 
