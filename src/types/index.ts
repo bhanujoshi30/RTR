@@ -132,6 +132,7 @@ export interface ProjectAggregatedEvent {
     mainTaskInfo: {
       id: string;
       name: string;
+      taskType?: 'standard' | 'collection';
     };
     // The events here are the ones from getTimelineForMainTask
     events: AggregatedEvent[];

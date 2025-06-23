@@ -32,6 +32,8 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
     setLoading(true);
     setError(null);
     try {
+      const isClientOrAdmin = user?.role === 'client' || user?.role === 'admin';
+
       if (isSupervisorOrMember) {
         console.log(`TaskList: User is ${user.role}. Fetching sub-tasks assigned to user ${user.uid} within project ${projectId}.`);
         const projectSpecificAssignedSubTasks = await getProjectSubTasksAssignedToUser(projectId, user.uid);
@@ -56,8 +58,12 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
       } else {
         // Admin or project owner sees all main tasks
         console.log('TaskList: User is admin/owner. Fetching all main tasks for project.');
-        const allMainTasks = await getProjectMainTasks(projectId);
+        let allMainTasks = await getProjectMainTasks(projectId);
         
+        if (!isClientOrAdmin) { // Filter for project owners who are not admins/clients
+            allMainTasks = allMainTasks.filter(t => t.taskType !== 'collection');
+        }
+
         setTasks(allMainTasks);
         console.log('TaskList: Fetched all main tasks for admin/owner:', allMainTasks.length > 0 ? allMainTasks : 'None');
       }

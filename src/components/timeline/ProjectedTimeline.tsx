@@ -14,6 +14,10 @@ interface MainTaskWithSubTasks extends Task {
     subTasks: Task[];
 }
 
+interface ProjectedTimelineProps {
+    projectId: string;
+}
+
 export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
   const [mainTasks, setMainTasks] = useState<MainTaskWithSubTasks[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,11 +29,11 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
       if (!projectId || !user) return;
       try {
         setLoading(true);
-        const isSupervisorOrMember = user.role === 'supervisor' || user.role === 'member';
+        const isClientOrAdmin = user.role === 'client' || user.role === 'admin';
         
         let allTasks = await getAllProjectTasks(projectId);
 
-        if (isSupervisorOrMember) {
+        if (!isClientOrAdmin) {
           allTasks = allTasks.filter(task => task.taskType !== 'collection');
         }
 

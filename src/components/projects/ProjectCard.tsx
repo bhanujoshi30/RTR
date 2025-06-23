@@ -9,12 +9,16 @@ import { Badge } from '@/components/ui/badge';
 import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers, Wallet, IndianRupee } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 import { numberToWordsInr } from '@/lib/currencyUtils';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ProjectCardProps {
   project: Project;
 }
 
 export function ProjectCard({ project }: ProjectCardProps) {
+  const { user } = useAuth();
+  const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
+
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
       case 'Not Started': return 'bg-gray-500 hover:bg-gray-500';
@@ -25,6 +29,11 @@ export function ProjectCard({ project }: ProjectCardProps) {
     }
   };
   
+  let displayStatus = project.status;
+  if (displayStatus === 'Payment Incomplete' && !canViewFinancials) {
+    displayStatus = 'Completed';
+  }
+
   return (
     <Card className="flex h-full transform flex-col overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group">
       <Link href={`/projects/${project.id}`} className="block relative w-full aspect-video bg-muted">
@@ -38,14 +47,14 @@ export function ProjectCard({ project }: ProjectCardProps) {
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-black/20 to-transparent" />
         <div className="absolute top-2 right-2 z-10 flex flex-col items-end gap-2">
-            {project.hasUpcomingReminder && (
+            {canViewFinancials && project.hasUpcomingReminder && (
                 <Badge variant="destructive" className="animate-pulse">
                     <Wallet className="mr-1.5 h-3.5 w-3.5" />
                     Payment Due Soon
                 </Badge>
             )}
-            <Badge variant="secondary" className={`${getStatusColor(project.status)} text-primary-foreground`}>
-            {project.status}
+            <Badge variant="secondary" className={`${getStatusColor(displayStatus)} text-primary-foreground`}>
+            {displayStatus}
             </Badge>
         </div>
       </Link>
@@ -92,7 +101,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 )}
             </>
             )}
-            {project.totalCost && project.totalCost > 0 && (
+            {canViewFinancials && project.totalCost && project.totalCost > 0 && (
                 <div className="pt-1">
                     <div className="flex items-center text-sm">
                         <IndianRupee className="mr-2 h-4 w-4 text-green-600" />

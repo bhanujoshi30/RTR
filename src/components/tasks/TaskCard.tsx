@@ -66,6 +66,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const canFullyEditOrDeleteThisTask = isOwnerOfThisTask;
   const isAssignedToThisSubTask = !isActuallyMainTask && (task.assignedToUids?.includes(user?.uid || '') ?? false);
   const canChangeSubTaskStatus = user && (isOwnerOfThisTask || isAssignedToThisSubTask);
+  const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
 
   useEffect(() => {
     setTask(initialTask); 
@@ -243,7 +244,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
               <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              {showReminder && (
+              {canViewFinancials && showReminder && (
                 <Badge variant="destructive" className="animate-pulse">
                     Reminder: {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left
                 </Badge>

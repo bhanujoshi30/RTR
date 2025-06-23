@@ -61,6 +61,7 @@ export default function ProjectDetailsPage() {
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
   const isClient = user?.role === 'client';
+  const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
 
   const fetchProjectDetails = async () => {
     if (authLoading || !user || !projectId) return;
@@ -190,6 +191,11 @@ export default function ProjectDetailsPage() {
   const displayProgress = project.progress !== undefined ? Math.round(project.progress) : 0;
   const defaultTab = isClient ? "timeline" : "tasks";
 
+  let displayStatus = project.status;
+  if (displayStatus === 'Payment Incomplete' && !canViewFinancials) {
+      displayStatus = 'Completed';
+  }
+
   const ProjectDetailsCard = () => (
      <Card className="shadow-lg">
         <CardHeader>
@@ -257,8 +263,8 @@ export default function ProjectDetailsPage() {
           <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">Status</p>
-              <Badge variant="secondary" className={`${getStatusColor(project.status)} text-primary-foreground text-base px-3 py-1`}>
-                {project.status}
+              <Badge variant="secondary" className={`${getStatusColor(displayStatus)} text-primary-foreground text-base px-3 py-1`}>
+                {displayStatus}
               </Badge>
             </div>
             <div className="space-y-1">
@@ -284,7 +290,7 @@ export default function ProjectDetailsPage() {
                     </div>
                 </div>
             )}
-             {project.totalCost && project.totalCost > 0 && (
+             {canViewFinancials && project.totalCost && project.totalCost > 0 && (
                 <div className="space-y-1">
                     <div className="flex items-center text-base">
                         <IndianRupee className="mr-2 h-4 w-4 text-green-600" />

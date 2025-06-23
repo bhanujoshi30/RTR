@@ -6,6 +6,7 @@ import type { ProjectAggregatedEvent } from '@/types';
 import { getTimelineForProject } from '@/services/taskService';
 import { Loader2, History } from 'lucide-react';
 import { ProjectTimelineEventCard } from './ProjectTimelineEventCard';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ProjectTimelineProps {
   projectId: string;
@@ -15,14 +16,21 @@ export function ProjectTimeline({ projectId }: ProjectTimelineProps) {
   const [eventGroups, setEventGroups] = useState<ProjectAggregatedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchTimeline = async () => {
-      if (!projectId) return;
+      if (!projectId || !user) return;
       try {
         setLoading(true);
+        const isClientOrAdmin = user.role === 'client' || user.role === 'admin';
         const fetchedEvents = await getTimelineForProject(projectId);
-        setEventGroups(fetchedEvents);
+        
+        const filteredEvents = isClientOrAdmin
+          ? fetchedEvents
+          : fetchedEvents.filter(group => group.data.mainTaskInfo.taskType !== 'collection');
+        
+        setEventGroups(filteredEvents);
         setError(null);
       } catch (err: any) {
         setError('Failed to load project timeline.');
@@ -32,7 +40,7 @@ export function ProjectTimeline({ projectId }: ProjectTimelineProps) {
       }
     };
     fetchTimeline();
-  }, [projectId]);
+  }, [projectId, user]);
 
   if (loading) {
     return (

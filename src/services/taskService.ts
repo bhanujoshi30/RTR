@@ -1,7 +1,4 @@
 
-
-
-
 import { db } from '@/lib/firebase';
 import type { Task, TaskStatus, UserRole, AggregatedEvent, ProjectAggregatedEvent, TimelineEvent } from '@/types';
 import {
@@ -897,7 +894,7 @@ export const getTimelineForProject = async (projectId: string): Promise<ProjectA
           timestamp: events[0].timestamp, // Latest event for sorting
           type: 'mainTaskGroup' as const,
           data: {
-            mainTaskInfo: { id: mainTask.id, name: mainTask.name },
+            mainTaskInfo: { id: mainTask.id, name: mainTask.name, taskType: mainTask.taskType },
             events: events,
           },
         };
