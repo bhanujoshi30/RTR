@@ -195,13 +195,13 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
     if (!showReminder || daysRemaining === null) return '';
     if (daysRemaining <= 0) return t('taskCard.reminderDueToday');
     const key = daysRemaining === 1 ? 'taskCard.reminderDayLeft' : 'taskCard.reminderDaysLeft';
-    return t(key).replace('{day}', '1').replace('{days}', daysRemaining.toString());
+    return t(key, { day: '1', days: daysRemaining.toString() });
   };
 
   const openIssuesText = () => {
     if (!hasOpenIssuesForCard) return '';
     const key = task.openIssueCount === 1 ? 'taskCard.openIssue' : 'taskCard.openIssues';
-    return t(key).replace('{count}', task.openIssueCount!.toString());
+    return t(key, { count: task.openIssueCount!.toString() });
   };
 
   const showReminder = task.taskType === 'collection' && task.status !== 'Completed' && daysRemaining !== null && task.reminderDays && daysRemaining >= 0 && daysRemaining <= task.reminderDays;
