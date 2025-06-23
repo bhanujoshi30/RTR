@@ -111,10 +111,10 @@ export default function ProjectDetailsPage() {
                       const record = await getTodaysAttendanceForUserInProject(user.uid, projectId, today);
                       if (record) {
                           setAttendanceStatus({ submitted: true, timestamp: record.timestamp });
-                          setShowAttendanceDialog(false); // Explicitly close if already submitted
+                          setShowAttendanceDialog(false);
                       } else {
                           setAttendanceStatus({ submitted: false, timestamp: null });
-                          setShowAttendanceDialog(true); // Automatically show popup if not submitted
+                          setShowAttendanceDialog(false); // Prevent dialog from opening automatically
                       }
                   } else {
                       setCanSubmitAttendance(false);
