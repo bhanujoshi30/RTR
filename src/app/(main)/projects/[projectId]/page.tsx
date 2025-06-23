@@ -30,7 +30,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { ProjectForm } from '@/components/projects/ProjectForm'; 
 import { TaskForm } from '@/components/tasks/TaskForm';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectTimeline } from '@/components/timeline/ProjectTimeline';
 import { ProjectedTimeline } from '@/components/timeline/ProjectedTimeline';
@@ -230,6 +230,7 @@ export default function ProjectDetailsPage() {
                       <DialogContent className="sm:max-w-2xl">
                         <DialogHeader>
                           <DialogTitle className="font-headline text-2xl">Edit Project</DialogTitle>
+                          <DialogDescription>Make changes to your project details. Click 'Save Changes' when you're done.</DialogDescription>
                         </DialogHeader>
                         <ProjectForm project={project} onFormSuccess={handleProjectFormSuccess} />
                       </DialogContent>
@@ -354,6 +355,7 @@ export default function ProjectDetailsPage() {
                               <DialogContent className="sm:max-w-2xl">
                                   <DialogHeader>
                                       <DialogTitle className="font-headline text-2xl">Add New Main Task</DialogTitle>
+                                      <DialogDescription>Add a new main task to this project. You can add sub-tasks and other details later.</DialogDescription>
                                   </DialogHeader>
                                   <TaskForm projectId={projectId} onFormSuccess={handleTaskFormSuccess} />
                               </DialogContent>
