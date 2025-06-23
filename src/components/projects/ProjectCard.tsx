@@ -1,4 +1,6 @@
 
+"use client";
+
 import type { Project } from '@/types';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -6,10 +8,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers, Wallet, IndianRupee } from 'lucide-react'; 
+import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers, Wallet, IndianRupee, Loader2 } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 import { numberToWordsInr } from '@/lib/currencyUtils';
 import { useAuth } from '@/hooks/useAuth';
+import { useState } from 'react';
 
 interface ProjectCardProps {
   project: Project;
@@ -18,6 +21,7 @@ interface ProjectCardProps {
 export function ProjectCard({ project }: ProjectCardProps) {
   const { user } = useAuth();
   const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
+  const [isNavigating, setIsNavigating] = useState(false);
 
   const getStatusColor = (status: Project['status']) => {
     switch (status) {
@@ -34,9 +38,18 @@ export function ProjectCard({ project }: ProjectCardProps) {
     displayStatus = 'Completed';
   }
 
+  const handleNavigation = () => {
+    setIsNavigating(true);
+  };
+
   return (
-    <Card className="flex h-full transform flex-col overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group">
-      <Link href={`/projects/${project.id}`} className="block relative w-full aspect-video bg-muted">
+    <Card className="relative flex h-full transform flex-col overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group">
+      {isNavigating && (
+        <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        </div>
+      )}
+      <Link href={`/projects/${project.id}`} onClick={handleNavigation} className="block relative w-full aspect-video bg-muted">
         <Image
           src={project.photoURL || 'https://placehold.co/600x400.png'}
           alt={project.name}
@@ -60,7 +73,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
       </Link>
       <CardHeader className="pb-4">
         <CardTitle className="font-headline text-xl">
-          <Link href={`/projects/${project.id}`} className="hover:underline">
+          <Link href={`/projects/${project.id}`} onClick={handleNavigation} className="hover:underline">
             {project.name}
           </Link>
         </CardTitle>
@@ -118,7 +131,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
           Created {project.createdAt ? formatDistanceToNow(project.createdAt, { addSuffix: true }) : 'recently'}
         </div>
         <Button variant="outline" size="sm" asChild>
-          <Link href={`/projects/${project.id}`}>
+          <Link href={`/projects/${project.id}`} onClick={handleNavigation}>
             View Project
             <ExternalLink className="ml-2 h-4 w-4" />
           </Link>
