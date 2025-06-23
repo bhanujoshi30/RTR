@@ -1,83 +1,89 @@
 
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-
+    
+    // Helper Functions
     function isAuth() {
       return request.auth != null;
     }
-
-    // Checks if the user is assigned to the task/issue
-    function isAssigned(uid, uids) {
-      return uid in uids;
-    }
-
-    match /users/{userId} {
-      allow read: if isAuth();
-      // Allow user to edit their own doc, or an admin to edit any doc.
-      allow write: if request.auth.uid == userId 
-                    || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    match /projects/{projectId} {
-      allow read: if isAuth();
-      allow create: if isAuth(); // Creator is set to request.auth.uid in service code
-      // Allow owner or admin to update
-      allow update: if request.auth.uid == resource.data.ownerUid 
-                    || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      // Only owner can delete
-      allow delete: if request.auth.uid == resource.data.ownerUid;
-    }
-
-    match /tasks/{taskId} {
-      // Allow reading if you are the project owner OR assigned to the task.
-      allow read: if request.auth.uid == resource.data.projectOwnerUid 
-                 || isAssigned(request.auth.uid, resource.data.assignedToUids);
-                 
-      // Allow creating if you own the parent project.
-      allow create: if request.auth.uid == get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid;
-      
-      // Allow updating if you are the task owner or assigned to it.
-      allow update: if request.auth.uid == resource.data.ownerUid 
-                    || isAssigned(request.auth.uid, resource.data.assignedToUids);
-                    
-      // Only task owner can delete.
-      allow delete: if request.auth.uid == resource.data.ownerUid;
-
-      // Subcollections
-      match /timeline/{eventId} {
-        allow read, create: if request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid
-                    || isAssigned(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids);
-      }
-      
-      match /attachments/{attachmentId} {
-        allow read: if request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid
-                    || isAssigned(request.auth.uid, get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids);
-        allow create: if isAuth(); // Detailed creator check is done in service code
-        allow delete: if request.auth.uid == resource.data.ownerUid;
-      }
-    }
-
-    match /issues/{issueId} {
-      // Allow reading if you are the project owner OR assigned to the issue.
-      allow read: if request.auth.uid == resource.data.projectOwnerUid 
-                 || isAssigned(request.auth.uid, resource.data.assignedToUids);
-      
-      // Allow creating if you own or are assigned to the parent sub-task.
-      allow create: if request.auth.uid == get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.ownerUid 
-                    || isAssigned(request.auth.uid, get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedToUids);
-      
-      // Allow updating if you are the issue owner or assigned to it.
-      allow update: if request.auth.uid == resource.data.ownerUid 
-                    || isAssigned(request.auth.uid, resource.data.assignedToUids);
-                    
-      // Only issue owner can delete.
-      allow delete: if request.auth.uid == resource.data.ownerUid;
+    
+    function isOwner(doc) {
+      return request.auth.uid == doc.data.ownerUid;
     }
     
+    function isAssignedTo(doc) {
+      return request.auth.uid in doc.data.assignedToUids;
+    }
+
+    function isProjectOwner(projectId) {
+      // Note: This function is only safe for single-document operations, not for collection queries.
+      return request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid;
+    }
+
+    function isAdmin() {
+      // Note: This function is only safe for single-document operations, not for collection queries.
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Collection Rules
+    match /projects/{projectId} {
+      allow read: if isAuth();
+      allow create: if isAuth() && request.resource.data.ownerUid == request.auth.uid;
+      // Admin check uses get(), safe for single-doc update/delete.
+      allow update, delete: if isAuth() && (isOwner(resource) || isAdmin());
+    }
+    
+    match /tasks/{taskId} {
+      // Use denormalized projectOwnerUid and assignedToUids for queryable reads.
+      allow read: if isAuth() && (request.auth.uid == resource.data.projectOwnerUid || isAssignedTo(resource));
+      
+      // Other operations are single-doc, so using isProjectOwner (with get()) is fine.
+      allow create: if isAuth() && (isProjectOwner(request.resource.data.projectId) || isAdmin());
+      allow update: if isAuth() && (isProjectOwner(request.resource.data.projectId) || isAssignedTo(resource) || isAdmin());
+      allow delete: if isAuth() && (isProjectOwner(request.resource.data.projectId) || isAdmin());
+
+      match /attachments/{attachmentId} {
+        // These rules use get() on the parent task. Safe for single-doc reads/writes.
+        // Will fail if a collection query is ever added for attachments.
+        function isParentTaskAccessible() {
+          let taskDoc = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+          return request.auth.uid == taskDoc.projectOwnerUid || request.auth.uid in taskDoc.assignedToUids;
+        }
+        allow read: if isAuth() && isParentTaskAccessible();
+        allow create: if isAuth() && isParentTaskAccessible();
+        allow delete: if isAuth() && isOwner(resource);
+      }
+      
+      match /timeline/{eventId} {
+         function isParentTaskReadable() {
+          let taskDoc = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+          return request.auth.uid == taskDoc.projectOwnerUid || request.auth.uid in taskDoc.assignedToUids;
+        }
+        allow read: if isAuth() && isParentTaskReadable();
+        allow create: if isAuth();
+      }
+    }
+    
+    match /issues/{issueId} {
+      // Use denormalized projectOwnerUid and assignedToUids for queryable reads.
+      allow read: if isAuth() && (request.auth.uid == resource.data.projectOwnerUid || isAssignedTo(resource));
+      
+      // Create/update/delete are single-doc, so get() is safe.
+      allow create: if isAuth() && (isProjectOwner(request.resource.data.projectId) || isAssignedTo(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId))));
+      allow update: if isAuth() && (isOwner(resource) || isAssignedTo(resource));
+      allow delete: if isAuth() && isOwner(resource);
+    }
+    
+    match /users/{userId} {
+      allow read: if isAuth();
+      // Admin check uses get(), safe for single-doc operations.
+      allow create, update, delete: if isAuth() && isAdmin();
+    }
+
     match /attendance/{attendanceId} {
-      allow read: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-      allow create: if isAuth();
+      allow read, create: if isAuth();
     }
   }
 }
