@@ -69,6 +69,7 @@ const mapDocumentToProject = (docSnapshot: any): Project => {
     photoURL: data.photoURL || null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
     totalCost: data.totalCost || 0,
+    memberUids: data.memberUids || [],
   };
 };
 
@@ -129,6 +130,7 @@ export const createProject = async (
     photoURL: projectData.photoURL || null,
     clientUid: projectData.clientUid || null,
     clientName: projectData.clientName || null,
+    memberUids: [],
   };
   console.log('projectService: Payload for Firestore addDoc:', projectPayload);
 
@@ -263,22 +265,10 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       const isClient = projectData.clientUid === userUid;
       const isAdmin = userRole === 'admin';
       const isServiceCall = userUid === 'dpr-service-call';
+      const isMember = projectData.memberUids?.includes(userUid) ?? false;
 
-      if (!isOwner && !isClient && !isAdmin && !isServiceCall) {
-        if (userRole === 'supervisor' || userRole === 'member') {
-          const tasksQuery = query(
-            collection(db, 'tasks'),
-            where('projectId', '==', projectId),
-            where('assignedToUids', 'array-contains', userUid),
-            limit(1)
-          );
-          const tasksSnapshot = await getDocs(tasksQuery);
-          if (tasksSnapshot.empty) {
-            throw new Error(`Access denied to project ${projectId}. User is not owner, client, or assigned to any tasks in it.`);
-          }
-        } else {
-            throw new Error(`Access denied to project ${projectId}. User role is not authorized.`);
-        }
+      if (!isOwner && !isClient && !isAdmin && !isServiceCall && !isMember) {
+            throw new Error(`Access denied to project ${projectId}. User is not owner, client, admin, or member.`);
       }
       
       const mainTasks = await getProjectMainTasks(projectId);

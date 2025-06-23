@@ -18,6 +18,7 @@ import {
   writeBatch,
   getCountFromServer,
   documentId,
+  arrayUnion,
 } from 'firebase/firestore';
 import { deleteIssuesForTask, getOpenIssuesForTaskIds } from './issueService';
 import { logTimelineEvent, getTimelineForTask } from '@/services/timelineService';
@@ -127,6 +128,13 @@ export const createTask = async (
   try {
     const newTaskRef = await addDoc(tasksCollection, newTaskPayload);
     const newTaskId = newTaskRef.id;
+
+    // Denormalize memberUids to project for access control
+    if (newTaskPayload.parentId && newTaskPayload.assignedToUids && newTaskPayload.assignedToUids.length > 0) {
+        await updateDoc(projectDocRef, {
+            memberUids: arrayUnion(...newTaskPayload.assignedToUids)
+        });
+    }
     
     if (newTaskPayload.parentId) {
       await logTimelineEvent(
@@ -534,6 +542,12 @@ export const updateTask = async (
       'timeline.assignmentUpdated',
       { names: newNames }
     );
+     // Denormalize new members to the project
+    const newUids = updates.assignedToUids || [];
+    if (newUids.length > 0) {
+      const projectDocRef = doc(db, 'projects', taskDataFromSnap.projectId);
+      await updateDoc(projectDocRef, { memberUids: arrayUnion(...newUids) });
+    }
   }
 
   if (updates.status !== undefined && updates.status !== taskDataFromSnap.status) {

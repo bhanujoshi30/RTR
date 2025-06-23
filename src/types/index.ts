@@ -23,6 +23,7 @@ export interface Project {
   totalOpenIssues?: number;
   hasUpcomingReminder?: boolean;
   totalCost?: number;
+  memberUids?: string[];
 }
 
 export interface Task {
