@@ -162,7 +162,7 @@ export const getOpenIssuesForTaskIds = async (taskIds: string[]): Promise<Issue[
     } catch(error: any) {
         console.error(`issueService: Error in getOpenIssuesForTaskIds for chunk`, error);
         if (error.message?.includes("index")) {
-            console.error("Firestore query requires an index for issues. Fields: 'taskId' (IN), 'status' (==).");
+            console.error("Firestore index needed for getOpenIssuesForTaskIds: on 'issues' subcollection, field 'taskId' (IN), 'status' (==).");
         }
     }
   }
@@ -431,15 +431,29 @@ export const hasOpenIssues = async (taskId: string): Promise<boolean> => {
   }
 };
 
-export const countProjectOpenIssues = async (projectId: string): Promise<number> => {
+export const countProjectOpenIssues = async (projectId: string, userUid?: string): Promise<number> => {
   if (!projectId) return 0;
   console.log(`issueService: countProjectOpenIssues for projectId: ${projectId}`);
 
-  const q = query(
-    issuesCollection,
-    where('projectId', '==', projectId),
-    where('status', '==', 'Open')
-  );
+  let q;
+  if (userUid) {
+    // This more specific query aligns with security rules for project owners/admins.
+    q = query(
+      issuesCollection,
+      where('projectId', '==', projectId),
+      where('status', '==', 'Open'),
+      where('projectOwnerUid', '==', userUid)
+    );
+  } else {
+    // This is a less secure fallback, primarily for scenarios where user context might not be available.
+    // It will likely fail for non-public data due to security rules.
+    console.warn(`[countProjectOpenIssues] called without userUid for project ${projectId}. The query might be blocked by security rules.`);
+    q = query(
+      issuesCollection,
+      where('projectId', '==', projectId),
+      where('status', '==', 'Open')
+    );
+  }
 
   try {
     const snapshot = await getCountFromServer(q);
@@ -449,7 +463,7 @@ export const countProjectOpenIssues = async (projectId: string): Promise<number>
   } catch (error: any) {
     console.error(`issueService: Error counting open issues for project ${projectId}:`, error.message, error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error(`Firestore query for counting open issues (projectId: ${projectId}) requires a composite index. Please create it in the Firebase console. Expected fields: 'projectId' (ASC), 'status' (ASC). The error message from Firebase often provides a direct link to create it.`);
+      console.error(`Firestore query for counting open issues (projectId: ${projectId}) requires a composite index. Please create it in the Firebase console. Expected fields: 'projectId' (ASC), 'status' (ASC), 'projectOwnerUid' (ASC). The error message from Firebase often provides a direct link to create it.`);
     }
     return 0;
   }

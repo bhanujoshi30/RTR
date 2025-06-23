@@ -115,7 +115,7 @@ export default function DashboardPage() {
                   const subTaskCountPromise = countProjectSubTasks(project.id);
                   
                   console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectOpenIssues.`);
-                  const openIssueCountPromise = countProjectOpenIssues(project.id);
+                  const openIssueCountPromise = countProjectOpenIssues(project.id, user.uid);
 
                   const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
                     mainTaskCountPromise,
