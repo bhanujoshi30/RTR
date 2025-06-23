@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle, RotateCcw, Loader2, Eye } from 'lucide-react'; 
-import { formatDistanceToNow, format } from 'date-fns';
+import { formatDistanceToNow, format, isPast } from 'date-fns';
 import { deleteIssue, updateIssueStatus } from '@/services/issueService';
 import { getTaskById, updateTaskStatus as updateParentTaskStatus } from '@/services/taskService';
 import { useToast } from '@/hooks/use-toast';
@@ -45,6 +45,7 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
   
   const canChangeStatusOfThisIssue = isIssueOwner || (user && issue.assignedToUids?.includes(user.uid));
   const canEditOrDeleteThisIssue = isIssueOwner;
+  const isOverdue = issue.dueDate && isPast(issue.dueDate) && issue.status === 'Open';
 
 
   const handleInitiateStatusChange = (newStatus: IssueProgressStatus) => {
@@ -129,6 +130,12 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
               {issue.title}
             </CardTitle>
             <div className="flex gap-2">
+              {isOverdue && (
+                <Badge variant="destructive">
+                    <AlertTriangle className="mr-1 h-3 w-3" />
+                    Overdue
+                </Badge>
+              )}
               <Badge className={`${getSeverityBadgeColor(issue.severity)}`}>
                 {issue.severity}
               </Badge>

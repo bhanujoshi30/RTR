@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress'; 
-import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle, CheckCircle, RotateCcw } from 'lucide-react';
+import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle, CheckCircle, RotateCcw, IndianRupee } from 'lucide-react';
 import { formatDistanceToNow, format, differenceInCalendarDays } from 'date-fns';
 import { updateTaskStatus, deleteTask, getSubTasks } from '@/services/taskService';
 import { hasOpenIssues } from '@/services/issueService';
@@ -27,6 +27,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { ProgressReportDialog } from '@/components/attachments/ProgressReportDialog';
+import { numberToWordsInr } from '@/lib/currencyUtils';
 
 interface TaskCardProps {
   task: Task;
@@ -289,6 +290,12 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
           </div>
           {(!isActuallyMainTask && task.description) && (
             <CardDescription className="pt-1 line-clamp-2">{task.description}</CardDescription>
+          )}
+          {canViewFinancials && isCollectionTask && task.cost && task.cost > 0 && (
+            <div className="flex items-baseline gap-2 text-sm text-foreground pt-1">
+                <IndianRupee className="h-4 w-4 text-green-600 self-center" />
+                <span className="font-semibold text-green-700 dark:text-green-500">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(task.cost)}</span>
+            </div>
           )}
         </CardHeader>
         <CardContent className="space-y-3 pt-2 pb-4">

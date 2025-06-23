@@ -14,7 +14,7 @@ import { SubTaskList } from '@/components/tasks/SubTaskList';
 import { TaskForm } from '@/components/tasks/TaskForm';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle as AlertDialogTaskTitle, AlertDialogDescription as AlertDialogTaskDescription, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, Users, Camera, CheckCircle, RotateCcw } from 'lucide-react';
+import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, Edit, PlusCircle, Layers, Trash2, Users, Camera, CheckCircle, RotateCcw, IndianRupee } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -22,6 +22,7 @@ import { ProgressReportDialog } from '@/components/attachments/ProgressReportDia
 import { AttachmentList } from '@/components/attachments/AttachmentList';
 import { Timeline } from '@/components/timeline/Timeline';
 import { MainTaskTimeline } from '@/components/timeline/MainTaskTimeline';
+import { numberToWordsInr } from '@/lib/currencyUtils';
 
 
 export default function TaskDetailsPage() {
@@ -54,6 +55,7 @@ export default function TaskDetailsPage() {
   const canDeleteCurrentTask = isOwner; 
   const canAddSubTask = isOwner && isMainTask && !isCollectionTask;
   const canChangeCollectionStatus = isOwner && isCollectionTask;
+  const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
 
 
   const fetchTaskDetails = async () => {
@@ -288,6 +290,16 @@ export default function TaskDetailsPage() {
              {isCollectionTask && (
                  <CardDescription className="mt-2 text-lg">This is a collection task, serving as a payment reminder or milestone. {task.description}</CardDescription>
              )}
+            {canViewFinancials && isCollectionTask && task.cost && task.cost > 0 && (
+                <div className="pt-4">
+                    <div className="flex items-center text-base">
+                        <IndianRupee className="mr-2 h-4 w-4 text-green-600" />
+                        <span className="text-muted-foreground">Collection Amount:&nbsp;</span>
+                        <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(task.cost)}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(task.cost)}</p>
+                </div>
+            )}
           </CardHeader>
           <CardContent>
               {isSubTask && (
