@@ -354,7 +354,13 @@
     "reminderPlaceholder": "उदा., 7",
     "saveChanges": "बदलाव सहेजें",
     "addSubTaskBtn": "उप-कार्य जोड़ें",
-    "createMainTaskBtn": "मुख्य कार्य बनाएं"
+    "createMainTaskBtn": "मुख्य कार्य बनाएं",
+    "missingFields": "आवश्यक जानकारी गुम है",
+    "nameAndDateRequired": "नाम और नियत तारीख आवश्यक हैं।",
+    "invalidCost": "अमान्य लागत",
+    "costRequired": "संग्रह कार्यों के लिए एक सकारात्मक लागत आवश्यक है।",
+    "missingAssignment": "असाइनमेंट गुम है",
+    "assignMemberError": "कृपया उप-कार्य के लिए कम से कम एक सदस्य निर्दिष्ट करें।"
   },
   "issueForm": {
     "addTitle": "नया मुद्दा जोड़ें",

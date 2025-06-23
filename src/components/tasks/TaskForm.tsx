@@ -147,11 +147,19 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
       return;
     }
     if (!name || !dueDate) {
-        toast({ title: 'Missing Fields', description: 'Name and Due Date are required.', variant: 'destructive'});
+        toast({ title: t('taskForm.missingFields'), description: t('taskForm.nameAndDateRequired'), variant: 'destructive'});
         return;
     }
+    if (isSubTask && assignedUsers.length === 0) {
+      toast({
+        title: t('taskForm.missingAssignment'),
+        description: t('taskForm.assignMemberError'),
+        variant: 'destructive',
+      });
+      return;
+    }
      if (!isSubTask && taskType === 'collection' && (!cost || cost <= 0)) {
-        toast({ title: 'Invalid Cost', description: 'A positive cost is required for collection tasks.', variant: 'destructive'});
+        toast({ title: t('taskForm.invalidCost'), description: t('taskForm.costRequired'), variant: 'destructive'});
         return;
     }
 

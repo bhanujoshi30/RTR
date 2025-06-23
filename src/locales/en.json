@@ -354,7 +354,13 @@
     "reminderPlaceholder": "E.g., 7",
     "saveChanges": "Save Changes",
     "addSubTaskBtn": "Add Sub-task",
-    "createMainTaskBtn": "Create Main Task"
+    "createMainTaskBtn": "Create Main Task",
+    "missingFields": "Missing Fields",
+    "nameAndDateRequired": "Name and Due Date are required.",
+    "invalidCost": "Invalid Cost",
+    "costRequired": "A positive cost is required for collection tasks.",
+    "missingAssignment": "Missing Assignment",
+    "assignMemberError": "Please assign at least one member to the sub-task."
   },
   "issueForm": {
     "addTitle": "Add New Issue",
