@@ -1,3 +1,4 @@
+
 // This file is no longer used and can be deleted.
 // The "Add Issue" functionality has been moved back to a dialog in IssueList.tsx.
 "use client";
