@@ -9,7 +9,6 @@ import { IssueCard } from '@/components/issues/IssueCard';
 import { Button } from '@/components/ui/button';
 import { Loader2, PlusCircle, Bug } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import Link from 'next/link';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
 import { IssueForm } from './IssueForm';
 
