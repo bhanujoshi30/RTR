@@ -253,7 +253,8 @@
     "noTasksOwner": {
       "title": "No Main Tasks Yet",
       "message": "No main tasks have been created for this project yet."
-    }
+    },
+    "loadingSubTasks": "Loading sub-tasks..."
   },
   "issueCard": {
     "overdue": "Overdue",

@@ -9,6 +9,7 @@ import { Loader2, ListChecks } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { query, where, getDocs, orderBy, collection, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { useTranslation } from '@/hooks/useTranslation';
 
 
 // This helper function is now local to avoid service dependency issues
@@ -44,6 +45,7 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
   
   const isViewerMainTaskOwner = user?.uid === mainTaskOwnerUid;
   const isAdmin = user?.role === 'admin';
@@ -145,7 +147,7 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Loading sub-tasks...</p>
+        <p className="ml-2">{t('taskList.loadingSubTasks')}</p>
       </div>
     );
   }
