@@ -253,6 +253,12 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
               <CardTitle className="font-headline text-lg">{task.name}</CardTitle>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
+              {task.isOverdue && (
+                <Badge variant="destructive">
+                  <AlertTriangle className="mr-1 h-3 w-3" />
+                  Overdue
+                </Badge>
+              )}
               {canViewFinancials && showReminder && (
                 <Badge variant="destructive" className="animate-pulse">
                     Reminder: {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left

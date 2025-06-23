@@ -1,7 +1,7 @@
 
 
 import { db } from '@/lib/firebase';
-import type { Task, TaskStatus, UserRole, AggregatedEvent, ProjectAggregatedEvent, TimelineEvent } from '@/types';
+import type { Task, TaskStatus, UserRole, AggregatedEvent, ProjectAggregatedEvent, TimelineEvent, Issue } from '@/types';
 import {
   collection,
   addDoc,
@@ -61,6 +61,7 @@ export const mapDocumentToTask = (docSnapshot: any): Task => {
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
     progress: data.progress, // Will be populated for main tasks by calling functions
     openIssueCount: data.openIssueCount, // Will be populated for main tasks
+    isOverdue: data.isOverdue, // Will be populated for main tasks
   };
 };
 
@@ -228,31 +229,59 @@ export const getProjectMainTasks = async (projectId: string, filterByIds?: strin
             mainTask.progress = 0;
             mainTask.openIssueCount = 0;
             // Do not derive status for collection tasks
-            return;
-        }
+        } else {
+            const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
+            let totalOpenIssues = 0;
+            relatedSubTasks.forEach(subTask => {
+                totalOpenIssues += (issuesBySubTaskId[subTask.id] || 0);
+            });
+            mainTask.openIssueCount = totalOpenIssues;
 
-        const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
-        let totalOpenIssues = 0;
-        relatedSubTasks.forEach(subTask => {
-            totalOpenIssues += (issuesBySubTaskId[subTask.id] || 0);
-        });
-        mainTask.openIssueCount = totalOpenIssues;
-
-        const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
-        mainTask.progress = relatedSubTasks.length > 0 ? Math.round((completedSubTasks / relatedSubTasks.length) * 100) : 0;
-        
-        // Derive status from progress for standard main tasks
-        if (relatedSubTasks.length > 0) {
-            if (mainTask.progress === 100) {
-                mainTask.status = 'Completed';
-            } else if (mainTask.progress > 0 || relatedSubTasks.some(st => st.status === 'In Progress')) {
-                mainTask.status = 'In Progress';
+            const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
+            mainTask.progress = relatedSubTasks.length > 0 ? Math.round((completedSubTasks / relatedSubTasks.length) * 100) : 0;
+            
+            // Derive status from progress for standard main tasks
+            if (relatedSubTasks.length > 0) {
+                if (mainTask.progress === 100) {
+                    mainTask.status = 'Completed';
+                } else if (mainTask.progress > 0 || relatedSubTasks.some(st => st.status === 'In Progress')) {
+                    mainTask.status = 'In Progress';
+                } else {
+                    mainTask.status = 'To Do';
+                }
             } else {
                 mainTask.status = 'To Do';
             }
-        } else {
-            mainTask.status = 'To Do';
         }
+        
+        // Calculate Overdue Status
+        const now = new Date();
+        let overdue = false;
+        if (mainTask.dueDate && now > mainTask.dueDate && mainTask.status !== 'Completed') {
+            overdue = true;
+        }
+
+        const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
+        if (!overdue) {
+            for (const subTask of relatedSubTasks) {
+                if (subTask.dueDate && now > subTask.dueDate && subTask.status !== 'Completed') {
+                    overdue = true;
+                    break;
+                }
+            }
+        }
+        
+        if (!overdue) {
+            const subTaskIds = relatedSubTasks.map(st => st.id);
+            const relatedIssues = openIssues.filter(issue => subTaskIds.includes(issue.taskId));
+            for (const issue of relatedIssues) {
+                if (issue.dueDate && now > issue.dueDate && issue.status === 'Open') {
+                    overdue = true;
+                    break;
+                }
+            }
+        }
+        mainTask.isOverdue = overdue;
     });
 
     mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));

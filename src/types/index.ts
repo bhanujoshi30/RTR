@@ -46,6 +46,7 @@ export interface Task {
   updatedAt?: Date;
   progress?: number; // For main tasks: % completion based on sub-tasks
   openIssueCount?: number;
+  isOverdue?: boolean;
 }
 
 export interface Issue {

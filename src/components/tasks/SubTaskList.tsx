@@ -2,8 +2,8 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { countOpenIssuesForTask } from '@/services/issueService';
-import type { Task } from '@/types';
+import { getOpenIssuesForTaskIds } from '@/services/issueService';
+import type { Task, Issue } from '@/types';
 import { TaskCard } from './TaskCard';
 import { Loader2, ListChecks } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -82,15 +82,36 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
 
       const querySnapshot = await getDocs(subTasksQuery);
       const fetchedSubTasks = querySnapshot.docs.map(mapDocumentToTask);
+      
+      if (fetchedSubTasks.length > 0) {
+        const subTaskIds = fetchedSubTasks.map(t => t.id);
+        const openIssues = await getOpenIssuesForTaskIds(subTaskIds);
+        
+        const issuesByTaskId = openIssues.reduce((acc, issue) => {
+            if (!acc[issue.taskId]) {
+                acc[issue.taskId] = [];
+            }
+            acc[issue.taskId].push(issue);
+            return acc;
+        }, {} as Record<string, Issue[]>);
 
-      const subTasksWithIssueCounts = await Promise.all(
-        fetchedSubTasks.map(async (task) => {
-          const openIssueCount = await countOpenIssuesForTask(task.id);
-          return { ...task, openIssueCount };
-        })
-      );
+        const now = new Date();
+        const subTasksWithDetails = fetchedSubTasks.map(subTask => {
+            const relatedIssues = issuesByTaskId[subTask.id] || [];
+            
+            const isTaskItselfOverdue = subTask.dueDate && now > subTask.dueDate && subTask.status !== 'Completed';
+            const isAnyIssueOverdue = relatedIssues.some(issue => issue.dueDate && now > issue.dueDate && issue.status === 'Open');
 
-      setSubTasks(subTasksWithIssueCounts);
+            return {
+                ...subTask,
+                openIssueCount: relatedIssues.length,
+                isOverdue: isTaskItselfOverdue || isAnyIssueOverdue,
+            };
+        });
+        setSubTasks(subTasksWithDetails);
+      } else {
+         setSubTasks([]);
+      }
 
     } catch (err: any) {
       console.error('[SubTaskList] Error fetching sub-tasks:', err);
