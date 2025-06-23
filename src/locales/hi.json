@@ -135,7 +135,9 @@
     "newAttachments": "नए अनुलग्नक",
     "noPhotosAttached": "आज कोई फोटो संलग्न नहीं किया गया।",
     "languageChangedTitle": "भाषा बदल गई है",
-    "languageChangedDesc": "रिपोर्ट साफ़ कर दी गई है। कृपया इसे नई भाषा में फिर से उत्पन्न करें।"
+    "languageChangedDesc": "रिपोर्ट साफ़ कर दी गई है। कृपया इसे नई भाषा में फिर से उत्पन्न करें।",
+    "newIssuePrefix": "नया मुद्दा:",
+    "closedIssuePrefix": "बंद मुद्दा:"
   },
   "users": {
     "pageTitle": "उपयोगकर्ता प्रबंधन",

@@ -340,7 +340,7 @@ export default function DprPage() {
                                     {rawReportData.tasksCompleted.length > 0 || rawReportData.issuesClosed.length > 0 ? (
                                         <ul className="list-disc pl-5 text-sm text-muted-foreground">
                                             {rawReportData.tasksCompleted.map(t => <li key={t.id}>{t.name}</li>)}
-                                            {rawReportData.issuesClosed.map(i => <li key={i.id}>Closed Issue: {i.title}</li>)}
+                                            {rawReportData.issuesClosed.map(i => <li key={i.id}>{t('dpr.closedIssuePrefix')} {i.title}</li>)}
                                         </ul>
                                     ) : <p className="text-sm text-muted-foreground">{t('dpr.noTasksCompleted')}</p>}
                                 </div>
@@ -349,7 +349,7 @@ export default function DprPage() {
                                     {rawReportData.tasksCreated.length > 0 || rawReportData.issuesOpened.length > 0 ? (
                                         <ul className="list-disc pl-5 text-sm text-muted-foreground">
                                             {rawReportData.tasksCreated.map(t => <li key={t.id}>{t.name}</li>)}
-                                            {rawReportData.issuesOpened.map(i => <li key={i.id}>New Issue: {i.title} ({i.severity})</li>)}
+                                            {rawReportData.issuesOpened.map(i => <li key={i.id}>{t('dpr.newIssuePrefix')} {i.title} ({t(`severity.${i.severity.toLowerCase()}`)})</li>)}
                                         </ul>
                                     ) : <p className="text-sm text-muted-foreground">{t('dpr.noTasksOpened')}</p>}
                                 </div>

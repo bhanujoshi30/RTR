@@ -50,8 +50,8 @@
     "subTasks": "{{count}} Sub-tasks",
     "openIssue": "{{count}} Open Issue",
     "openIssues": "{{count}} Open Issues",
-    "subTaskAssignedToYou": "{{count}} Sub-task (assigned to you)",
-    "subTasksAssignedToYou": "{{count}} Sub-tasks (assigned to you)"
+    "subTaskAssignedToYou": "{{count}} sub-task assigned to you",
+    "subTasksAssignedToYou": "{{count}} sub-tasks assigned to you"
   },
   "projectDetails": {
     "backToDashboard": "Back to Dashboard",
@@ -135,7 +135,9 @@
     "newAttachments": "New Attachments",
     "noPhotosAttached": "No photos were attached today.",
     "languageChangedTitle": "Language Changed",
-    "languageChangedDesc": "The report has been cleared. Please generate it again for the new language."
+    "languageChangedDesc": "The report has been cleared. Please generate it again for the new language.",
+    "newIssuePrefix": "New Issue:",
+    "closedIssuePrefix": "Closed Issue:"
   },
   "users": {
     "pageTitle": "User Management",
