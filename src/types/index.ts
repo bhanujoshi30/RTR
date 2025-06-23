@@ -182,6 +182,10 @@ export interface DprData {
     total: number;
   };
   attachments: Pick<Attachment, 'id' | 'url' | 'filename' | 'ownerName'>[];
+  timelineEvents: {
+    description: string;
+    authorName: string;
+  }[];
 }
 
 export interface DprSummary {
