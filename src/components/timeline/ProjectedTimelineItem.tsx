@@ -3,6 +3,7 @@
 
 import type { Task } from '@/types';
 import { format, differenceInCalendarDays } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { Layers, ListChecks, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -34,7 +35,8 @@ interface ProjectedTimelineItemProps {
 }
 
 export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTimelineItemProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   const { icon: Icon, label } = getTaskTypeInfo(task, t);
   const { user } = useAuth();
   const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
@@ -71,7 +73,7 @@ export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTime
              </div>
           </div>
           <div className="text-right flex-shrink-0">
-              <p className="text-sm font-medium text-foreground">{task.dueDate ? format(task.dueDate, 'PP') : ''}</p>
+              <p className="text-sm font-medium text-foreground">{task.dueDate ? format(task.dueDate, 'PP', { locale: dateLocale }) : ''}</p>
               <p className="text-xs text-muted-foreground">{t('projectedTimeline.dueDate')}</p>
           </div>
       </div>
@@ -89,7 +91,7 @@ export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTime
       {canViewFinancials && isCollectionTask && task.cost && task.cost > 0 && (
          <div className="flex items-baseline gap-2 text-sm text-foreground pt-1">
             <span className="font-semibold text-green-700 dark:text-green-500">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(task.cost)}</span>
-            <span className="text-xs text-muted-foreground">({numberToWordsInr(task.cost)})</span>
+            <span className="text-xs text-muted-foreground">({numberToWordsInr(task.cost, locale)})</span>
          </div>
       )}
 

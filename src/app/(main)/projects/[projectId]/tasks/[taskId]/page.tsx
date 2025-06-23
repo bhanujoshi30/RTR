@@ -18,6 +18,7 @@ import { Loader2, ArrowLeft, CalendarDays, Info, ListChecks, Paperclip, Clock, E
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { ProgressReportDialog } from '@/components/attachments/ProgressReportDialog';
 import { AttachmentList } from '@/components/attachments/AttachmentList';
 import { Timeline } from '@/components/timeline/Timeline';
@@ -39,6 +40,7 @@ export default function TaskDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   
   const [showEditTaskDialog, setShowEditTaskDialog] = useState(false);
   const [showAddSubTaskDialog, setShowAddSubTaskDialog] = useState(false);
@@ -331,18 +333,18 @@ export default function TaskDetailsPage() {
               {isSubTask && (
                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                       <div>
-                          <p className="text-sm font-medium text-muted-foreground">{t('taskDetails.createdAt')}</p>
+                          <p className="text-sm font-medium text-muted-foreground">{t('common.createdAt')}</p>
                           <div className="flex items-center text-base">
                               <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                              {task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}
+                              {task.createdAt ? format(task.createdAt, 'PPP p', { locale: dateLocale }) : 'N/A'}
                           </div>
                       </div>
                       {task.dueDate && (
                           <div>
-                              <p className="text-sm font-medium text-muted-foreground">{t('taskDetails.dueDate')}</p>
+                              <p className="text-sm font-medium text-muted-foreground">{t('common.dueDate')}</p>
                               <div className="flex items-center text-base">
                                   <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                                  {format(task.dueDate, 'PPP')}
+                                  {format(task.dueDate, 'PPP', { locale: dateLocale })}
                               </div>
                           </div>
                       )}
@@ -351,8 +353,8 @@ export default function TaskDetailsPage() {
                {isMainTask && (
                    <div className="flex items-center text-sm text-muted-foreground">
                       <CalendarDays className="mr-2 h-4 w-4" />
-                      {t('taskDetails.createdLabel')} {task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}
-                      {task.dueDate && <span className="ml-2 border-l pl-2">{t('taskDetails.dueByLabel')} {format(task.dueDate, 'PPP')}</span>}
+                      {t('taskDetails.createdLabel')} {task.createdAt ? format(task.createdAt, 'PPP p', { locale: dateLocale }) : 'N/A'}
+                      {task.dueDate && <span className="ml-2 border-l pl-2">{t('taskDetails.dueByLabel')} {format(task.dueDate, 'PPP', { locale: dateLocale })}</span>}
                    </div>
                )}
           </CardContent>
@@ -435,7 +437,7 @@ export default function TaskDetailsPage() {
                 <CardContent className="space-y-4">
                   <div><h4 className="font-semibold">{t('taskDetails.infoName')}</h4><p>{task.name}</p></div>
                   {task.description && (<div><h4 className="font-semibold">{t('taskDetails.infoDesc')}</h4><p className="whitespace-pre-wrap">{task.description}</p></div>)}
-                  <div><h4 className="font-semibold">{t('taskDetails.infoStatus')}</h4><p>{task.status}</p></div>
+                  <div><h4 className="font-semibold">{t('taskDetails.infoStatus')}</h4><p>{t(`status.${task.status.toLowerCase().replace(/ /g, '')}`)}</p></div>
                   {task.assignedToNames && task.assignedToNames.length > 0 && (
                     <div>
                       <h4 className="font-semibold">{t('taskDetails.infoAssignedTo')}</h4>
@@ -446,8 +448,8 @@ export default function TaskDetailsPage() {
                     <h4 className="font-semibold">{t('taskDetails.infoCreatedBy')}</h4>
                     <p>{ownerDisplayName || task.ownerUid}</p>
                   </div>
-                  <div><h4 className="font-semibold">{t('taskDetails.infoCreatedAt')}</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
-                  {task.dueDate && (<div><h4 className="font-semibold">{t('taskDetails.infoDueDate')}</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}
+                  <div><h4 className="font-semibold">{t('common.createdAt')}</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p', { locale: dateLocale }) : 'N/A'}</p></div>
+                  {task.dueDate && (<div><h4 className="font-semibold">{t('common.dueDate')}</h4><p>{format(task.dueDate, 'PPP', { locale: dateLocale })}</p></div>)}
                 </CardContent>
               </Card>
             </TabsContent>

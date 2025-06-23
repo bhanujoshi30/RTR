@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { TimelineEventCard } from './TimelineEventCard';
 import { ListChecks } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -72,7 +73,8 @@ const renderDescriptionWithLink = (event: TimelineEvent, t: (key: string, params
 
 export function MainTaskTimelineEventCard({ event }: { event: AggregatedEvent }) {
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   const isClient = user?.role === 'client';
 
   // Case 1: It's a group of sub-task events
@@ -86,7 +88,7 @@ export function MainTaskTimelineEventCard({ event }: { event: AggregatedEvent })
         ? t('timeline.eventsOnSubTask_one')
         : t('timeline.eventsOnSubTask_other', { count: events.length });
 
-    const latestActivityText = t('timeline.latestActivity', { time: formatDistanceToNow(event.timestamp, { addSuffix: true }) });
+    const latestActivityText = t('timeline.latestActivity', { time: formatDistanceToNow(event.timestamp, { addSuffix: true, locale: dateLocale }) });
 
 
     // For clients, render a simplified, non-interactive view
@@ -138,7 +140,7 @@ export function MainTaskTimelineEventCard({ event }: { event: AggregatedEvent })
                         <div className="absolute -left-1.5 top-2 h-1.5 w-1.5 rounded-full bg-border" />
                         {renderDescriptionWithLink(subEvent, t)}
                         <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(subEvent.timestamp, { addSuffix: true })}
+                          {formatDistanceToNow(subEvent.timestamp, { addSuffix: true, locale: dateLocale })}
                         </p>
                       </div>
                     ))}

@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers, Wallet, IndianRupee, Loader2 } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { numberToWordsInr } from '@/lib/currencyUtils';
 import { useAuth } from '@/hooks/useAuth';
 import { useState } from 'react';
@@ -21,7 +22,8 @@ interface ProjectCardProps {
 
 export function ProjectCard({ project }: ProjectCardProps) {
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
   const [isNavigating, setIsNavigating] = useState(false);
 
@@ -122,7 +124,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                         <IndianRupee className="mr-2 h-4 w-4 text-green-600" />
                         <span className="text-foreground font-medium">{t('projectDetails.estCost')} {new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(project.totalCost)}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost)}</p>
+                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost, locale)}</p>
                 </div>
             )}
         </div>
@@ -130,7 +132,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
       <CardFooter className="flex flex-col items-start gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
          <div className="flex items-center text-xs text-muted-foreground">
           <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-          Created {project.createdAt ? formatDistanceToNow(project.createdAt, { addSuffix: true }) : 'recently'}
+          {t('common.created')} {project.createdAt ? formatDistanceToNow(project.createdAt, { addSuffix: true, locale: dateLocale }) : 'recently'}
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/projects/${project.id}`} onClick={handleNavigation}>

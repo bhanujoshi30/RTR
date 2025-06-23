@@ -16,6 +16,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
 
@@ -126,7 +127,8 @@ const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) 
 
 
 export function TimelineEventCard({ event, hideIcon = false }: TimelineEventCardProps) {
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   const Icon = eventIcons[event.type] || GitCommit;
 
   return (
@@ -139,7 +141,7 @@ export function TimelineEventCard({ event, hideIcon = false }: TimelineEventCard
       <div className={cn("flex-1 space-y-1", !hideIcon && "pl-8")}>
         {renderDescription(event, t)}
         <p className="text-xs text-muted-foreground">
-          {formatDistanceToNow(event.timestamp, { addSuffix: true })}
+          {formatDistanceToNow(event.timestamp, { addSuffix: true, locale: dateLocale })}
         </p>
       </div>
     </div>

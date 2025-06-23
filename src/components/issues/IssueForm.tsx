@@ -13,6 +13,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Save, Loader2, Users, X, ImagePlus, MapPin, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -41,7 +42,8 @@ interface Location {
 export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueFormProps) {
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
 
   // Form State
   const [title, setTitle] = useState(issue?.title || '');
@@ -398,16 +400,17 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               </Select>
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium">{t('issueForm.dueDate')}</label>
+              <label className="text-sm font-medium">{t('common.dueDate')}</label>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dueDate ? format(dueDate, "PPP") : <span>{t('issueForm.pickDate')}</span>}
+                    {dueDate ? format(dueDate, "PPP", { locale: dateLocale }) : <span>{t('issueForm.pickDate')}</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
+                    locale={dateLocale}
                     mode="single"
                     selected={dueDate}
                     onSelect={setDueDate}
@@ -417,7 +420,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               </Popover>
                {mainTaskDetails?.dueDate && (
                 <p className="text-xs text-muted-foreground pt-1">
-                    {t('issueForm.dateConstraint', { startDate: format(mainTaskDetails.createdAt!, 'PP'), endDate: format(mainTaskDetails.dueDate, 'PP') })}
+                    {t('issueForm.dateConstraint', { startDate: format(mainTaskDetails.createdAt!, 'PP', { locale: dateLocale }), endDate: format(mainTaskDetails.dueDate, 'PP', { locale: dateLocale }) })}
                 </p>
               )}
             </div>

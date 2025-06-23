@@ -16,6 +16,7 @@ import { TaskList } from '@/components/tasks/TaskList';
 import { Loader2, ArrowLeft, Edit, PlusCircle, CalendarDays, Trash2, Layers, Clock, User, GanttChartSquare, Camera, CheckCircle, IndianRupee } from 'lucide-react'; 
 import { useAuth } from '@/hooks/useAuth';
 import { format } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -42,7 +43,8 @@ export default function ProjectDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   const projectId = params.projectId as string;
   
   const [project, setProject] = useState<Project | null>(null);
@@ -211,7 +213,7 @@ export default function ProjectDetailsPage() {
                       {attendanceStatus.submitted ? (
                           <Button variant="outline" size="sm" disabled>
                               <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                              {t('projectDetails.submittedAt')} {attendanceStatus.timestamp ? format(attendanceStatus.timestamp, 'p') : ''}
+                              {t('common.submittedAt')} {attendanceStatus.timestamp ? format(attendanceStatus.timestamp, 'p', { locale: dateLocale }) : ''}
                           </Button>
                       ) : (
                           <Button variant="outline" size="sm" onClick={() => setShowAttendanceDialog(true)}>
@@ -279,10 +281,10 @@ export default function ProjectDetailsPage() {
               </div>
             </div>
             <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.createdAt')}</p>
+              <p className="text-sm font-medium text-muted-foreground">{t('common.createdAt')}</p>
               <div className="flex items-center text-base">
                 <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                {project.createdAt ? format(project.createdAt, 'PPP') : 'N/A'}
+                {project.createdAt ? format(project.createdAt, 'PPP', { locale: dateLocale }) : 'N/A'}
               </div>
             </div>
             {project.clientName && (
@@ -301,7 +303,7 @@ export default function ProjectDetailsPage() {
                         <span className="text-muted-foreground">{t('projectDetails.estCost')}&nbsp;</span>
                         <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(project.totalCost)}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost)}</p>
+                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost, locale)}</p>
                 </div>
             )}
           </div>

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress'; 
 import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle, CheckCircle, RotateCcw, IndianRupee } from 'lucide-react';
 import { formatDistanceToNow, format, differenceInCalendarDays } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { updateTaskStatus, deleteTask } from '@/services/taskService';
 import { hasOpenIssues } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
@@ -42,7 +43,8 @@ const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = false, isSubTaskView = false }: TaskCardProps) {
   const { toast } = useToast();
   const router = useRouter();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   const [task, setTask] = useState<Task>(initialTask);
   const [showProofDialog, setShowProofDialog] = useState(false);
   const { user } = useAuth();
@@ -273,17 +275,17 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
           <div className="flex flex-col gap-y-2">
             <div className="flex items-center text-xs text-muted-foreground">
               <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-              Created {task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true }) : 'N/A'}
+              {t('common.created')} {task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true, locale: dateLocale }) : 'N/A'}
               {task.dueDate && (
                 <span className="ml-2 border-l pl-2">
-                  Due: {format(task.dueDate, 'PP')}
+                  {t('common.due')}: {format(task.dueDate, 'PP', { locale: dateLocale })}
                 </span>
               )}
             </div>
             {!isActuallyMainTask && task.assignedToNames && task.assignedToNames.length > 0 && (
               <div className="flex items-center text-xs text-muted-foreground">
                 <Users className="mr-1.5 h-3.5 w-3.5" />
-                Assigned to: {displayAssignedNames}
+                {t('common.assignedTo')} {displayAssignedNames}
               </div>
             )}
           </div>

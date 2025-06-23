@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CalendarDays, Edit2, Trash2, Users, CheckSquare, AlertTriangle, RotateCcw, Loader2, Eye } from 'lucide-react'; 
 import { formatDistanceToNow, format, isPast } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { deleteIssue, updateIssueStatus } from '@/services/issueService';
 import { getTaskById, updateTaskStatus as updateParentTaskStatus } from '@/services/taskService';
 import { useToast } from '@/hooks/use-toast';
@@ -37,7 +38,8 @@ interface IssueCardProps {
 
 export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue }: IssueCardProps) {
   const { toast } = useToast();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   const [statusChangeState, setStatusChangeState] = useState<{ open: boolean; newStatus: IssueProgressStatus | null }>({ open: false, newStatus: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -154,17 +156,17 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
           <div className="flex flex-col gap-2 text-xs text-muted-foreground">
             <div className="flex items-center">
               <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-              Created {issue.createdAt ? formatDistanceToNow(issue.createdAt, { addSuffix: true }) : 'N/A'}
+              {t('common.created')} {issue.createdAt ? formatDistanceToNow(issue.createdAt, { addSuffix: true, locale: dateLocale }) : 'N/A'}
               {issue.dueDate && ( 
                 <span className="ml-2 border-l pl-2">
-                  Due: {format(issue.dueDate, 'PP')}
+                  {t('common.due')}: {format(issue.dueDate, 'PP', { locale: dateLocale })}
                 </span>
               )}
             </div>
             {issue.assignedToNames && issue.assignedToNames.length > 0 && ( 
               <div className="flex items-center">
                 <Users className="mr-1.5 h-3.5 w-3.5" />
-                Assigned to: {displayAssignedNames}
+                {t('common.assignedTo')} {displayAssignedNames}
               </div>
             )}
           </div>

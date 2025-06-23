@@ -6,6 +6,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { MainTaskTimelineEventCard } from './MainTaskTimelineEventCard';
 import { Layers } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { useTranslation } from '@/hooks/useTranslation';
 
 interface ProjectTimelineEventCardProps {
@@ -14,13 +15,14 @@ interface ProjectTimelineEventCardProps {
 
 export function ProjectTimelineEventCard({ eventGroup }: ProjectTimelineEventCardProps) {
   const { mainTaskInfo, events } = eventGroup.data;
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
 
   const relevantEventsText = events.length === 1 
     ? t('timeline.relevantEvent', { count: 1 }) 
     : t('timeline.relevantEvents', { count: events.length });
     
-  const latestActivityText = t('timeline.latestActivity', { time: formatDistanceToNow(eventGroup.timestamp, { addSuffix: true }) });
+  const latestActivityText = t('timeline.latestActivity', { time: formatDistanceToNow(eventGroup.timestamp, { addSuffix: true, locale: dateLocale }) });
 
   return (
     <Accordion type="single" collapsible className="w-full bg-card rounded-lg border shadow-sm">

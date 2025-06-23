@@ -13,6 +13,7 @@ import { getUserProjects } from '@/services/projectService';
 import { getDprData } from '@/services/dprService';
 import { generateDpr } from '@/ai/flows/generate-dpr-flow';
 import { format, startOfDay } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 import Image from 'next/image';
 import jsPDF from 'jspdf';
@@ -45,6 +46,7 @@ export default function DprPage() {
     const router = useRouter();
     const { toast } = useToast();
     const { t, locale } = useTranslation();
+    const dateLocale = locale === 'hi' ? hi : enUS;
 
     // State for controls
     const [projects, setProjects] = useState<Project[]>([]);
@@ -219,7 +221,7 @@ export default function DprPage() {
                         {t('dpr.pageTitle')}
                     </h1>
                      <p className="text-muted-foreground mt-1">
-                        {t('dpr.reportForToday')} {format(selectedDate, 'PPP')}
+                        {t('dpr.reportForToday')} {format(selectedDate, 'PPP', { locale: dateLocale })}
                     </p>
                 </div>
             </div>
@@ -272,7 +274,7 @@ export default function DprPage() {
                     <div className="space-y-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle>{t('dpr.summaryTitle')} {rawReportData.projectName} {t('dpr.on')} {format(selectedDate, 'PPP')}</CardTitle>
+                                <CardTitle>{t('dpr.summaryTitle')} {rawReportData.projectName} {t('dpr.on')} {format(selectedDate, 'PPP', { locale: dateLocale })}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div>

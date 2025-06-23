@@ -12,22 +12,27 @@ import type { AttendanceRecord, User as AppUser } from '@/types';
 import { getAttendanceForUser } from '@/services/attendanceService';
 import { getAllUsers } from '@/services/userService';
 import { format, isSameMonth, addDays, isBefore, startOfToday, startOfMonth } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useTranslation } from '@/hooks/useTranslation';
 
 const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRecord[] | null, selectedDate?: Date }) => {
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
+
   if (!selectedDate) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Attendance Details</CardTitle>
-          <CardDescription>Select a user and a highlighted day on the calendar to view details.</CardDescription>
+          <CardTitle>{t('attendance.detailsTitle')}</CardTitle>
+          <CardDescription>{t('attendance.detailsDesc')}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center text-center h-96">
           <CalendarCheck className="h-16 w-16 text-muted-foreground/50" />
-          <p className="mt-4 text-muted-foreground">No date selected</p>
+          <p className="mt-4 text-muted-foreground">{t('attendance.noDateSelected')}</p>
         </CardContent>
       </Card>
     );
@@ -37,12 +42,12 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Details for {format(selectedDate, 'PPP')}</CardTitle>
+          <CardTitle>{t('attendance.detailsFor')} {format(selectedDate, 'PPP', { locale: dateLocale })}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center text-center h-96">
           <XCircle className="h-16 w-16 text-destructive/80" />
-          <p className="mt-4 text-foreground font-semibold">No Attendance Recorded</p>
-          <p className="text-muted-foreground text-sm">There is no attendance record for this day.</p>
+          <p className="mt-4 text-foreground font-semibold">{t('attendance.noAttendanceRecorded')}</p>
+          <p className="text-muted-foreground text-sm">{t('attendance.noRecordForDay')}</p>
         </CardContent>
       </Card>
     );
@@ -51,9 +56,9 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Details for {format(selectedDate, 'PPP')}</CardTitle>
+        <CardTitle>{t('attendance.detailsFor')} {format(selectedDate, 'PPP', { locale: dateLocale })}</CardTitle>
         <CardDescription>
-          {records[0].userName} submitted attendance for {records.length} project{records.length > 1 ? 's' : ''} today.
+          {records[0].userName} {t('attendance.submittedAttendanceFor')} {records.length} {t('attendance.projectsToday')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -62,15 +67,15 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
                  <div className="flex justify-between items-start">
                     <div>
                         {record.projectExists === false ? (
-                           <p className="font-semibold flex items-center gap-2 text-muted-foreground"><FolderX className="h-4 w-4 text-destructive" />{record.projectName} (Deleted)</p>
+                           <p className="font-semibold flex items-center gap-2 text-muted-foreground"><FolderX className="h-4 w-4 text-destructive" />{record.projectName} {t('attendance.deletedProject')}</p>
                         ) : (
                            <p className="font-semibold flex items-center gap-2"><Building className="h-4 w-4 text-primary" />{record.projectName}</p>
                         )}
-                        <p className="text-xs text-muted-foreground">Submitted at {format(record.timestamp, 'p')}</p>
+                        <p className="text-xs text-muted-foreground">{t('common.submittedAt')} {format(record.timestamp, 'p', { locale: dateLocale })}</p>
                     </div>
                     <Button asChild variant="outline" size="sm">
                         <Link href={record.photoUrl} target="_blank" rel="noopener noreferrer">
-                           View Photo
+                           {t('attendance.viewPhoto')}
                         </Link>
                     </Button>
                 </div>
@@ -82,7 +87,7 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
                 {record.location ? (
                     <div className="text-sm">
                         <p className="whitespace-normal break-words text-foreground">
-                        {record.location.address || 'Address not available'}
+                        {record.location.address || t('attendance.addressNotAvailable')}
                         </p>
                         <a
                             href={`https://www.google.com/maps?q=${record.location.latitude},${record.location.longitude}`}
@@ -94,7 +99,7 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
                         </a>
                     </div>
                 ) : (
-                    <p className="text-sm text-muted-foreground">Location not available</p>
+                    <p className="text-sm text-muted-foreground">{t('attendance.locationNotAvailable')}</p>
                 )}
             </div>
         ))}
@@ -103,28 +108,33 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
   );
 };
 
-const AttendanceSummaryCard = ({ present, absent }: { present: number, absent: number }) => (
-    <Card>
-        <CardHeader>
-            <CardTitle className="flex items-center gap-2"><BarChart className="h-5 w-5" /> Monthly Summary</CardTitle>
-            <CardDescription>Attendance for the selected month.</CardDescription>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-4 text-center">
-            <div>
-                <p className="text-2xl font-bold text-green-600">{present}</p>
-                <p className="text-sm text-muted-foreground">Days Present</p>
-            </div>
-             <div>
-                <p className="text-2xl font-bold text-red-600">{absent}</p>
-                <p className="text-sm text-muted-foreground">Days Absent</p>
-            </div>
-        </CardContent>
-    </Card>
-)
+const AttendanceSummaryCard = ({ present, absent }: { present: number, absent: number }) => {
+    const { t } = useTranslation();
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle className="flex items-center gap-2"><BarChart className="h-5 w-5" /> {t('attendance.monthlySummary')}</CardTitle>
+                <CardDescription>{t('attendance.monthlySummaryDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-2 gap-4 text-center">
+                <div>
+                    <p className="text-2xl font-bold text-green-600">{present}</p>
+                    <p className="text-sm text-muted-foreground">{t('attendance.daysPresent')}</p>
+                </div>
+                 <div>
+                    <p className="text-2xl font-bold text-red-600">{absent}</p>
+                    <p className="text-sm text-muted-foreground">{t('attendance.daysAbsent')}</p>
+                </div>
+            </CardContent>
+        </Card>
+    )
+}
 
 export default function AttendancePage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
 
   const [users, setUsers] = useState<AppUser[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(true);
@@ -191,10 +201,10 @@ export default function AttendancePage() {
         setSelectedDateRecords(null);
         return;
     }
-    const dateString = format(selectedDate, 'yyyy-MM-dd');
+    const dateString = format(selectedDate, 'yyyy-MM-dd', { locale: dateLocale });
     const records = allUserAttendance.filter(rec => rec.date === dateString);
     setSelectedDateRecords(records);
-  }, [selectedDate, allUserAttendance, selectedUserId]);
+  }, [selectedDate, allUserAttendance, selectedUserId, dateLocale]);
 
   useEffect(() => {
     updateSelectedDateRecords();
@@ -216,14 +226,14 @@ export default function AttendancePage() {
     let dayIterator = startOfMonth(month);
 
     while (isSameMonth(dayIterator, month) && isBefore(dayIterator, today)) {
-        const dateString = format(dayIterator, 'yyyy-MM-dd');
+        const dateString = format(dayIterator, 'yyyy-MM-dd', { locale: dateLocale });
         if (!attendedDates.has(dateString)) {
             missed.push(new Date(dayIterator));
         }
         dayIterator = addDays(dayIterator, 1);
     }
     return missed;
-  }, [allUserAttendance, month, selectedUserId]);
+  }, [allUserAttendance, month, selectedUserId, dateLocale]);
 
   const summaryStats = useMemo(() => {
     if (!selectedUserId) return { present: 0, absent: 0 };
@@ -246,7 +256,7 @@ export default function AttendancePage() {
       <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
         <h1 className="font-headline text-3xl font-semibold tracking-tight flex items-center">
           <CalendarCheck className="mr-3 h-8 w-8 text-primary" />
-          User Attendance Viewer
+          {t('attendance.pageTitle')}
         </h1>
       </div>
       
@@ -256,12 +266,12 @@ export default function AttendancePage() {
         <div className="lg:col-span-1 space-y-6">
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><User className="h-5 w-5" /> Select User</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><User className="h-5 w-5" /> {t('attendance.selectUser')}</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <Select onValueChange={setSelectedUserId} disabled={loadingUsers}>
                         <SelectTrigger className="w-full">
-                            <SelectValue placeholder={loadingUsers ? "Loading users..." : "Select a user"} />
+                            <SelectValue placeholder={loadingUsers ? t('attendance.loadingUsers') : t('attendance.selectAUser')} />
                         </SelectTrigger>
                         <SelectContent>
                         {users.map(u => (
@@ -284,17 +294,18 @@ export default function AttendancePage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Search className="h-5 w-5" /> Find Attendance</CardTitle>
-                    <CardDescription>Days with attendance are green. Missed days are red.</CardDescription>
+                    <CardTitle className="flex items-center gap-2"><Search className="h-5 w-5" /> {t('attendance.findAttendance')}</CardTitle>
+                    <CardDescription>{t('attendance.findAttendanceDesc')}</CardDescription>
                 </CardHeader>
                 <CardContent className="relative">
                     {loadingAttendance && (
                          <div className="absolute inset-0 bg-background/80 flex flex-col justify-center items-center rounded-b-lg z-10">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            <p className="mt-2 text-sm text-muted-foreground">Loading records...</p>
+                            <p className="mt-2 text-sm text-muted-foreground">{t('attendance.loadingRecords')}</p>
                         </div>
                     )}
                     <Calendar
+                        locale={dateLocale}
                         mode="single"
                         onSelect={setSelectedDate}
                         selected={selectedDate}

@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { CalendarIcon, Save, Loader2, Users, Layers, X } from 'lucide-react';
 import { format } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -36,7 +37,8 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
   const isSubTask = !!(parentId || task?.parentId);
 
   // Form State
@@ -240,16 +242,17 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
                     </Select>
                 </div>
                  <div className="space-y-2">
-                    <label className="text-sm font-medium">{t("taskForm.dueDate")}</label>
+                    <label className="text-sm font-medium">{t("common.dueDate")}</label>
                     <Popover>
                         <PopoverTrigger asChild>
                             <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                                 <CalendarIcon className="mr-2 h-4 w-4"/>
-                                {dueDate ? format(dueDate, "PPP") : <span>{t("taskForm.pickDate")}</span>}
+                                {dueDate ? format(dueDate, "PPP", { locale: dateLocale }) : <span>{t("taskForm.pickDate")}</span>}
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
                           <Calendar
+                            locale={dateLocale}
                             mode="single"
                             selected={dueDate}
                             onSelect={setDueDate}
@@ -259,7 +262,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
                     </Popover>
                     {parentMainTask?.dueDate && (
                       <p className="text-xs text-muted-foreground pt-1">
-                          {t("taskForm.dateConstraint", { startDate: format(parentMainTask.createdAt!, 'PP'), endDate: format(parentMainTask.dueDate, 'PP') })}
+                          {t("taskForm.dateConstraint", { startDate: format(parentMainTask.createdAt!, 'PP', { locale: dateLocale }), endDate: format(parentMainTask.dueDate, 'PP', { locale: dateLocale }) })}
                       </p>
                     )}
                 </div>
@@ -301,15 +304,22 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
 
           {!isSubTask && (
               <div className="space-y-2">
-                  <label className="text-sm font-medium">{t("taskForm.dueDate")}</label>
+                  <label className="text-sm font-medium">{t("common.dueDate")}</label>
                   <Popover>
                       <PopoverTrigger asChild>
                           <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                               <CalendarIcon className="mr-2 h-4 w-4"/>
-                              {dueDate ? format(dueDate, "PPP") : <span>{t("taskForm.pickDate")}</span>}
+                              {dueDate ? format(dueDate, "PPP", { locale: dateLocale }) : <span>{t("taskForm.pickDate")}</span>}
                           </Button>
                       </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dueDate} onSelect={setDueDate}/></PopoverContent>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar
+                          locale={dateLocale} 
+                          mode="single" 
+                          selected={dueDate} 
+                          onSelect={setDueDate}
+                         />
+                      </PopoverContent>
                   </Popover>
               </div>
           )}
