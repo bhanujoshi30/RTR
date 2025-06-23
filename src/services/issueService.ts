@@ -56,34 +56,26 @@ const mapDocumentToIssue = (docSnapshot: any): Issue => {
   };
 };
 
-export const createIssue = async (projectId: string, taskId: string, userUid: string, ownerName: string, issueData: CreateIssueData): Promise<string> => {
+export const createIssue = async (parentTask: Task, userUid: string, ownerName: string, issueData: CreateIssueData): Promise<string> => {
   if (!userUid) throw new Error('User not authenticated');
-
-  const taskDocRef = doc(db, 'tasks', taskId); 
-  const taskSnap = await getDoc(taskDocRef);
-  const taskData = taskSnap.data() as Task | undefined;
-
-  if (!taskSnap.exists() || taskData?.projectId !== projectId) {
-    throw new Error('Parent sub-task not found or does not belong to the project.');
-  }
   
-  const isOwnerOfSubTask = taskData?.ownerUid === userUid;
-  const isAssignedToSubTask = taskData?.assignedToUids?.includes(userUid);
+  const isOwnerOfSubTask = parentTask.ownerUid === userUid;
+  const isAssignedToSubTask = parentTask.assignedToUids?.includes(userUid);
 
   if (!isOwnerOfSubTask && !isAssignedToSubTask) {
      throw new Error('Access denied. You must own or be assigned to the parent sub-task to create an issue.');
   }
 
-  if (!taskData.projectOwnerUid) {
-      console.warn(`taskService: Parent task ${taskId} is missing projectOwnerUid. This is unexpected.`);
+  if (!parentTask.projectOwnerUid) {
+      console.warn(`issueService: Parent task ${parentTask.id} is missing projectOwnerUid. This is unexpected.`);
   }
 
   const newIssuePayload = {
     ...issueData,
-    projectId,
-    projectOwnerUid: taskData.projectOwnerUid,
-    clientUid: taskData.clientUid || null,
-    taskId, 
+    projectId: parentTask.projectId,
+    projectOwnerUid: parentTask.projectOwnerUid,
+    clientUid: parentTask.clientUid || null,
+    taskId: parentTask.id, 
     ownerUid: userUid,
     ownerName: ownerName,
     assignedToUids: issueData.assignedToUids || [],
@@ -97,16 +89,13 @@ export const createIssue = async (projectId: string, taskId: string, userUid: st
     const newIssueRef = await addDoc(issuesCollection, newIssuePayload);
     
     await logTimelineEvent(
-        taskId,
+        parentTask.id,
         userUid,
         'ISSUE_CREATED',
         `created issue: "${issueData.title}".`,
         { issueId: newIssueRef.id, title: issueData.title }
     );
     
-    // Note: The logic to re-open a 'Completed' parent task or to ensure assignees are on the parent task
-    // is now handled in the component layer (IssueForm) to avoid circular dependencies.
-
     return newIssueRef.id;
   } catch (error: any) {
     console.error('issueService: Error creating issue:', error.message, error.code ? `(${error.code})` : '', error.stack);

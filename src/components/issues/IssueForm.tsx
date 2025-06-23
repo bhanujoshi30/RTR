@@ -223,7 +223,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         toast({ title: 'Issue Updated', description: `"${title}" has been updated.` });
       } else {
         const ownerName = user.displayName || user.email || 'Unknown User';
-        issueId = await createIssue(projectId, taskId, user.uid, ownerName, issueDataPayload);
+        issueId = await createIssue(parentSubTask, user.uid, ownerName, issueDataPayload);
         toast({ title: 'Issue Created', description: `"${title}" has been added.` });
 
         if (parentSubTask.status === 'Completed') {
