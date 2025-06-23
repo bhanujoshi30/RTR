@@ -173,7 +173,7 @@
     "openIssue": "{{count}} Open Issue",
     "openIssues": "{{count}} Open Issues",
     "mainTaskProgress": "Main Task Progress",
-    "markComplete": "Mark Complete",
+    "markComplete": "Mark as Complete",
     "reopenTask": "Reopen",
     "taskCompleted": "Task Completed",
     "taskMarkedComplete": "Task {{name}} has been marked as complete.",
@@ -316,6 +316,8 @@
     "collectionTaskDesc": "This is a collection task, serving as a payment reminder or milestone.",
     "collectionAmount": "Collection Amount:",
     "createdAt": "Created At",
+    "createdLabel": "Created",
+    "dueByLabel": "Due by",
     "dueDate": "Due Date",
     "tabs": {
       "details": "Details",

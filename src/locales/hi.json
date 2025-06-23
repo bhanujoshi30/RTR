@@ -316,6 +316,8 @@
     "collectionTaskDesc": "यह एक संग्रह कार्य है, जो भुगतान अनुस्मारक या मील का पत्थर के रूप में कार्य करता है।",
     "collectionAmount": "संग्रह राशि:",
     "createdAt": "बनाने की तारीख",
+    "createdLabel": "बनाया गया",
+    "dueByLabel": "देय तिथि",
     "dueDate": "नियत तारीख",
     "tabs": {
       "details": "विवरण",

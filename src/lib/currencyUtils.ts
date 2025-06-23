@@ -1,14 +1,36 @@
 // A simplified number to words converter for Indian Rupees.
 // Handles numbers up to 99,99,99,999 (Ninety-Nine Crore...).
 
-const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
+const translations = {
+    en: {
+        ones: ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'],
+        teens: ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'],
+        tens: ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'],
+        crore: 'Crore',
+        lakh: 'Lakh',
+        thousand: 'Thousand',
+        hundred: 'Hundred',
+        rupeesOnly: 'Rupees Only',
+        zero: 'Zero'
+    },
+    hi: {
+        ones: ['', 'एक', 'दो', 'तीन', 'चार', 'पांच', 'छह', 'सात', 'आठ', 'नौ'],
+        teens: ['दस', 'ग्यारह', 'बारह', 'तेरह', 'चौदह', 'पंद्रह', 'सोलह', 'सत्रह', 'अठारह', 'उन्नीस'],
+        tens: ['', '', 'बीस', 'तीस', 'चालीस', 'पचास', 'साठ', 'सत्तर', 'अस्सी', 'नब्बे'],
+        crore: 'करोड़',
+        lakh: 'लाख',
+        thousand: 'हजार',
+        hundred: 'सौ',
+        rupeesOnly: 'रुपये मात्र',
+        zero: 'शून्य'
+    }
+};
 
-function convertLessThanThousand(n: number): string {
+function convertLessThanThousand(n: number, locale: 'en' | 'hi'): string {
+    const { ones, teens, tens, hundred } = translations[locale];
     let result = '';
     if (n >= 100) {
-        result += ones[Math.floor(n / 100)] + ' Hundred ';
+        result += ones[Math.floor(n / 100)] + ` ${hundred} `;
         n %= 100;
     }
     if (n >= 20) {
@@ -24,31 +46,34 @@ function convertLessThanThousand(n: number): string {
     return result.trim();
 }
 
-export function numberToWordsInr(num: number): string {
-    if (num === 0) return 'Zero Rupees Only';
+export function numberToWordsInr(num: number | null, locale: 'en' | 'hi' = 'en'): string {
+    if (num === null || num === undefined) return '';
+    if (num === 0) return `${translations[locale].zero} ${translations[locale].rupeesOnly}`;
+
+    const { crore, lakh, thousand, rupeesOnly } = translations[locale];
 
     let words = '';
-    const crore = Math.floor(num / 10000000);
+    const croreVal = Math.floor(num / 10000000);
     num %= 10000000;
-    if (crore > 0) {
-        words += convertLessThanThousand(crore) + ' Crore ';
+    if (croreVal > 0) {
+        words += convertLessThanThousand(croreVal, locale) + ` ${crore} `;
     }
 
-    const lakh = Math.floor(num / 100000);
+    const lakhVal = Math.floor(num / 100000);
     num %= 100000;
-    if (lakh > 0) {
-        words += convertLessThanThousand(lakh) + ' Lakh ';
+    if (lakhVal > 0) {
+        words += convertLessThanThousand(lakhVal, locale) + ` ${lakh} `;
     }
 
-    const thousand = Math.floor(num / 1000);
+    const thousandVal = Math.floor(num / 1000);
     num %= 1000;
-    if (thousand > 0) {
-        words += convertLessThanThousand(thousand) + ' Thousand ';
+    if (thousandVal > 0) {
+        words += convertLessThanThousand(thousandVal, locale) + ` ${thousand} `;
     }
 
     if (num > 0) {
-        words += convertLessThanThousand(num);
+        words += convertLessThanThousand(num, locale);
     }
     
-    return words.trim().replace(/\s+/g, ' ') + ' Rupees Only';
+    return words.trim().replace(/\s+/g, ' ') + ` ${rupeesOnly}`;
 }

@@ -23,6 +23,7 @@ import { AttachmentList } from '@/components/attachments/AttachmentList';
 import { Timeline } from '@/components/timeline/Timeline';
 import { MainTaskTimeline } from '@/components/timeline/MainTaskTimeline';
 import { numberToWordsInr } from '@/lib/currencyUtils';
+import { useTranslation } from '@/hooks/useTranslation';
 
 
 export default function TaskDetailsPage() {
@@ -36,6 +37,7 @@ export default function TaskDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
+  const { t, locale } = useTranslation();
   const [showAddEditTaskModal, setShowAddEditTaskModal] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); 
   const [ownerDisplayName, setOwnerDisplayName] = useState<string | null>(null);
@@ -179,7 +181,7 @@ export default function TaskDetailsPage() {
   }
 
   const backButtonPath = isSubTask ? `/projects/${projectId}/tasks/${task.parentId}` : `/projects/${projectId}`;
-  const backButtonText = isSubTask ? "Back to Main Task" : "Back to Project";
+  const backButtonText = isSubTask ? t('taskDetails.backToMainTask') : t('taskDetails.backToProject');
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 
     ? task.assignedToNames.join(', ') 
     : 'N/A';
@@ -214,39 +216,39 @@ export default function TaskDetailsPage() {
               <div className="flex items-center gap-2 flex-wrap">
                 {task.status && (isSubTask || isCollectionTask) && (
                   <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground text-base px-3 py-1`}>
-                    {task.status}
+                    {t(`status.${task.status.toLowerCase().replace(/ /g, '')}`)}
                   </Badge>
                 )}
-                 {isCollectionTask && <Badge variant="secondary">Collection</Badge>}
+                 {isCollectionTask && <Badge variant="secondary">{t('taskDetails.collectionTaskType')}</Badge>}
                 {isSubTask && canSubmitProgress && (
                     <Button variant="outline" size="sm" onClick={() => setShowDailyReportDialog(true)}>
-                        <Camera className="mr-2 h-4 w-4" /> Daily Progress
+                        <Camera className="mr-2 h-4 w-4" /> {t('taskDetails.dailyProgress')}
                     </Button>
                 )}
                 {isCollectionTask && canChangeCollectionStatus && task.status !== 'Completed' && (
                   <Button variant="outline" size="sm" onClick={() => handleCollectionStatusChange('Completed')} disabled={isStatusChanging}>
-                      {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />} Mark as Complete
+                      {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />} {t('taskCard.markComplete')}
                   </Button>
                 )}
                 {isCollectionTask && canChangeCollectionStatus && task.status === 'Completed' && (
                   <Button variant="outline" size="sm" onClick={() => handleCollectionStatusChange('To Do')} disabled={isStatusChanging}>
-                      {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} Reopen Task
+                      {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} {t('taskCard.reopenTask')}
                   </Button>
                 )}
                 {canEditCurrentTask && (
                   <Dialog open={showAddEditTaskModal && !!editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen);}}>
                     <DialogTrigger asChild>
                       <Button variant="outline" size="sm" onClick={() => { setEditingTask(task); setShowAddEditTaskModal(true); }}>
-                        <Edit className="mr-2 h-4 w-4" /> Edit {isSubTask ? "Sub-task" : "Main Task"}
+                        <Edit className="mr-2 h-4 w-4" /> {isSubTask ? t('taskDetails.editSubTask') : t('taskDetails.editMainTask')}
                       </Button>
                     </DialogTrigger>
                     <DialogContent className="sm:max-w-xl">
                       <DialogHeader>
                         <DialogTitle className="font-headline text-xl">
-                          Edit {isSubTask ? "Sub-task" : "Main Task"}
+                          {isSubTask ? t('taskDetails.editSubTask') : t('taskDetails.editMainTask')}
                         </DialogTitle>
                         <DialogDescription>
-                            {isSubTask ? "Modify the details of this sub-task." : "Update the name or details of this main task."}
+                            {isSubTask ? t('taskDetails.modifySubTask') : t('taskDetails.modifyMainTask')}
                         </DialogDescription>
                       </DialogHeader>
                       {editingTask && user && isOwner && (
@@ -261,19 +263,19 @@ export default function TaskDetailsPage() {
                 {canDeleteCurrentTask && (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>Delete</Button>
+                      <Button variant="destructive" size="sm"><Trash2 className="mr-2 h-4 w-4"/>{t('common.delete')}</Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTaskTitle>Delete "{task.name}"?</AlertDialogTaskTitle>
+                        <AlertDialogTaskTitle>{t('taskDetails.deleteTaskTitle', { name: task.name })}</AlertDialogTaskTitle>
                         <AlertDialogTaskDescription>
-                          This action cannot be undone and will permanently delete this {isSubTask ? "sub-task and its issues." : "main task, all its sub-tasks, and their issues."}
+                          {isSubTask ? t('taskDetails.deleteSubTaskDesc') : t('taskDetails.deleteMainTaskDesc')}
                         </AlertDialogTaskDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>{t('taskDetails.cancel')}</AlertDialogCancel>
                         <AlertDialogAction onClick={handleDeleteCurrentTask} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
-                           {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Delete
+                           {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {t('common.delete')}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -285,19 +287,19 @@ export default function TaskDetailsPage() {
               <CardDescription className="mt-2 text-lg">{task.description}</CardDescription>
             )}
              {isMainTask && !isCollectionTask && (
-               <CardDescription className="mt-2 text-lg">This is a main task. Manage its sub-tasks and view its full timeline below. {isSupervisor && "You will see sub-tasks assigned to you if applicable."}</CardDescription>
+               <CardDescription className="mt-2 text-lg">{t('taskDetails.subTaskDesc')} {isSupervisor && t('taskDetails.subTaskDescSupervisor')}</CardDescription>
              )}
              {isCollectionTask && (
-                 <CardDescription className="mt-2 text-lg">This is a collection task, serving as a payment reminder or milestone. {task.description}</CardDescription>
+                 <CardDescription className="mt-2 text-lg">{t('taskDetails.collectionTaskDesc')} {task.description}</CardDescription>
              )}
             {canViewFinancials && isCollectionTask && task.cost && task.cost > 0 && (
                 <div className="pt-4">
                     <div className="flex items-center text-base">
                         <IndianRupee className="mr-2 h-4 w-4 text-green-600" />
-                        <span className="text-muted-foreground">Collection Amount:&nbsp;</span>
+                        <span className="text-muted-foreground">{t('taskDetails.collectionAmount')}&nbsp;</span>
                         <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(task.cost)}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(task.cost)}</p>
+                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(task.cost, locale)}</p>
                 </div>
             )}
           </CardHeader>
@@ -305,7 +307,7 @@ export default function TaskDetailsPage() {
               {isSubTask && (
                    <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                       <div>
-                          <p className="text-sm font-medium text-muted-foreground">Created At</p>
+                          <p className="text-sm font-medium text-muted-foreground">{t('taskDetails.createdAt')}</p>
                           <div className="flex items-center text-base">
                               <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
                               {task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}
@@ -313,7 +315,7 @@ export default function TaskDetailsPage() {
                       </div>
                       {task.dueDate && (
                           <div>
-                              <p className="text-sm font-medium text-muted-foreground">Due Date</p>
+                              <p className="text-sm font-medium text-muted-foreground">{t('taskDetails.dueDate')}</p>
                               <div className="flex items-center text-base">
                                   <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
                                   {format(task.dueDate, 'PPP')}
@@ -325,8 +327,8 @@ export default function TaskDetailsPage() {
                {isMainTask && (
                    <div className="flex items-center text-sm text-muted-foreground">
                       <CalendarDays className="mr-2 h-4 w-4" />
-                      Created {task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}
-                      {task.dueDate && <span className="ml-2 border-l pl-2">Due by {format(task.dueDate, 'PPP')}</span>}
+                      {t('taskDetails.createdLabel')} {task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}
+                      {task.dueDate && <span className="ml-2 border-l pl-2">{t('taskDetails.dueByLabel')} {format(task.dueDate, 'PPP')}</span>}
                    </div>
                )}
           </CardContent>
@@ -335,27 +337,27 @@ export default function TaskDetailsPage() {
         {isMainTask && !isCollectionTask && task.ownerUid && (
           <Tabs defaultValue="subtasks" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="subtasks"><ListChecks className="mr-2 h-4 w-4" /> Sub-tasks</TabsTrigger>
-              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> Timeline</TabsTrigger>
+              <TabsTrigger value="subtasks"><ListChecks className="mr-2 h-4 w-4" /> {t('projectDetails.subTasks')}</TabsTrigger>
+              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> {t('taskDetails.mainTaskTimelineTitle')}</TabsTrigger>
             </TabsList>
             <TabsContent value="subtasks" className="mt-6">
               <div className="space-y-6">
                 <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center rounded-lg border bg-card p-6 shadow-sm">
                   <h2 className="font-headline text-2xl font-semibold flex items-center">
                     <ListChecks className="mr-3 h-7 w-7 text-primary" />
-                    Sub-tasks
+                    {t('projectDetails.subTasks')}
                   </h2>
                   {canAddSubTask && (
                     <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
                       <DialogTrigger asChild>
                         <Button onClick={() => { setEditingTask(null); setShowAddEditTaskModal(true); }}>
-                          <PlusCircle className="mr-2 h-4 w-4" /> Add New Sub-task
+                          <PlusCircle className="mr-2 h-4 w-4" /> {t('taskForm.addSubTaskBtn')}
                         </Button>
                       </DialogTrigger>
                       <DialogContent className="sm:max-w-xl">
                         <DialogHeader>
-                          <DialogTitle className="font-headline text-xl">Add New Sub-task</DialogTitle>
-                          <DialogDescription>Fill in the details for the new sub-task.</DialogDescription>
+                          <DialogTitle className="font-headline text-xl">{t('taskForm.addSubTask')}</DialogTitle>
+                          <DialogDescription>{t('taskForm.subTaskDescPlaceholder')}</DialogDescription>
                         </DialogHeader>
                         {user && <TaskForm projectId={projectId} parentId={taskId} onFormSuccess={handleTaskFormSuccess} />}
                       </DialogContent>
@@ -368,8 +370,8 @@ export default function TaskDetailsPage() {
             <TabsContent value="timeline" className="mt-6">
                <Card>
                   <CardHeader>
-                      <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> Main Task Timeline</CardTitle>
-                      <CardDescription>An overview of all events related to this main task and its sub-tasks.</CardDescription>
+                      <CardTitle className="flex items-center"><Clock className="mr-2 h-5 w-5" /> {t('taskDetails.mainTaskTimelineTitle')}</CardTitle>
+                      <CardDescription>{t('taskDetails.mainTaskTimelineDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent>
                       <MainTaskTimeline mainTaskId={taskId} />
@@ -382,31 +384,31 @@ export default function TaskDetailsPage() {
         {isSubTask && (
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 sm:w-auto sm:inline-flex">
-              <TabsTrigger value="details" className="text-sm"><Info className="mr-2 h-4 w-4" /> Details</TabsTrigger>
-              <TabsTrigger value="issues" className="text-sm"><ListChecks className="mr-2 h-4 w-4" /> Issues</TabsTrigger>
-              <TabsTrigger value="attachments" className="text-sm"><Paperclip className="mr-2 h-4 w-4" /> Attachments</TabsTrigger>
-              <TabsTrigger value="timeline" className="text-sm"><Clock className="mr-2 h-4 w-4" /> Timeline</TabsTrigger>
+              <TabsTrigger value="details" className="text-sm"><Info className="mr-2 h-4 w-4" /> {t('taskDetails.tabs.details')}</TabsTrigger>
+              <TabsTrigger value="issues" className="text-sm"><ListChecks className="mr-2 h-4 w-4" /> {t('taskDetails.tabs.issues')}</TabsTrigger>
+              <TabsTrigger value="attachments" className="text-sm"><Paperclip className="mr-2 h-4 w-4" /> {t('taskDetails.tabs.attachments')}</TabsTrigger>
+              <TabsTrigger value="timeline" className="text-sm"><Clock className="mr-2 h-4 w-4" /> {t('taskDetails.tabs.timeline')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="mt-6">
               <Card>
-                <CardHeader><CardTitle>Sub-task Information</CardTitle></CardHeader>
+                <CardHeader><CardTitle>{t('taskDetails.infoTitle')}</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
-                  <div><h4 className="font-semibold">Name:</h4><p>{task.name}</p></div>
-                  {task.description && (<div><h4 className="font-semibold">Description:</h4><p className="whitespace-pre-wrap">{task.description}</p></div>)}
-                  <div><h4 className="font-semibold">Status:</h4><p>{task.status}</p></div>
+                  <div><h4 className="font-semibold">{t('taskDetails.infoName')}</h4><p>{task.name}</p></div>
+                  {task.description && (<div><h4 className="font-semibold">{t('taskDetails.infoDesc')}</h4><p className="whitespace-pre-wrap">{task.description}</p></div>)}
+                  <div><h4 className="font-semibold">{t('taskDetails.infoStatus')}</h4><p>{task.status}</p></div>
                   {task.assignedToNames && task.assignedToNames.length > 0 && (
                     <div>
-                      <h4 className="font-semibold">Assigned To:</h4>
+                      <h4 className="font-semibold">{t('taskDetails.infoAssignedTo')}</h4>
                       <p>{displayAssignedNames}</p>
                     </div>
                   )}
                   <div>
-                    <h4 className="font-semibold">Created By:</h4>
+                    <h4 className="font-semibold">{t('taskDetails.infoCreatedBy')}</h4>
                     <p>{ownerDisplayName || task.ownerUid}</p>
                   </div>
-                  <div><h4 className="font-semibold">Created At:</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
-                  {task.dueDate && (<div><h4 className="font-semibold">Due Date:</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}
+                  <div><h4 className="font-semibold">{t('taskDetails.infoCreatedAt')}</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p') : 'N/A'}</p></div>
+                  {task.dueDate && (<div><h4 className="font-semibold">{t('taskDetails.infoDueDate')}</h4><p>{format(task.dueDate, 'PPP')}</p></div>)}
                 </CardContent>
               </Card>
             </TabsContent>
@@ -415,7 +417,7 @@ export default function TaskDetailsPage() {
             </TabsContent>
             <TabsContent value="attachments" className="mt-6">
                 <Card>
-                    <CardHeader><CardTitle>Attachments</CardTitle></CardHeader>
+                    <CardHeader><CardTitle>{t('taskDetails.tabs.attachments')}</CardTitle></CardHeader>
                     <CardContent>
                         <AttachmentList taskId={taskId} projectId={projectId}/>
                     </CardContent>
@@ -424,7 +426,7 @@ export default function TaskDetailsPage() {
             <TabsContent value="timeline" className="mt-6">
               <Card>
                   <CardHeader>
-                      <CardTitle>Timeline</CardTitle>
+                      <CardTitle>{t('taskDetails.tabs.timeline')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                       <Timeline taskId={taskId} />
