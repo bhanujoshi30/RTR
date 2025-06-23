@@ -270,7 +270,8 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       const isMember = projectData.memberUids?.includes(userUid) ?? false;
 
       if (!isOwner && !isClient && !isAdmin && !isServiceCall && !isMember) {
-            throw new Error(`Access denied to project ${projectId}. User is not owner, client, admin, or member.`);
+          console.warn(`Access denied to project ${projectId}. User ${userUid} is not owner, client, admin, or member.`);
+          return null; // Return null instead of throwing an error.
       }
       
       const mainTasks = await getProjectMainTasks(projectId);
@@ -286,9 +287,10 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
   } catch (error: any) {
     console.error(`projectService: Error fetching project by ID ${projectId}.`, error);
     if ((error as any)?.code === 'permission-denied') {
-        throw new Error(`Access denied to project ${projectId}. Check Firestore security rules.`);
+        console.warn(`Access denied to project ${projectId} for user ${userUid}. This may be expected if user is not a member.`);
+        return null; // Return null on permission denied to handle gracefully.
     }
-    throw error;
+    throw error; // Re-throw other unexpected errors
   }
 };
 

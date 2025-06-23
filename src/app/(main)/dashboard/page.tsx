@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import type { Project, Task as AppTask } from '@/types';
 import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
-import { getProjectsByIds, getUserProjects, getClientProjects, ensureUserIsInProjectMembers } from '@/services/projectService';
+import { getProjectsByIds, getUserProjects, getClientProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
@@ -67,10 +67,6 @@ export default function DashboardPage() {
           const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId).filter(id => !!id);
           const allRelevantProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
           console.log(`DashboardPage: ${userRoleForLog} - Combined ${allRelevantProjectIds.length} unique projectIds from user's work:`, allRelevantProjectIds);
-
-          if (allRelevantProjectIds.length > 0) {
-            await ensureUserIsInProjectMembers(user.uid, allRelevantProjectIds);
-          }
 
           if (allRelevantProjectIds.length > 0) {
             const baseProjectsForUser = await getProjectsByIds(allRelevantProjectIds, user.uid, user.role);
