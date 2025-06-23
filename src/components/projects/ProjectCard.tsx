@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { FolderKanban, CalendarDays, ExternalLink, ListChecks, AlertTriangle, Layers, Wallet, IndianRupee, Loader2 } from 'lucide-react'; 
 import { formatDistanceToNow } from 'date-fns';
 import { enUS, hi } from 'date-fns/locale';
-import { numberToWordsInr } from '@/lib/currencyUtils';
+import { numberToWordsInr, replaceDevanagariNumerals } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useState } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -45,6 +45,8 @@ export function ProjectCard({ project }: ProjectCardProps) {
   const handleNavigation = () => {
     setIsNavigating(true);
   };
+  
+  const createdAtText = project.createdAt ? formatDistanceToNow(project.createdAt, { addSuffix: true, locale: dateLocale }) : 'recently';
 
   return (
     <Card className="relative flex h-full transform flex-col overflow-hidden shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 group">
@@ -132,7 +134,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
       <CardFooter className="flex flex-col items-start gap-2 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
          <div className="flex items-center text-xs text-muted-foreground">
           <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-          {t('common.created')} {project.createdAt ? formatDistanceToNow(project.createdAt, { addSuffix: true, locale: dateLocale }) : 'recently'}
+          {t('common.created')} {locale === 'hi' ? replaceDevanagariNumerals(createdAtText) : createdAtText}
         </div>
         <Button variant="outline" size="sm" asChild>
           <Link href={`/projects/${project.id}`} onClick={handleNavigation}>

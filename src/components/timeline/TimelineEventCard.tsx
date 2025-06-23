@@ -19,6 +19,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { enUS, hi } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
 
 interface TimelineEventCardProps {
@@ -40,7 +41,7 @@ const eventIcons: Record<TimelineEventType, React.ElementType> = {
   MAIN_TASK_REOPENED: RotateCcw,
 };
 
-const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) => string) => {
+const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) => string, locale: 'en' | 'hi') => {
   // New event format with descriptionKey
   if (event.descriptionKey) {
     const statusToKey = (status: string) => `status.${status.toLowerCase().replace(/ /g, '')}`;
@@ -53,7 +54,8 @@ const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) 
       detailsForTranslation.oldStatus = t(statusToKey(event.details.oldStatus));
     }
     
-    const descriptionText = t(event.descriptionKey, detailsForTranslation);
+    let descriptionText = t(event.descriptionKey, detailsForTranslation);
+    descriptionText = locale === 'hi' ? replaceDevanagariNumerals(descriptionText) : descriptionText;
 
     if (event.type === 'ATTACHMENT_ADDED' && event.details?.url && event.details?.filename) {
       const filename = event.details.filename as string;
@@ -108,7 +110,9 @@ const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) 
     }
 
     // If we found a key, use it. Otherwise, fallback to the stored English text.
-    const textToShow = translationKey ? t(translationKey) : legacyDescription;
+    let textToShow = translationKey ? t(translationKey) : legacyDescription;
+    textToShow = locale === 'hi' ? replaceDevanagariNumerals(textToShow) : textToShow;
+
 
     return (
       <p className="text-sm text-foreground">
@@ -130,6 +134,8 @@ export function TimelineEventCard({ event, hideIcon = false }: TimelineEventCard
   const { t, locale } = useTranslation();
   const dateLocale = locale === 'hi' ? hi : enUS;
   const Icon = eventIcons[event.type] || GitCommit;
+  
+  const timestampText = formatDistanceToNow(event.timestamp, { addSuffix: true, locale: dateLocale });
 
   return (
     <div className="relative flex items-start gap-4">
@@ -139,9 +145,9 @@ export function TimelineEventCard({ event, hideIcon = false }: TimelineEventCard
         </div>
       )}
       <div className={cn("flex-1 space-y-1", !hideIcon && "pl-8")}>
-        {renderDescription(event, t)}
+        {renderDescription(event, t, locale)}
         <p className="text-xs text-muted-foreground">
-          {formatDistanceToNow(event.timestamp, { addSuffix: true, locale: dateLocale })}
+          {locale === 'hi' ? replaceDevanagariNumerals(timestampText) : timestampText}
         </p>
       </div>
     </div>

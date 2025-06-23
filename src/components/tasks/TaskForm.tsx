@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { getAllUsers } from '@/services/userService';
 import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 const taskTypes = ['standard', 'collection'] as const;
@@ -189,6 +190,17 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
   const buttonText = task 
     ? t("taskForm.saveChanges")
     : (isSubTask ? t("taskForm.addSubTaskBtn") : t("taskForm.createMainTaskBtn"));
+    
+  const formattedDueDate = dueDate ? format(dueDate, "PPP", { locale: dateLocale }) : '';
+  const displayDueDate = locale === 'hi' ? replaceDevanagariNumerals(formattedDueDate) : formattedDueDate;
+  
+  const mainTaskCreatedDateText = parentMainTask?.createdAt ? format(parentMainTask.createdAt, 'PP', { locale: dateLocale }) : '';
+  const mainTaskDueDateText = parentMainTask?.dueDate ? format(parentMainTask.dueDate, 'PP', { locale: dateLocale }) : '';
+  
+  const dateConstraintText = t("taskForm.dateConstraint", { 
+    startDate: locale === 'hi' ? replaceDevanagariNumerals(mainTaskCreatedDateText) : mainTaskCreatedDateText, 
+    endDate: locale === 'hi' ? replaceDevanagariNumerals(mainTaskDueDateText) : mainTaskDueDateText,
+  });
 
   return (
     <Card className="shadow-lg">
@@ -247,7 +259,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
                         <PopoverTrigger asChild>
                             <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                                 <CalendarIcon className="mr-2 h-4 w-4"/>
-                                {dueDate ? format(dueDate, "PPP", { locale: dateLocale }) : <span>{t("taskForm.pickDate")}</span>}
+                                {dueDate ? displayDueDate : <span>{t("taskForm.pickDate")}</span>}
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
@@ -262,7 +274,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
                     </Popover>
                     {parentMainTask?.dueDate && (
                       <p className="text-xs text-muted-foreground pt-1">
-                          {t("taskForm.dateConstraint", { startDate: format(parentMainTask.createdAt!, 'PP', { locale: dateLocale }), endDate: format(parentMainTask.dueDate, 'PP', { locale: dateLocale }) })}
+                          {dateConstraintText}
                       </p>
                     )}
                 </div>
@@ -309,7 +321,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
                       <PopoverTrigger asChild>
                           <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
                               <CalendarIcon className="mr-2 h-4 w-4"/>
-                              {dueDate ? format(dueDate, "PPP", { locale: dateLocale }) : <span>{t("taskForm.pickDate")}</span>}
+                              {dueDate ? displayDueDate : <span>{t("taskForm.pickDate")}</span>}
                           </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-auto p-0">

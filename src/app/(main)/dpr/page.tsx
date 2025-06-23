@@ -20,6 +20,7 @@ import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useToast } from '@/hooks/use-toast';
 import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
 
 const StatsChart = ({ data }: { data: any[] }) => (
@@ -202,6 +203,9 @@ export default function DprPage() {
             { name: 'Completed', Tasks: rawReportData.tasksCompleted.length, Issues: rawReportData.issuesClosed.length },
         ];
     }, [rawReportData]);
+    
+    const formattedDate = format(selectedDate, 'PPP', { locale: dateLocale });
+    const displayDate = locale === 'hi' ? replaceDevanagariNumerals(formattedDate) : formattedDate;
 
 
     if (authLoading || !isAdmin) {
@@ -221,7 +225,7 @@ export default function DprPage() {
                         {t('dpr.pageTitle')}
                     </h1>
                      <p className="text-muted-foreground mt-1">
-                        {t('dpr.reportForToday')} {format(selectedDate, 'PPP', { locale: dateLocale })}
+                        {t('dpr.reportForToday')} {displayDate}
                     </p>
                 </div>
             </div>
@@ -274,7 +278,7 @@ export default function DprPage() {
                     <div className="space-y-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle>{t('dpr.summaryTitle')} {rawReportData.projectName} {t('dpr.on')} {format(selectedDate, 'PPP', { locale: dateLocale })}</CardTitle>
+                                <CardTitle>{t('dpr.summaryTitle')} {rawReportData.projectName} {t('dpr.on')} {displayDate}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div>

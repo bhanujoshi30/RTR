@@ -27,6 +27,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { IssueStatusChangeDialog } from './IssueStatusChangeDialog';
 import Link from 'next/link';
 import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
 interface IssueCardProps {
   issue: Issue;
@@ -116,6 +117,9 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
   const displayAssignedNames = issue.assignedToNames && issue.assignedToNames.length > 0 
     ? issue.assignedToNames.join(', ') 
     : 'N/A';
+    
+  const createdAtText = issue.createdAt ? formatDistanceToNow(issue.createdAt, { addSuffix: true, locale: dateLocale }) : 'N/A';
+  const dueDateText = issue.dueDate ? format(issue.dueDate, 'PP', { locale: dateLocale }) : '';
 
   return (
     <>
@@ -156,10 +160,10 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
           <div className="flex flex-col gap-2 text-xs text-muted-foreground">
             <div className="flex items-center">
               <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-              {t('common.created')} {issue.createdAt ? formatDistanceToNow(issue.createdAt, { addSuffix: true, locale: dateLocale }) : 'N/A'}
+              {t('common.created')} {locale === 'hi' ? replaceDevanagariNumerals(createdAtText) : createdAtText}
               {issue.dueDate && ( 
                 <span className="ml-2 border-l pl-2">
-                  {t('common.due')}: {format(issue.dueDate, 'PP', { locale: dateLocale })}
+                  {t('common.due')}: {locale === 'hi' ? replaceDevanagariNumerals(dueDateText) : dueDateText}
                 </span>
               )}
             </div>

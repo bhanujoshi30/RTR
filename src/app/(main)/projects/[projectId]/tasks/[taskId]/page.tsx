@@ -23,7 +23,7 @@ import { ProgressReportDialog } from '@/components/attachments/ProgressReportDia
 import { AttachmentList } from '@/components/attachments/AttachmentList';
 import { Timeline } from '@/components/timeline/Timeline';
 import { MainTaskTimeline } from '@/components/timeline/MainTaskTimeline';
-import { numberToWordsInr } from '@/lib/currencyUtils';
+import { numberToWordsInr, replaceDevanagariNumerals } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
 import { getAllUsers } from '@/services/userService';
 
@@ -213,6 +213,12 @@ export default function TaskDetailsPage() {
     : 'N/A';
 
   const canSubmitProgress = user && (isOwner || task.assignedToUids?.includes(user.uid));
+  
+  const formattedCreatedAt = task.createdAt ? format(task.createdAt, 'PPP p', { locale: dateLocale }) : 'N/A';
+  const displayCreatedAt = locale === 'hi' ? replaceDevanagariNumerals(formattedCreatedAt) : formattedCreatedAt;
+  
+  const formattedDueDate = task.dueDate ? format(task.dueDate, 'PPP', { locale: dateLocale }) : '';
+  const displayDueDate = locale === 'hi' ? replaceDevanagariNumerals(formattedDueDate) : formattedDueDate;
 
 
   return (
@@ -336,7 +342,7 @@ export default function TaskDetailsPage() {
                           <p className="text-sm font-medium text-muted-foreground">{t('common.createdAt')}</p>
                           <div className="flex items-center text-base">
                               <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                              {task.createdAt ? format(task.createdAt, 'PPP p', { locale: dateLocale }) : 'N/A'}
+                              {displayCreatedAt}
                           </div>
                       </div>
                       {task.dueDate && (
@@ -344,7 +350,7 @@ export default function TaskDetailsPage() {
                               <p className="text-sm font-medium text-muted-foreground">{t('common.dueDate')}</p>
                               <div className="flex items-center text-base">
                                   <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                                  {format(task.dueDate, 'PPP', { locale: dateLocale })}
+                                  {displayDueDate}
                               </div>
                           </div>
                       )}
@@ -353,8 +359,8 @@ export default function TaskDetailsPage() {
                {isMainTask && (
                    <div className="flex items-center text-sm text-muted-foreground">
                       <CalendarDays className="mr-2 h-4 w-4" />
-                      {t('taskDetails.createdLabel')} {task.createdAt ? format(task.createdAt, 'PPP p', { locale: dateLocale }) : 'N/A'}
-                      {task.dueDate && <span className="ml-2 border-l pl-2">{t('taskDetails.dueByLabel')} {format(task.dueDate, 'PPP', { locale: dateLocale })}</span>}
+                      {t('taskDetails.createdLabel')} {displayCreatedAt}
+                      {task.dueDate && <span className="ml-2 border-l pl-2">{t('taskDetails.dueByLabel')} {displayDueDate}</span>}
                    </div>
                )}
           </CardContent>
@@ -448,8 +454,8 @@ export default function TaskDetailsPage() {
                     <h4 className="font-semibold">{t('taskDetails.infoCreatedBy')}</h4>
                     <p>{ownerDisplayName || task.ownerUid}</p>
                   </div>
-                  <div><h4 className="font-semibold">{t('common.createdAt')}</h4><p>{task.createdAt ? format(task.createdAt, 'PPP p', { locale: dateLocale }) : 'N/A'}</p></div>
-                  {task.dueDate && (<div><h4 className="font-semibold">{t('common.dueDate')}</h4><p>{format(task.dueDate, 'PPP', { locale: dateLocale })}</p></div>)}
+                  <div><h4 className="font-semibold">{t('common.createdAt')}</h4><p>{displayCreatedAt}</p></div>
+                  {task.dueDate && (<div><h4 className="font-semibold">{t('common.dueDate')}</h4><p>{displayDueDate}</p></div>)}
                 </CardContent>
               </Card>
             </TabsContent>

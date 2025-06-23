@@ -8,6 +8,7 @@ import { Layers } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { enUS, hi } from 'date-fns/locale';
 import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
 interface ProjectTimelineEventCardProps {
   eventGroup: ProjectAggregatedEvent;
@@ -22,7 +23,9 @@ export function ProjectTimelineEventCard({ eventGroup }: ProjectTimelineEventCar
     ? t('timeline.relevantEvent', { count: 1 }) 
     : t('timeline.relevantEvents', { count: events.length });
     
-  const latestActivityText = t('timeline.latestActivity', { time: formatDistanceToNow(eventGroup.timestamp, { addSuffix: true, locale: dateLocale }) });
+  const latestActivityFormatted = formatDistanceToNow(eventGroup.timestamp, { addSuffix: true, locale: dateLocale });
+  const latestActivityText = t('timeline.latestActivity', { time: locale === 'hi' ? replaceDevanagariNumerals(latestActivityFormatted) : latestActivityFormatted });
+
 
   return (
     <Accordion type="single" collapsible className="w-full bg-card rounded-lg border shadow-sm">

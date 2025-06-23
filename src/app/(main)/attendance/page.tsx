@@ -18,6 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
 const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRecord[] | null, selectedDate?: Date }) => {
   const { t, locale } = useTranslation();
@@ -38,11 +39,14 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
     );
   }
 
+  const formattedDate = format(selectedDate, 'PPP', { locale: dateLocale });
+  const displayDate = locale === 'hi' ? replaceDevanagariNumerals(formattedDate) : formattedDate;
+
   if (!records || records.length === 0) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>{t('attendance.detailsFor')} {format(selectedDate, 'PPP', { locale: dateLocale })}</CardTitle>
+          <CardTitle>{t('attendance.detailsFor')} {displayDate}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col items-center justify-center text-center h-96">
           <XCircle className="h-16 w-16 text-destructive/80" />
@@ -52,57 +56,62 @@ const AttendanceDetailCard = ({ records, selectedDate }: { records: AttendanceRe
       </Card>
     );
   }
+  
+  const recordCount = locale === 'hi' ? replaceDevanagariNumerals(records.length.toString()) : records.length.toString();
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{t('attendance.detailsFor')} {format(selectedDate, 'PPP', { locale: dateLocale })}</CardTitle>
+        <CardTitle>{t('attendance.detailsFor')} {displayDate}</CardTitle>
         <CardDescription>
-          {records[0].userName} {t('attendance.submittedAttendanceFor')} {records.length} {t('attendance.projectsToday')}
+          {records[0].userName} {t('attendance.submittedAttendanceFor')} {recordCount} {t('attendance.projectsToday')}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {records.map(record => (
-            <div key={record.id} className="rounded-lg border p-4 space-y-4 bg-background">
-                 <div className="flex justify-between items-start">
-                    <div>
-                        {record.projectExists === false ? (
-                           <p className="font-semibold flex items-center gap-2 text-muted-foreground"><FolderX className="h-4 w-4 text-destructive" />{record.projectName} {t('attendance.deletedProject')}</p>
-                        ) : (
-                           <p className="font-semibold flex items-center gap-2"><Building className="h-4 w-4 text-primary" />{record.projectName}</p>
-                        )}
-                        <p className="text-xs text-muted-foreground">{t('common.submittedAt')} {format(record.timestamp, 'p', { locale: dateLocale })}</p>
-                    </div>
-                    <Button asChild variant="outline" size="sm">
-                        <Link href={record.photoUrl} target="_blank" rel="noopener noreferrer">
-                           {t('attendance.viewPhoto')}
-                        </Link>
-                    </Button>
-                </div>
-                
-                <div className="relative aspect-video w-full rounded-lg overflow-hidden border">
-                    <Image src={record.photoUrl} alt={`Attendance for ${record.userName}`} layout="fill" objectFit="cover" />
-                </div>
-                
-                {record.location ? (
-                    <div className="text-sm">
-                        <p className="whitespace-normal break-words text-foreground">
-                        {record.location.address || t('attendance.addressNotAvailable')}
-                        </p>
-                        <a
-                            href={`https://www.google.com/maps?q=${record.location.latitude},${record.location.longitude}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-xs text-muted-foreground mt-1 hover:text-primary hover:underline block"
-                        >
-                            {`Lat: ${record.location.latitude.toFixed(4)}, Lon: ${record.location.longitude.toFixed(4)}`}
-                        </a>
-                    </div>
-                ) : (
-                    <p className="text-sm text-muted-foreground">{t('attendance.locationNotAvailable')}</p>
-                )}
-            </div>
-        ))}
+        {records.map(record => {
+            const formattedTime = format(record.timestamp, 'p', { locale: dateLocale });
+            const displayTime = locale === 'hi' ? replaceDevanagariNumerals(formattedTime) : formattedTime;
+            return (
+              <div key={record.id} className="rounded-lg border p-4 space-y-4 bg-background">
+                   <div className="flex justify-between items-start">
+                      <div>
+                          {record.projectExists === false ? (
+                             <p className="font-semibold flex items-center gap-2 text-muted-foreground"><FolderX className="h-4 w-4 text-destructive" />{record.projectName} {t('attendance.deletedProject')}</p>
+                          ) : (
+                             <p className="font-semibold flex items-center gap-2"><Building className="h-4 w-4 text-primary" />{record.projectName}</p>
+                          )}
+                          <p className="text-xs text-muted-foreground">{t('common.submittedAt')} {displayTime}</p>
+                      </div>
+                      <Button asChild variant="outline" size="sm">
+                          <Link href={record.photoUrl} target="_blank" rel="noopener noreferrer">
+                             {t('attendance.viewPhoto')}
+                          </Link>
+                      </Button>
+                  </div>
+                  
+                  <div className="relative aspect-video w-full rounded-lg overflow-hidden border">
+                      <Image src={record.photoUrl} alt={`Attendance for ${record.userName}`} layout="fill" objectFit="cover" />
+                  </div>
+                  
+                  {record.location ? (
+                      <div className="text-sm">
+                          <p className="whitespace-normal break-words text-foreground">
+                          {record.location.address || t('attendance.addressNotAvailable')}
+                          </p>
+                          <a
+                              href={`https://www.google.com/maps?q=${record.location.latitude},${record.location.longitude}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-muted-foreground mt-1 hover:text-primary hover:underline block"
+                          >
+                              {`Lat: ${record.location.latitude.toFixed(4)}, Lon: ${record.location.longitude.toFixed(4)}`}
+                          </a>
+                      </div>
+                  ) : (
+                      <p className="text-sm text-muted-foreground">{t('attendance.locationNotAvailable')}</p>
+                  )}
+              </div>
+          )})}
       </CardContent>
     </Card>
   );

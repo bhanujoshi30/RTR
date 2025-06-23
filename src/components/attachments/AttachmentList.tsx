@@ -21,8 +21,11 @@ import {
 import Image from 'next/image';
 import Link from 'next/link';
 import { format } from 'date-fns';
+import { enUS, hi } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
 
 interface AttachmentListProps {
@@ -36,6 +39,8 @@ export function AttachmentList({ taskId, projectId }: AttachmentListProps) {
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t, locale } = useTranslation();
+  const dateLocale = locale === 'hi' ? hi : enUS;
 
   const fetchAttachments = async () => {
     if (!taskId) return;
@@ -109,7 +114,7 @@ export function AttachmentList({ taskId, projectId }: AttachmentListProps) {
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <Paperclip className="mx-auto h-12 w-12 text-muted-foreground/50" />
-        <h3 className="mt-3 font-headline text-lg font-semibold">No Attachments</h3>
+        <h3 className="font-headline text-lg font-semibold">No Attachments</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           There are no attachments for this sub-task yet.
         </p>
@@ -119,52 +124,56 @@ export function AttachmentList({ taskId, projectId }: AttachmentListProps) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-      {attachments.map((att) => (
-        <Card key={att.id} className="overflow-hidden group/attachment">
-          <a href={att.url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square w-full">
-            <Image
-              src={att.url}
-              alt={att.filename}
-              layout="fill"
-              objectFit="cover"
-              className="transition-transform duration-300 hover:scale-105"
-            />
-             <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-          </a>
-           {user && user.uid === att.ownerUid && (
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="icon" className="absolute top-2 right-2 z-10 h-7 w-7 opacity-0 transition-opacity group-hover/attachment:opacity-100">
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Delete Attachment</span>
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Attachment?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This will permanently delete "{att.filename}". This action cannot be undone.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleDelete(att.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
-          <CardHeader className="p-3">
-             <CardTitle className="text-sm font-semibold truncate flex items-center gap-1.5">
-                <FileImage className="h-4 w-4 text-muted-foreground" />
-                {getTitleForAttachment(att)}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="p-3 pt-0 text-xs text-muted-foreground">
-            <p>By: <span className="font-medium text-foreground">{att.ownerName}</span></p>
-            <p>{format(att.createdAt, 'PPp')}</p>
-          </CardContent>
-        </Card>
-      ))}
+      {attachments.map((att) => {
+        const createdAtText = format(att.createdAt, 'PPp', { locale: dateLocale });
+        const displayDate = locale === 'hi' ? replaceDevanagariNumerals(createdAtText) : createdAtText;
+
+        return (
+            <Card key={att.id} className="overflow-hidden group/attachment">
+              <a href={att.url} target="_blank" rel="noopener noreferrer" className="block relative aspect-square w-full">
+                <Image
+                  src={att.url}
+                  alt={att.filename}
+                  layout="fill"
+                  objectFit="cover"
+                  className="transition-transform duration-300 hover:scale-105"
+                />
+                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+              </a>
+               {user && user.uid === att.ownerUid && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="icon" className="absolute top-2 right-2 z-10 h-7 w-7 opacity-0 transition-opacity group-hover/attachment:opacity-100">
+                        <Trash2 className="h-4 w-4" />
+                        <span className="sr-only">Delete Attachment</span>
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Attachment?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete "{att.filename}". This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => handleDelete(att.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+              <CardHeader className="p-3">
+                 <CardTitle className="text-sm font-semibold truncate flex items-center gap-1.5">
+                    <FileImage className="h-4 w-4 text-muted-foreground" />
+                    {getTitleForAttachment(att)}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-3 pt-0 text-xs text-muted-foreground">
+                <p>By: <span className="font-medium text-foreground">{att.ownerName}</span></p>
+                <p>{displayDate}</p>
+              </CardContent>
+            </Card>
+        )})}
     </div>
   );
 }

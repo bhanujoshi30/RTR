@@ -35,7 +35,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProjectTimeline } from '@/components/timeline/ProjectTimeline';
 import { ProjectedTimeline } from '@/components/timeline/ProjectedTimeline';
-import { numberToWordsInr } from '@/lib/currencyUtils';
+import { numberToWordsInr, replaceDevanagariNumerals } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
 
 
@@ -201,8 +201,15 @@ export default function ProjectDetailsPage() {
   if (displayStatus === 'Payment Incomplete' && !canViewFinancials) {
       displayStatus = 'Completed';
   }
+  
+  const submittedAtTime = attendanceStatus.timestamp ? format(attendanceStatus.timestamp, 'p', { locale: dateLocale }) : '';
+  const displaySubmittedAtTime = locale === 'hi' ? replaceDevanagariNumerals(submittedAtTime) : submittedAtTime;
 
-  const ProjectDetailsCard = () => (
+  const ProjectDetailsCard = () => {
+    const formattedCreatedAt = project.createdAt ? format(project.createdAt, 'PPP', { locale: dateLocale }) : 'N/A';
+    const displayCreatedAt = locale === 'hi' ? replaceDevanagariNumerals(formattedCreatedAt) : formattedCreatedAt;
+
+    return (
      <Card className="shadow-lg">
         <CardHeader>
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
@@ -213,7 +220,7 @@ export default function ProjectDetailsPage() {
                       {attendanceStatus.submitted ? (
                           <Button variant="outline" size="sm" disabled>
                               <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                              {t('common.submittedAt')} {attendanceStatus.timestamp ? format(attendanceStatus.timestamp, 'p', { locale: dateLocale }) : ''}
+                              {t('common.submittedAt')} {displaySubmittedAtTime}
                           </Button>
                       ) : (
                           <Button variant="outline" size="sm" onClick={() => setShowAttendanceDialog(true)}>
@@ -284,7 +291,7 @@ export default function ProjectDetailsPage() {
               <p className="text-sm font-medium text-muted-foreground">{t('common.createdAt')}</p>
               <div className="flex items-center text-base">
                 <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-                {project.createdAt ? format(project.createdAt, 'PPP', { locale: dateLocale }) : 'N/A'}
+                {displayCreatedAt}
               </div>
             </div>
             {project.clientName && (
@@ -309,7 +316,8 @@ export default function ProjectDetailsPage() {
           </div>
         </CardContent>
       </Card>
-  );
+    )
+  };
 
   return (
     <>

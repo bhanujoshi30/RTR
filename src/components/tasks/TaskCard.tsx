@@ -28,7 +28,7 @@ import {
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { ProgressReportDialog } from '@/components/attachments/ProgressReportDialog';
-import { numberToWordsInr } from '@/lib/currencyUtils';
+import { numberToWordsInr, replaceDevanagariNumerals } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
 
 interface TaskCardProps {
@@ -197,7 +197,9 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
     if (!showReminder || daysRemaining === null) return '';
     if (daysRemaining <= 0) return t('taskCard.reminderDueToday');
     const key = daysRemaining === 1 ? 'taskCard.reminderDayLeft' : 'taskCard.reminderDaysLeft';
-    return t(key, { day: '1', days: daysRemaining.toString() });
+    const daysStr = daysRemaining.toString();
+    const translatedDays = locale === 'hi' ? replaceDevanagariNumerals(daysStr) : daysStr;
+    return t(key, { count: translatedDays });
   };
 
   const openIssuesText = () => {
@@ -207,6 +209,9 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   };
 
   const showReminder = task.taskType === 'collection' && task.status !== 'Completed' && daysRemaining !== null && task.reminderDays && daysRemaining >= 0 && daysRemaining <= task.reminderDays;
+  
+  const createdAtText = task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true, locale: dateLocale }) : 'N/A';
+  const dueDateText = task.dueDate ? format(task.dueDate, 'PP', { locale: dateLocale }) : '';
 
   return (
     <>
@@ -275,10 +280,10 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
           <div className="flex flex-col gap-y-2">
             <div className="flex items-center text-xs text-muted-foreground">
               <CalendarDays className="mr-1.5 h-3.5 w-3.5" />
-              {t('common.created')} {task.createdAt ? formatDistanceToNow(task.createdAt, { addSuffix: true, locale: dateLocale }) : 'N/A'}
+              {t('common.created')} {locale === 'hi' ? replaceDevanagariNumerals(createdAtText) : createdAtText}
               {task.dueDate && (
                 <span className="ml-2 border-l pl-2">
-                  {t('common.due')}: {format(task.dueDate, 'PP', { locale: dateLocale })}
+                  {t('common.due')}: {locale === 'hi' ? replaceDevanagariNumerals(dueDateText) : dueDateText}
                 </span>
               )}
             </div>

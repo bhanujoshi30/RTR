@@ -8,7 +8,7 @@ import { Layers, ListChecks, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/useAuth';
-import { numberToWordsInr } from '@/lib/currencyUtils';
+import { numberToWordsInr, replaceDevanagariNumerals } from '@/lib/utils';
 import { useTranslation } from '@/hooks/useTranslation';
 
 const RupeeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
@@ -53,7 +53,9 @@ export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTime
     if (!showReminder || daysRemaining === null) return '';
     if (daysRemaining <= 0) return t('taskCard.reminderDueToday');
     const key = daysRemaining === 1 ? 'taskCard.reminderDayLeft' : 'taskCard.reminderDaysLeft';
-    return t(key, { day: '1', days: daysRemaining.toString() });
+    const daysStr = daysRemaining.toString();
+    const translatedDays = locale === 'hi' ? replaceDevanagariNumerals(daysStr) : daysStr;
+    return t(key, { count: translatedDays });
   };
 
   const openIssuesText = () => {
@@ -61,6 +63,9 @@ export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTime
     const key = task.openIssueCount === 1 ? 'taskCard.openIssue' : 'taskCard.openIssues';
     return t(key, { count: task.openIssueCount!.toString() });
   };
+  
+  const formattedDueDate = task.dueDate ? format(task.dueDate, 'PP', { locale: dateLocale }) : '';
+  const displayDueDate = locale === 'hi' ? replaceDevanagariNumerals(formattedDueDate) : formattedDueDate;
 
   return (
     <div className="flex flex-col space-y-2">
@@ -73,7 +78,7 @@ export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTime
              </div>
           </div>
           <div className="text-right flex-shrink-0">
-              <p className="text-sm font-medium text-foreground">{task.dueDate ? format(task.dueDate, 'PP', { locale: dateLocale }) : ''}</p>
+              <p className="text-sm font-medium text-foreground">{displayDueDate}</p>
               <p className="text-xs text-muted-foreground">{t('projectedTimeline.dueDate')}</p>
           </div>
       </div>

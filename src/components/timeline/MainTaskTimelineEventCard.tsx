@@ -9,8 +9,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { enUS, hi } from 'date-fns/locale';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
-const renderDescriptionWithLink = (event: TimelineEvent, t: (key: string, params?: any) => string) => {
+const renderDescriptionWithLink = (event: TimelineEvent, t: (key: string, params?: any) => string, locale: 'en' | 'hi') => {
   // Use the stored key if it exists.
   if (event.descriptionKey) {
     const statusToKey = (status: string) => `status.${status.toLowerCase().replace(/ /g, '')}`;
@@ -23,7 +24,8 @@ const renderDescriptionWithLink = (event: TimelineEvent, t: (key: string, params
       detailsForTranslation.oldStatus = t(statusToKey(event.details.oldStatus));
     }
     
-    const descriptionText = t(event.descriptionKey, detailsForTranslation);
+    let descriptionText = t(event.descriptionKey, detailsForTranslation);
+    descriptionText = locale === 'hi' ? replaceDevanagariNumerals(descriptionText) : descriptionText;
 
     if (event.type === 'ATTACHMENT_ADDED' && event.details?.url && event.details?.filename) {
       const filename = event.details.filename as string;
@@ -88,7 +90,8 @@ export function MainTaskTimelineEventCard({ event }: { event: AggregatedEvent })
         ? t('timeline.eventsOnSubTask_one')
         : t('timeline.eventsOnSubTask_other', { count: events.length });
 
-    const latestActivityText = t('timeline.latestActivity', { time: formatDistanceToNow(event.timestamp, { addSuffix: true, locale: dateLocale }) });
+    const latestActivityFormatted = formatDistanceToNow(event.timestamp, { addSuffix: true, locale: dateLocale });
+    const latestActivityText = t('timeline.latestActivity', { time: locale === 'hi' ? replaceDevanagariNumerals(latestActivityFormatted) : latestActivityFormatted });
 
 
     // For clients, render a simplified, non-interactive view
@@ -134,16 +137,19 @@ export function MainTaskTimelineEventCard({ event }: { event: AggregatedEvent })
                   <div className="relative space-y-4 pl-8 pt-2">
                     {/* Dotted line for sub-events */}
                     <div className="absolute left-4 top-0 bottom-0 w-px border-l-2 border-dashed border-border" />
-                    {events.map((subEvent) => (
-                      <div key={subEvent.id} className="relative">
-                        {/* Dot for each sub-event */}
-                        <div className="absolute -left-1.5 top-2 h-1.5 w-1.5 rounded-full bg-border" />
-                        {renderDescriptionWithLink(subEvent, t)}
-                        <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(subEvent.timestamp, { addSuffix: true, locale: dateLocale })}
-                        </p>
-                      </div>
-                    ))}
+                    {events.map((subEvent) => {
+                      const subEventDate = formatDistanceToNow(subEvent.timestamp, { addSuffix: true, locale: dateLocale });
+                      return (
+                          <div key={subEvent.id} className="relative">
+                            {/* Dot for each sub-event */}
+                            <div className="absolute -left-1.5 top-2 h-1.5 w-1.5 rounded-full bg-border" />
+                            {renderDescriptionWithLink(subEvent, t, locale)}
+                            <p className="text-xs text-muted-foreground">
+                              {locale === 'hi' ? replaceDevanagariNumerals(subEventDate) : subEventDate}
+                            </p>
+                          </div>
+                      )
+                    })}
                   </div>
               </AccordionContent>
             </AccordionItem>

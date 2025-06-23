@@ -16,6 +16,7 @@ import { enUS, hi } from 'date-fns/locale';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useTranslation } from '@/hooks/useTranslation';
+import { replaceDevanagariNumerals } from '@/lib/utils';
 
 export default function IssueDetailsPage() {
   const params = useParams();
@@ -89,6 +90,11 @@ export default function IssueDetailsPage() {
   const canEditIssue = user && user.uid === issue.ownerUid;
   const backPath = `/projects/${projectId}/tasks/${taskId}`;
   const displayAssignedNames = issue.assignedToNames && issue.assignedToNames.length > 0 ? issue.assignedToNames.join(', ') : 'None';
+  
+  const formattedCreatedAt = format(issue.createdAt, 'PPP p', { locale: dateLocale });
+  const displayCreatedAt = locale === 'hi' ? replaceDevanagariNumerals(formattedCreatedAt) : formattedCreatedAt;
+  const formattedDueDate = format(issue.dueDate, 'PPP', { locale: dateLocale });
+  const displayDueDate = locale === 'hi' ? replaceDevanagariNumerals(formattedDueDate) : formattedDueDate;
 
   return (
     <div className="space-y-6">
@@ -116,8 +122,8 @@ export default function IssueDetailsPage() {
                 <div className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.severity')}</strong> <Badge className={`${getSeverityBadgeColor(issue.severity)}`}>{t(`severity.${issue.severity.toLowerCase()}`)}</Badge></div>
                 <div className="flex items-center gap-2"><User className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.createdBy')}</strong> {issue.ownerName || 'N/A'}</div>
                 <div className="flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.assignedTo')}</strong> {displayAssignedNames}</div>
-                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.created')}:</strong> {format(issue.createdAt, 'PPP p', { locale: dateLocale })}</div>
-                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.due')}:</strong> {format(issue.dueDate, 'PPP', { locale: dateLocale })}</div>
+                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.created')}:</strong> {displayCreatedAt}</div>
+                <div className="flex items-center gap-2"><CalendarDays className="h-4 w-4 text-muted-foreground" /> <strong>{t('common.due')}:</strong> {displayDueDate}</div>
             </div>
             <div>
                 <h4 className="font-semibold mb-2">{t('common.attachments')}</h4>
