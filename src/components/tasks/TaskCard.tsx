@@ -48,6 +48,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
   const [isStatusChanging, setIsStatusChanging] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     if (initialTask.taskType === 'collection' && initialTask.dueDate) {
@@ -206,6 +207,9 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   };
 
   const handleViewTask = () => {
+    if (isActuallyMainTask) {
+      setIsNavigating(true);
+    }
     router.push(`/projects/${task.projectId}/tasks/${task.id}`);
   };
 
@@ -236,7 +240,12 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
           onSuccess={handleProofSuccess}
         />
       )}
-      <Card className="shadow-md transition-shadow hover:shadow-lg">
+      <Card className="shadow-md transition-shadow hover:shadow-lg relative">
+        {isNavigating && (
+          <div className="absolute inset-0 bg-card/80 backdrop-blur-sm flex items-center justify-center z-10 rounded-lg">
+            <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          </div>
+        )}
         <CardHeader className="pb-3 cursor-pointer hover:bg-muted/50 transition-colors" onClick={handleViewTask}>
           <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-2">
