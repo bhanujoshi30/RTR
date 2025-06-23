@@ -7,31 +7,44 @@ import { TimelineEventCard } from './TimelineEventCard';
 import { ListChecks } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 
-interface MainTaskTimelineEventCardProps {
-  event: AggregatedEvent;
-}
+const renderDescriptionWithLink = (event: TimelineEvent, t: (key: string, params?: any) => string) => {
+  const statusToKey = (status: string) => `status.${status.toLowerCase().replace(/ /g, '')}`;
 
-const renderDescriptionWithLink = (event: TimelineEvent) => {
+  const detailsForTranslation = { ...event.details };
+  if (event.details.newStatus) {
+    detailsForTranslation.newStatus = t(statusToKey(event.details.newStatus));
+  }
+  if (event.details.oldStatus) {
+    detailsForTranslation.oldStatus = t(statusToKey(event.details.oldStatus));
+  }
+  
+  const descriptionText = t(event.descriptionKey, detailsForTranslation);
+
   if (event.type === 'ATTACHMENT_ADDED' && event.details?.url && event.details?.filename) {
     const filename = event.details.filename as string;
-    // Ensure description is a string before splitting
-    const description = typeof event.description === 'string' ? event.description : '';
-    const parts = description.split(`"${filename}"`);
+    const parts = descriptionText.split(filename);
     return (
       <p className="text-sm text-foreground">
         <span className="font-semibold">{event.author.name}</span>
-        {parts[0]}
-        <a href={event.details.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
-          "{filename}"
-        </a>
-        {parts[1]}
+         {parts.length > 1 ? (
+          <>
+            {parts[0]}
+            <a href={event.details.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+              {filename}
+            </a>
+            {parts[1]}
+          </>
+        ) : (
+          ` ${descriptionText}` // fallback if split fails
+        )}
       </p>
     );
   }
   return (
     <p className="text-sm text-foreground">
-      <span className="font-semibold">{event.author.name}</span> {event.description}
+      <span className="font-semibold">{event.author.name}</span> {descriptionText}
     </p>
   );
 };
@@ -39,6 +52,7 @@ const renderDescriptionWithLink = (event: TimelineEvent) => {
 
 export function MainTaskTimelineEventCard({ event }: MainTaskTimelineEventCardProps) {
   const { user } = useAuth();
+  const { t } = useTranslation();
   const isClient = user?.role === 'client';
 
   // Case 1: It's a group of sub-task events
@@ -95,7 +109,7 @@ export function MainTaskTimelineEventCard({ event }: MainTaskTimelineEventCardPr
                       <div key={subEvent.id} className="relative">
                         {/* Dot for each sub-event */}
                         <div className="absolute -left-1.5 top-2 h-1.5 w-1.5 rounded-full bg-border" />
-                        {renderDescriptionWithLink(subEvent)}
+                        {renderDescriptionWithLink(subEvent, t)}
                         <p className="text-xs text-muted-foreground">
                           {formatDistanceToNow(subEvent.timestamp, { addSuffix: true })}
                         </p>

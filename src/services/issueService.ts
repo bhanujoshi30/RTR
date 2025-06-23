@@ -92,7 +92,7 @@ export const createIssue = async (parentTask: Task, userUid: string, ownerName: 
         parentTask.id,
         userUid,
         'ISSUE_CREATED',
-        `created issue: "${issueData.title}".`,
+        'timeline.issueCreated',
         { issueId: newIssueRef.id, title: issueData.title }
     );
     
@@ -262,7 +262,7 @@ export const updateIssue = async (issueId: string, userUid: string, parentSubTas
             issueData.taskId,
             userUid,
             'ISSUE_STATUS_CHANGED',
-            `changed status of issue "${issueData.title}" to '${updates.status}'.`,
+            'timeline.issueStatusChanged',
             { issueId, oldStatus: issueData.status, newStatus: updates.status, title: issueData.title }
         );
     }
@@ -321,7 +321,7 @@ export const updateIssueStatus = async (
           issueData.taskId,
           userUid,
           'ISSUE_STATUS_CHANGED',
-          `changed status of issue "${issueData.title}" to '${newStatus}' with comments and proof.`,
+          'timeline.issueStatusChangedWithProof',
           { 
             issueId, 
             oldStatus, 
@@ -340,7 +340,7 @@ export const updateIssueStatus = async (
           issueData.taskId,
           userUid,
           'ISSUE_STATUS_CHANGED',
-          `changed status of issue "${issueData.title}" to '${newStatus}'.`,
+          'timeline.issueStatusChanged',
           { issueId, oldStatus, newStatus, title: issueData.title }
       );
     }
@@ -368,7 +368,7 @@ export const deleteIssue = async (issueId: string, userUid: string): Promise<voi
         issueData.taskId,
         userUid,
         'ISSUE_DELETED',
-        `deleted issue: "${issueData.title}".`,
+        'timeline.issueDeleted',
         { issueId: issueData.id, title: issueData.title }
     );
     await deleteDoc(issueDocRef);

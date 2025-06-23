@@ -344,5 +344,26 @@
   "projectedTimeline": {
     "dueDate": "नियत तारीख",
     "progress": "प्रगति"
+  },
+  "timeline": {
+    "attachmentAdded": "अनुलग्नक अपलोड किया: \"{{filename}}\"।",
+    "attachmentAddedToIssue": "मुद्दे के लिए एक अनुलग्नक अपलोड किया: \"{{filename}}\"।",
+    "attachmentDeleted": "अनुलग्नक हटा दिया: \"{{filename}}\"।",
+    "issueCreated": "मुद्दा बनाया: \"{{title}}\"।",
+    "issueStatusChanged": "मुद्दे \"{{title}}\" की स्थिति को '{{newStatus}}' में बदल दिया।",
+    "issueStatusChangedWithProof": "मुद्दे \"{{title}}\" की स्थिति को टिप्पणियों और सबूत के साथ '{{newStatus}}' में बदल दिया।",
+    "issueDeleted": "मुद्दा हटा दिया: \"{{title}}\"।",
+    "subTaskCreated": "उप-कार्य बनाया।",
+    "assignmentChanged": "कार्य {{names}} को सौंपा।",
+    "mainTaskCreated": "मुख्य कार्य बनाया।",
+    "collectionTaskCreated": "₹{{cost, number}} के लिए एक संग्रह कार्य बनाया।",
+    "mainTaskUpdated": "मुख्य कार्य विवरण अपडेट किया।",
+    "collectionCostUpdated": "संग्रह राशि को ₹{{oldCost, number}} से ₹{{newCost, number}} में अपडेट किया।",
+    "taskRenamed": "कार्य का नाम बदलकर \"{{newName}}\" कर दिया।",
+    "dueDateUpdated": "नियत तारीख को {{newDueDate}} में अपडेट किया।",
+    "assignmentUpdated": "असाइनमेंट को {{names}} में अपडेट किया।",
+    "statusChanged": "स्थिति को '{{oldStatus}}' से '{{newStatus}}' में बदल दिया।",
+    "mainTaskCompleted": "मुख्य कार्य पूरा किया।",
+    "mainTaskReopened": "उप-कार्य \"{{subTaskName}}\" को फिर से खोलने के कारण मुख्य कार्य को फिर से खोला।"
   }
 }

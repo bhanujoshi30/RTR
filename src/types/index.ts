@@ -105,7 +105,7 @@ export interface TimelineEvent {
   taskId: string;
   timestamp: Date;
   type: TimelineEventType;
-  description: string;
+  descriptionKey: string;
   author: {
     uid: string;
     name: string;

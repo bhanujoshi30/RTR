@@ -344,5 +344,26 @@
   "projectedTimeline": {
     "dueDate": "Due Date",
     "progress": "Progress"
+  },
+  "timeline": {
+    "attachmentAdded": "uploaded an attachment: \"{{filename}}\".",
+    "attachmentAddedToIssue": "uploaded an attachment for an issue: \"{{filename}}\".",
+    "attachmentDeleted": "deleted an attachment: \"{{filename}}\".",
+    "issueCreated": "created issue: \"{{title}}\".",
+    "issueStatusChanged": "changed status of issue \"{{title}}\" to '{{newStatus}}'.",
+    "issueStatusChangedWithProof": "changed status of issue \"{{title}}\" to '{{newStatus}}' with comments and proof.",
+    "issueDeleted": "deleted issue: \"{{title}}\".",
+    "subTaskCreated": "created the sub-task.",
+    "assignmentChanged": "assigned the task to {{names}}.",
+    "mainTaskCreated": "created the main task.",
+    "collectionTaskCreated": "created a collection task for ₹{{cost, number}}.",
+    "mainTaskUpdated": "updated the main task details.",
+    "collectionCostUpdated": "updated collection amount from ₹{{oldCost, number}} to ₹{{newCost, number}}.",
+    "taskRenamed": "renamed task to \"{{newName}}\".",
+    "dueDateUpdated": "updated the due date to {{newDueDate}}.",
+    "assignmentUpdated": "updated assignments to {{names}}.",
+    "statusChanged": "changed status from '{{oldStatus}}' to '{{newStatus}}'.",
+    "mainTaskCompleted": "completed the main task.",
+    "mainTaskReopened": "reopened the main task because sub-task \"{{subTaskName}}\" was reopened."
   }
 }

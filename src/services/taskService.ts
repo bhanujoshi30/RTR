@@ -133,7 +133,7 @@ export const createTask = async (
         newTaskId,
         userUid,
         'TASK_CREATED',
-        `created the sub-task.`
+        'timeline.subTaskCreated'
       );
       if (newTaskPayload.assignedToUids.length > 0) {
           const names = newTaskPayload.assignedToNames.join(', ');
@@ -141,22 +141,22 @@ export const createTask = async (
             newTaskId,
             userUid,
             'ASSIGNMENT_CHANGED',
-            `assigned the task to ${names}.`,
-            { assigned: newTaskPayload.assignedToNames }
+            'timeline.assignmentChanged',
+            { names: names }
           );
       }
     } else { 
-        let description = 'created the main task.';
+        let descriptionKey = 'timeline.mainTaskCreated';
         const details: Record<string, any> = {};
         if (newTaskPayload.taskType === 'collection' && newTaskPayload.cost) {
-            description = `created a collection task for ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(newTaskPayload.cost)}.`;
+            descriptionKey = 'timeline.collectionTaskCreated';
             details.cost = newTaskPayload.cost;
         }
         await logTimelineEvent(
             newTaskId,
             userUid,
             'TASK_CREATED',
-            description,
+            descriptionKey,
             details
         );
     }
@@ -482,25 +482,27 @@ export const updateTask = async (
     }
     
     if (detailsChanged) {
-        let description = 'updated the main task details.';
+        let descriptionKey = 'timeline.mainTaskUpdated';
         const details: Record<string, any> = { updatedFields: [] };
         
         const oldCost = taskDataFromSnap.cost || 0;
         const newCost = updates.cost !== undefined ? (updates.cost || 0) : oldCost;
 
         if (taskDataFromSnap.taskType === 'collection' && newCost !== oldCost) {
-             description = `updated collection amount from ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(oldCost)} to ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(newCost)}.`;
+             descriptionKey = 'timeline.collectionCostUpdated';
              details.oldCost = oldCost;
              details.newCost = newCost;
              (details.updatedFields as string[]).push('cost');
         } else if (updates.name && updates.name !== taskDataFromSnap.name) {
-             description = `renamed task to "${updates.name}".`;
+             descriptionKey = 'timeline.taskRenamed';
+             details.newName = updates.name;
              (details.updatedFields as string[]).push('name');
         } else if (updates.dueDate) {
             const newDate = updates.dueDate ? updates.dueDate : new Date();
             const oldDate = taskDataFromSnap.dueDate ? taskDataFromSnap.dueDate : new Date();
             if(format(newDate, 'PP') !== format(oldDate, 'PP')){
-                description = `updated the due date to ${format(newDate, 'PP')}.`;
+                descriptionKey = 'timeline.dueDateUpdated';
+                details.newDueDate = format(newDate, 'PP');
                 (details.updatedFields as string[]).push('dueDate');
             }
         }
@@ -508,7 +510,7 @@ export const updateTask = async (
             taskId,
             userUid,
             'MAIN_TASK_UPDATED',
-            description,
+            descriptionKey,
             details
         );
     }
@@ -529,8 +531,8 @@ export const updateTask = async (
       taskId,
       userUid,
       'ASSIGNMENT_CHANGED',
-      `updated assignments to ${newNames}.`,
-      { assigned: updates.assignedToNames }
+      'timeline.assignmentUpdated',
+      { names: newNames }
     );
   }
 
@@ -539,7 +541,7 @@ export const updateTask = async (
         taskId,
         userUid,
         'STATUS_CHANGED',
-        `changed status from '${taskDataFromSnap.status}' to '${updates.status}'.`,
+        'timeline.statusChanged',
         { oldStatus: taskDataFromSnap.status, newStatus: updates.status }
     );
   }
@@ -580,7 +582,7 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
         taskId,
         userUid,
         'STATUS_CHANGED',
-        `changed status from '${oldStatus}' to '${status}'.`,
+        'timeline.statusChanged',
         { oldStatus, newStatus: status }
       );
 
@@ -599,7 +601,7 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
                     taskData.parentId,
                     userUid,
                     'MAIN_TASK_COMPLETED',
-                    `completed the main task.`
+                    'timeline.mainTaskCompleted'
                 );
             }
         }
@@ -618,8 +620,8 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
                 parentId,
                 userUid,
                 'MAIN_TASK_REOPENED',
-                `reopened the main task because sub-task "${taskData.name}" was reopened.`,
-                { subTaskId: taskId, subTaskName: taskData.name }
+                'timeline.mainTaskReopened',
+                { subTaskName: taskData.name }
             );
         }
       }

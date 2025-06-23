@@ -85,17 +85,14 @@ export const addAttachmentMetadata = async (attachmentData: AttachmentMetadata):
 
   const docRef = await addDoc(attachmentsCollectionRef, payload);
   
-  let description = `uploaded an attachment: "${attachmentData.filename}".`;
-  if (attachmentData.issueId) {
-      description = `uploaded an attachment for an issue: "${attachmentData.filename}".`
-  }
+  const descriptionKey = attachmentData.issueId ? 'timeline.attachmentAddedToIssue' : 'timeline.attachmentAdded';
   
   // Log timeline event for attachment
   await logTimelineEvent(
     attachmentData.taskId,
     attachmentData.ownerUid,
     'ATTACHMENT_ADDED',
-    description,
+    descriptionKey,
     { 
         reportType: attachmentData.reportType, 
         url: attachmentData.url, 
@@ -170,7 +167,7 @@ export const deleteAttachment = async (taskId: string, attachmentId: string, use
         taskId,
         userUid,
         'ATTACHMENT_DELETED',
-        `deleted an attachment: "${attachmentData.filename}".`,
+        'timeline.attachmentDeleted',
         { attachmentId: attachmentData.id, filename: attachmentData.filename }
     );
     

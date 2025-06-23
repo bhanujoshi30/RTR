@@ -9,14 +9,14 @@ import { getUserDisplayName } from '@/services/userService';
  * @param taskId The ID of the sub-task.
  * @param userUid The UID of the user performing the action.
  * @param type The type of event.
- * @param description A human-readable summary of the event.
- * @param details An object containing event-specific data.
+ * @param descriptionKey A key for i18n translation of the event summary.
+ * @param details An object containing event-specific data for translation.
  */
 export const logTimelineEvent = async (
   taskId: string,
   userUid: string,
   type: TimelineEventType,
-  description: string,
+  descriptionKey: string,
   details: Record<string, any> = {}
 ): Promise<void> => {
   try {
@@ -26,7 +26,7 @@ export const logTimelineEvent = async (
     const eventPayload = {
       taskId,
       type,
-      description,
+      descriptionKey,
       author: { uid: userUid, name: authorName },
       details,
       timestamp: serverTimestamp(),
