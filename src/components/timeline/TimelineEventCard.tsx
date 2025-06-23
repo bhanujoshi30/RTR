@@ -40,41 +40,61 @@ const eventIcons: Record<TimelineEventType, React.ElementType> = {
 };
 
 const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) => string) => {
-  const statusToKey = (status: string) => `status.${status.toLowerCase().replace(/ /g, '')}`;
+  // If descriptionKey exists, use the new translation system
+  if (event.descriptionKey) {
+    const statusToKey = (status: string) => `status.${status.toLowerCase().replace(/ /g, '')}`;
 
-  const detailsForTranslation = { ...event.details };
-  if (event.details.newStatus) {
-    detailsForTranslation.newStatus = t(statusToKey(event.details.newStatus));
-  }
-  if (event.details.oldStatus) {
-    detailsForTranslation.oldStatus = t(statusToKey(event.details.oldStatus));
-  }
+    const detailsForTranslation = { ...event.details };
+    if (event.details.newStatus) {
+      detailsForTranslation.newStatus = t(statusToKey(event.details.newStatus));
+    }
+    if (event.details.oldStatus) {
+      detailsForTranslation.oldStatus = t(statusToKey(event.details.oldStatus));
+    }
+    
+    const descriptionText = t(event.descriptionKey, detailsForTranslation);
 
-  const descriptionText = t(event.descriptionKey, detailsForTranslation);
-
-  if (event.type === 'ATTACHMENT_ADDED' && event.details?.url && event.details?.filename) {
-    const filename = event.details.filename as string;
-    const parts = descriptionText.split(filename);
+    if (event.type === 'ATTACHMENT_ADDED' && event.details?.url && event.details?.filename) {
+      const filename = event.details.filename as string;
+      const parts = descriptionText.split(filename);
+      return (
+        <p className="text-sm text-foreground">
+          <span className="font-semibold">{event.author.name}</span>
+          {parts.length > 1 ? (
+            <>
+              {parts[0]}
+              <a href={event.details.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
+                {filename}
+              </a>
+              {parts[1]}
+            </>
+          ) : (
+            ` ${descriptionText}` // fallback if split fails
+          )}
+        </p>
+      );
+    }
     return (
       <p className="text-sm text-foreground">
-        <span className="font-semibold">{event.author.name}</span>
-        {parts.length > 1 ? (
-          <>
-            {parts[0]}
-            <a href={event.details.url} target="_blank" rel="noopener noreferrer" className="font-medium text-primary hover:underline">
-              {filename}
-            </a>
-            {parts[1]}
-          </>
-        ) : (
-          ` ${descriptionText}` // fallback if split fails
-        )}
+        <span className="font-semibold">{event.author.name}</span> {descriptionText}
       </p>
     );
   }
+
+  // Fallback for old events that have the `description` field
+  const legacyDescription = (event as any).description;
+  if (legacyDescription) {
+    return (
+      <p className="text-sm text-foreground">
+        <span className="font-semibold">{event.author.name}</span> {legacyDescription}
+      </p>
+    );
+  }
+
+  // Final fallback if nothing is found
   return (
     <p className="text-sm text-foreground">
-      <span className="font-semibold">{event.author.name}</span> {descriptionText}
+      <span className="font-semibold">{event.author.name}</span> performed an event.
     </p>
   );
 };
