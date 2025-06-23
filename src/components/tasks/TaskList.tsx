@@ -130,7 +130,7 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
     return (
       <div className="flex justify-center items-center py-8">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="ml-2">Loading tasks...</p>
+        <p className="ml-2">{t('taskList.loading')}</p>
       </div>
     );
   }
@@ -143,11 +143,11 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
   if (tasks.length === 0) {
     console.log('TaskList: Render - No tasks to display.');
     const message = isSupervisorOrMember
-      ? "You are not assigned to any sub-tasks under main tasks in this project, or there are no main tasks with such assignments."
-      : "No main tasks have been created for this project yet.";
+      ? t('taskList.noTasksSupervisor.message')
+      : t('taskList.noTasksOwner.message');
     const title = isSupervisorOrMember
-      ? "No Relevant Main Tasks"
-      : "No Main Tasks Yet";
+      ? t('taskList.noTasksSupervisor.title')
+      : t('taskList.noTasksOwner.title');
     return (
       <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-10 text-center">
         <ListTodo className="mx-auto h-12 w-12 text-muted-foreground/50" />

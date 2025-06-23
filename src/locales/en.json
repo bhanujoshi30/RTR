@@ -244,6 +244,17 @@
     "cannotDeleteTask": "Only the task owner can delete this task.",
     "cannotEditTask": "Only the task owner can edit task details."
   },
+  "taskList": {
+    "loading": "Loading tasks...",
+    "noTasksSupervisor": {
+      "title": "No Relevant Main Tasks",
+      "message": "You are not assigned to any sub-tasks under main tasks in this project, or there are no main tasks with such assignments."
+    },
+    "noTasksOwner": {
+      "title": "No Main Tasks Yet",
+      "message": "No main tasks have been created for this project yet."
+    }
+  },
   "issueCard": {
     "overdue": "Overdue",
     "closeIssue": "Close Issue",
