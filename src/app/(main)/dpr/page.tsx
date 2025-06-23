@@ -89,6 +89,20 @@ export default function DprPage() {
         fetchProjects();
     }, [isAdmin, user]);
 
+    // Reset report if language changes
+    useEffect(() => {
+        if (reportData) {
+            setReportData(null);
+            setRawReportData(null);
+            setError(null);
+            toast({
+                title: t('dpr.languageChangedTitle'),
+                description: t('dpr.languageChangedDesc'),
+            });
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [locale]);
+
     const handleGenerateReport = async () => {
         if (!selectedProjectId) {
             setError("Please select a project.");

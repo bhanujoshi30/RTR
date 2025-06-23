@@ -133,7 +133,9 @@
     "openedToday": "आज खोला गया",
     "noTasksOpened": "आज कोई नया कार्य या मुद्दे नहीं खोले गए।",
     "newAttachments": "नए अनुलग्नक",
-    "noPhotosAttached": "आज कोई फोटो संलग्न नहीं किया गया।"
+    "noPhotosAttached": "आज कोई फोटो संलग्न नहीं किया गया।",
+    "languageChangedTitle": "भाषा बदल गई है",
+    "languageChangedDesc": "रिपोर्ट साफ़ कर दी गई है। कृपया इसे नई भाषा में फिर से उत्पन्न करें।"
   },
   "users": {
     "pageTitle": "उपयोगकर्ता प्रबंधन",

@@ -133,7 +133,9 @@
     "openedToday": "Opened Today",
     "noTasksOpened": "No new tasks or issues were opened today.",
     "newAttachments": "New Attachments",
-    "noPhotosAttached": "No photos were attached today."
+    "noPhotosAttached": "No photos were attached today.",
+    "languageChangedTitle": "Language Changed",
+    "languageChangedDesc": "The report has been cleared. Please generate it again for the new language."
   },
   "users": {
     "pageTitle": "User Management",
