@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, type SubmitHandler, Controller } from 'react-hook-form';
+import { useForm, type SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { createTask, updateTask } from '@/services/taskService';
@@ -18,9 +18,8 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { CalendarIcon, Save, Loader2, Users, Layers } from 'lucide-react';
-import { format, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -326,37 +325,56 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                   />
                 </div>
                 
-                <Controller
-                  name="assignedToUids"
+                <FormField
                   control={form.control}
-                  render={({ field }) => (
-                    <div className="space-y-2">
-                        <Label className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</Label>
-                        <p className="text-sm text-muted-foreground">Select team members to assign this sub-task to.</p>
-                        <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                           {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
-                           {assignableUsers.map((assignableUser) => (
-                             <div key={assignableUser.uid} className="flex items-center space-x-3">
-                                <Checkbox
-                                    id={`task-assignee-${assignableUser.uid}`}
-                                    checked={field.value?.includes(assignableUser.uid)}
-                                    onCheckedChange={(checked) => {
+                  name="assignedToUids"
+                  render={() => (
+                    <FormItem>
+                      <div className="mb-4">
+                        <FormLabel className="flex items-center"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</FormLabel>
+                        <FormDescription>
+                          Select team members to assign this sub-task to.
+                        </FormDescription>
+                      </div>
+                      <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
+                        {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
+                        {assignableUsers.map((assignableUser) => (
+                          <FormField
+                            key={assignableUser.uid}
+                            control={form.control}
+                            name="assignedToUids"
+                            render={({ field }) => {
+                              return (
+                                <FormItem
+                                  key={assignableUser.uid}
+                                  className="flex flex-row items-center space-x-3 space-y-0"
+                                >
+                                  <FormControl>
+                                    <Checkbox
+                                      checked={(field.value || []).includes(assignableUser.uid)}
+                                      onCheckedChange={(checked) => {
                                         const currentValues = field.value || [];
-                                        if (checked) {
-                                            field.onChange([...currentValues, assignableUser.uid]);
-                                        } else {
-                                            field.onChange(currentValues.filter((id) => id !== assignableUser.uid));
-                                        }
-                                    }}
-                                />
-                                <Label htmlFor={`task-assignee-${assignableUser.uid}`} className="font-normal cursor-pointer">
-                                  {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
-                                </Label>
-                             </div>
-                           ))}
-                        </div>
-                        {form.formState.errors.assignedToUids && <p className="text-sm font-medium text-destructive">{form.formState.errors.assignedToUids.message}</p>}
-                    </div>
+                                        return checked
+                                          ? field.onChange([...currentValues, assignableUser.uid])
+                                          : field.onChange(
+                                              currentValues.filter(
+                                                (value) => value !== assignableUser.uid
+                                              )
+                                            );
+                                      }}
+                                    />
+                                  </FormControl>
+                                  <FormLabel className="font-normal cursor-pointer">
+                                    {assignableUser.displayName || assignableUser.email} ({assignableUser.role})
+                                  </FormLabel>
+                                </FormItem>
+                              );
+                            }}
+                          />
+                        ))}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
                   )}
                 />
               </>
@@ -451,3 +469,5 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     </Card>
   );
 }
+
+    
