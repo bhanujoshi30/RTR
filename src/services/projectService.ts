@@ -146,7 +146,7 @@ export const createProject = async (
   }
 };
 
-const processProjectList = async (projectsFromDb: Project[]): Promise<Project[]> => {
+const processProjectList = async (projectsFromDb: Project[], userContext: { uid: string, role: 'owner' | 'client' }): Promise<Project[]> => {
     if (projectsFromDb.length === 0) {
         return [];
     }
@@ -160,14 +160,27 @@ const processProjectList = async (projectsFromDb: Project[]): Promise<Project[]>
     }
 
     for (const chunk of taskChunks) {
-        const tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk));
-        const tasksSnapshot = await getDocs(tasksQuery);
-        tasksSnapshot.forEach(doc => {
-            const task: Task = mapDocumentToTask(doc);
-            const tasks = allTasksByProject.get(task.projectId) || [];
-            tasks.push(task);
-            allTasksByProject.set(task.projectId, tasks);
-        });
+        if (chunk.length === 0) continue;
+        
+        let tasksQuery;
+        if (userContext.role === 'owner') {
+             tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk), where('projectOwnerUid', '==', userContext.uid));
+        } else { // client
+             tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk), where('clientUid', '==', userContext.uid));
+        }
+        
+        try {
+            const tasksSnapshot = await getDocs(tasksQuery);
+            tasksSnapshot.forEach(doc => {
+                const task: Task = mapDocumentToTask(doc);
+                const tasks = allTasksByProject.get(task.projectId) || [];
+                tasks.push(task);
+                allTasksByProject.set(task.projectId, tasks);
+            });
+        } catch(error: any) {
+            console.error(`projectService: Failed to process task chunk for role ${userContext.role}`, error);
+            // Don't rethrow, just continue so the dashboard can load projects without stats
+        }
     }
 
     const projectsWithDetails = projectsFromDb.map(project => {
@@ -221,7 +234,7 @@ export const getUserProjects = async (userUid: string, userRole?: UserRole): Pro
   try {
     const querySnapshot = await getDocs(q);
     const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
-    const projects = await processProjectList(projectsFromDb);
+    const projects = await processProjectList(projectsFromDb, { uid: userUid, role: 'owner' });
     console.log(`projectService: Fetched ${projects.length} projects for owner.`);
     return projects;
   } catch (error: any) {
@@ -238,7 +251,7 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
   try {
     const querySnapshot = await getDocs(q);
     const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
-    const projects = await processProjectList(projectsFromDb);
+    const projects = await processProjectList(projectsFromDb, { uid: clientUid, role: 'client' });
     console.log(`projectService: Fetched ${projects.length} projects for client with details.`);
     return projects;
   } catch (error: any) {
@@ -364,39 +377,5 @@ export const deleteProject = async (projectId: string, userUid: string): Promise
   } catch (error: any) {
     console.error('projectService: Error deleting project and associated data for ID:', projectId, error.message, error.code ? `(${error.code})` : '', error.stack);
     throw error;
-  }
-};
-
-export const ensureUserIsInProjectMembers = async (userUid: string, projectIds: string[]): Promise<void> => {
-  if (!userUid || projectIds.length === 0) return;
-  console.log(`Ensuring user ${userUid} is in member list for projects: ${projectIds.join(', ')}`);
-  
-  const projectChunks: string[][] = [];
-  for (let i = 0; i < projectIds.length; i += 30) {
-    projectChunks.push(projectIds.slice(i, i + 30));
-  }
-
-  try {
-    for (const chunk of projectChunks) {
-        if (chunk.length === 0) continue;
-        const batch = writeBatch(db);
-        const projectsQuery = query(collection(db, 'projects'), where(documentId(), 'in', chunk));
-        const projectsSnapshot = await getDocs(projectsQuery);
-
-        projectsSnapshot.forEach(projectSnap => {
-            if (projectSnap.exists()) {
-                const projectData = projectSnap.data();
-                const memberUids = projectData.memberUids || [];
-                if (!memberUids.includes(userUid)) {
-                    console.log(`User ${userUid} not in members for project ${projectSnap.id}. Adding now.`);
-                    batch.update(projectSnap.ref, { memberUids: arrayUnion(userUid) });
-                }
-            }
-        });
-        await batch.commit();
-    }
-  } catch (error) {
-    console.error("Failed to ensure user is in project members list", error);
-    // Do not throw, as this is a background data-fix operation. The subsequent read might still fail but we tried.
   }
 };

@@ -1,89 +1,84 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
     // Helper Functions
     function isAuth() {
       return request.auth != null;
     }
-    
-    function isOwner(doc) {
-      return request.auth.uid == doc.data.ownerUid;
-    }
-    
-    function isAssignedTo(doc) {
-      return request.auth.uid in doc.data.assignedToUids;
+
+    function isOwner(resourceId) {
+      return request.auth.uid == resourceId;
     }
 
-    function isProjectOwner(projectId) {
-      // Note: This function is only safe for single-document operations, not for collection queries.
-      return request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid;
-    }
-
-    function isAdmin() {
-      // Note: This function is only safe for single-document operations, not for collection queries.
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
-    }
-
-    // Collection Rules
+    // Projects Collection
     match /projects/{projectId} {
-      allow read: if isAuth();
-      allow create: if isAuth() && request.resource.data.ownerUid == request.auth.uid;
-      // Admin check uses get(), safe for single-doc update/delete.
-      allow update, delete: if isAuth() && (isOwner(resource) || isAdmin());
-    }
-    
-    match /tasks/{taskId} {
-      // Use denormalized projectOwnerUid and assignedToUids for queryable reads.
-      allow read: if isAuth() && (request.auth.uid == resource.data.projectOwnerUid || isAssignedTo(resource));
-      
-      // Other operations are single-doc, so using isProjectOwner (with get()) is fine.
-      allow create: if isAuth() && (isProjectOwner(request.resource.data.projectId) || isAdmin());
-      allow update: if isAuth() && (isProjectOwner(request.resource.data.projectId) || isAssignedTo(resource) || isAdmin());
-      allow delete: if isAuth() && (isProjectOwner(request.resource.data.projectId) || isAdmin());
+      allow read: if isAuth(); // Any authenticated user can read project-level details.
+      allow create: if isAuth() && isOwner(request.auth.uid);
+      allow update: if isAuth() && isOwner(resource.data.ownerUid);
+      allow delete: if isAuth() && isOwner(resource.data.ownerUid);
 
-      match /attachments/{attachmentId} {
-        // These rules use get() on the parent task. Safe for single-doc reads/writes.
-        // Will fail if a collection query is ever added for attachments.
-        function isParentTaskAccessible() {
-          let taskDoc = get(/databases/$(database)/documents/tasks/$(taskId)).data;
-          return request.auth.uid == taskDoc.projectOwnerUid || request.auth.uid in taskDoc.assignedToUids;
-        }
-        allow read: if isAuth() && isParentTaskAccessible();
-        allow create: if isAuth() && isParentTaskAccessible();
-        allow delete: if isAuth() && isOwner(resource);
+      // Tasks Subcollection (deprecated, use top-level 'tasks' collection)
+      match /tasks/{taskId} {
+        allow read, write, delete: if false; // Disallow use of this subcollection
       }
-      
+    }
+
+    // Tasks Collection
+    match /tasks/{taskId} {
+      allow read: if isAuth() && (
+        isOwner(resource.data.projectOwnerUid) ||
+        isOwner(resource.data.clientUid) ||
+        request.auth.uid in resource.data.assignedToUids
+      );
+      allow create: if isAuth();
+      allow update: if isAuth() && (
+        isOwner(resource.data.ownerUid) || // Task owner
+        request.auth.uid in resource.data.assignedToUids // Assigned member
+      );
+      allow delete: if isAuth() && isOwner(resource.data.ownerUid);
+
+      // Attachments Subcollection
+      match /attachments/{attachmentId} {
+        allow read: if isAuth();
+        allow create: if isAuth();
+        allow delete: if isAuth() && isOwner(resource.data.ownerUid);
+      }
+
+      // Timeline Subcollection
       match /timeline/{eventId} {
-         function isParentTaskReadable() {
-          let taskDoc = get(/databases/$(database)/documents/tasks/$(taskId)).data;
-          return request.auth.uid == taskDoc.projectOwnerUid || request.auth.uid in taskDoc.assignedToUids;
-        }
-        allow read: if isAuth() && isParentTaskReadable();
+        allow read: if isAuth();
         allow create: if isAuth();
       }
     }
-    
+
+    // Issues Collection
     match /issues/{issueId} {
-      // Use denormalized projectOwnerUid and assignedToUids for queryable reads.
-      allow read: if isAuth() && (request.auth.uid == resource.data.projectOwnerUid || isAssignedTo(resource));
-      
-      // Create/update/delete are single-doc, so get() is safe.
-      allow create: if isAuth() && (isProjectOwner(request.resource.data.projectId) || isAssignedTo(get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId))));
-      allow update: if isAuth() && (isOwner(resource) || isAssignedTo(resource));
-      allow delete: if isAuth() && isOwner(resource);
-    }
-    
-    match /users/{userId} {
-      allow read: if isAuth();
-      // Admin check uses get(), safe for single-doc operations.
-      allow create, update, delete: if isAuth() && isAdmin();
+      allow read: if isAuth() && (
+        isOwner(resource.data.projectOwnerUid) ||
+        isOwner(resource.data.clientUid) ||
+        request.auth.uid in resource.data.assignedToUids
+      );
+      allow create: if isAuth();
+      allow update: if isAuth() && (
+        isOwner(resource.data.ownerUid) || // Issue owner
+        request.auth.uid in resource.data.assignedToUids // Assigned member
+      );
+      allow delete: if isAuth() && isOwner(resource.data.ownerUid);
     }
 
-    match /attendance/{attendanceId} {
-      allow read, create: if isAuth();
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isAuth();
+      allow create: if isAuth();
+      allow update: if isAuth();
+      allow delete: if isAuth();
+    }
+
+    // Attendance Collection
+    match /attendance/{recordId} {
+        allow read: if isAuth();
+        allow create: if isAuth();
     }
   }
 }
