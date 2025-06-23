@@ -21,7 +21,7 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
-  const { t } = useTranslation();
+  const { t, locale } = useTranslation();
 
   const isSupervisorOrMember = user?.role === 'supervisor' || user?.role === 'member';
 
@@ -115,7 +115,7 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
       setError("User not authenticated. Cannot load tasks.");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, authLoading, user]);
+  }, [projectId, authLoading, user, locale]);
 
   const onTaskUpdated = () => {
     console.log('TaskList: onTaskUpdated called, re-fetching main tasks.');
