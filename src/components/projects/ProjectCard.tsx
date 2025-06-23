@@ -69,7 +69,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 </Badge>
             )}
             <Badge variant="secondary" className={`${getStatusColor(displayStatus)} text-primary-foreground`}>
-            {displayStatus}
+              {t(`status.${displayStatus.toLowerCase().replace(/ /g, '')}`)}
             </Badge>
         </div>
       </Link>

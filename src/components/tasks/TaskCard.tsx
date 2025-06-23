@@ -28,6 +28,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { ProgressReportDialog } from '@/components/attachments/ProgressReportDialog';
 import { numberToWordsInr } from '@/lib/currencyUtils';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface TaskCardProps {
   task: Task;
@@ -41,6 +42,7 @@ const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = false, isSubTaskView = false }: TaskCardProps) {
   const { toast } = useToast();
   const router = useRouter();
+  const { t } = useTranslation();
   const [task, setTask] = useState<Task>(initialTask);
   const [subTaskCountLabel, setSubTaskCountLabel] = useState("Sub-tasks");
   const [loadingSubTaskCount, setLoadingSubTaskCount] = useState(false);
@@ -89,12 +91,12 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
             // Filter client-side to avoid composite index query
             const assignedSubtasks = allSubtasks.filter(st => st.assignedToUids?.includes(user.uid));
             const count = assignedSubtasks.length;
-            const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
-            setSubTaskCountLabel(`${count} ${taskWord} (assigned to you)`);
+            const labelKey = count === 1 ? 'taskCard.subTaskAssignedToYou' : 'taskCard.subTasksAssignedToYou';
+            setSubTaskCountLabel(t(labelKey).replace('{count}', count.toString()));
           } else {
             const count = allSubtasks.length;
-            const taskWord = count === 1 ? "Sub-task" : "Sub-tasks";
-            setSubTaskCountLabel(`${count} ${taskWord}`);
+            const labelKey = count === 1 ? 'taskCard.subTask' : 'taskCard.subTasks';
+            setSubTaskCountLabel(t(labelKey).replace('{count}', count.toString()));
           }
         } catch (error: any) {
             if (error.message && (error.message.includes("index is currently building") || error.message.includes("index is building"))) {
@@ -103,7 +105,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                 console.error("[TaskCard Debug] Failed to fetch sub-task count for main task:", task.id, error);
             }
             const isPotentiallyAssignedViewer = !isOwnerOfThisTask && (isSupervisor || isMember);
-            const errorLabel = isPotentiallyAssignedViewer ? "0 Sub-tasks (assigned to you)" : "0 Sub-tasks";
+            const errorLabel = isPotentiallyAssignedViewer ? t('taskCard.subTasksAssignedToYou').replace('{count}', '0') : t('taskCard.subTasks').replace('{count}', '0');
             setSubTaskCountLabel(errorLabel);
         } finally {
           setLoadingSubTaskCount(false); // Set loading false after fetch
@@ -112,7 +114,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
       fetchCountAndProgress();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor, isMember, isOwnerOfThisTask, isCollectionTask]);
+  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor, isMember, isOwnerOfThisTask, isCollectionTask, t]);
 
   const handleProofSuccess = async () => {
     setShowProofDialog(false);
@@ -227,6 +229,19 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const showEditButton = isOwnerOfThisTask;
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
   const hasOpenIssuesForCard = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
+  
+  const reminderText = () => {
+    if (!showReminder || daysRemaining === null) return '';
+    const key = daysRemaining === 1 ? 'taskCard.reminderDayLeft' : 'taskCard.reminderDaysLeft';
+    return t(key).replace('{day}', '1').replace('{days}', daysRemaining.toString());
+  };
+
+  const openIssuesText = () => {
+    if (!hasOpenIssuesForCard) return '';
+    const key = task.openIssueCount === 1 ? 'taskCard.openIssue' : 'taskCard.openIssues';
+    return t(key).replace('{count}', task.openIssueCount!.toString());
+  };
+
   const showReminder = task.taskType === 'collection' && task.status !== 'Completed' && daysRemaining !== null && task.reminderDays && daysRemaining >= 0 && daysRemaining <= task.reminderDays;
 
   return (
@@ -257,23 +272,23 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
               {task.isOverdue && (
                 <Badge variant="destructive">
                   <AlertTriangle className="mr-1 h-3 w-3" />
-                  Overdue
+                  {t('issueCard.overdue')}
                 </Badge>
               )}
               {canViewFinancials && showReminder && (
                 <Badge variant="destructive" className="animate-pulse">
-                    Reminder: {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} left
+                    {reminderText()}
                 </Badge>
               )}
               {hasOpenIssuesForCard && (
                 <Badge variant="outline" className="border-amber-500 text-amber-600 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
-                  {task.openIssueCount} Open Issue{task.openIssueCount !== 1 ? 's' : ''}
+                  {openIssuesText()}
                 </Badge>
               )}
               {task.status && (isActuallyMainTask || isSubTaskView) && (
                 <Badge variant="secondary" className={`${getStatusColor(task.status)} text-primary-foreground`}>
-                  {task.status}
+                  {t(`status.${task.status.toLowerCase().replace(/ /g, '')}`)}
                 </Badge>
               )}
               {isActuallyMainTask && !isCollectionTask && (
@@ -285,7 +300,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   </Badge>
                 )
               )}
-              {isCollectionTask && <Badge variant="secondary">Collection</Badge>}
+              {isCollectionTask && <Badge variant="secondary">{t('taskDetails.collectionTaskType')}</Badge>}
             </div>
           </div>
           {(!isActuallyMainTask && task.description) && (
@@ -320,7 +335,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
           {isActuallyMainTask && !isCollectionTask && task.progress !== undefined && (
             <div className="mt-3">
               <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-                <span>Main Task Progress</span>
+                <span>{t('taskCard.mainTaskProgress')}</span>
                 <span>{Math.round(task.progress)}%</span>
               </div>
               <Progress value={task.progress} className="h-2 w-full" aria-label={`Main task progress: ${Math.round(task.progress)}%`} />
@@ -330,12 +345,12 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
           <div className="flex items-center justify-end gap-2 pt-2">
               {isCollectionTask && isOwnerOfThisTask && task.status !== 'Completed' && (
                 <Button size="sm" variant="outline" onClick={() => handleCollectionStatusChange('Completed')} disabled={isStatusChanging}>
-                    {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />} Mark Complete
+                    {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle className="mr-2 h-4 w-4" />} {t('taskCard.markComplete')}
                 </Button>
               )}
               {isCollectionTask && isOwnerOfThisTask && task.status === 'Completed' && (
                 <Button size="sm" variant="outline" onClick={() => handleCollectionStatusChange('To Do')} disabled={isStatusChanging}>
-                    {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} Reopen
+                    {isStatusChanging ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcw className="mr-2 h-4 w-4" />} {t('taskCard.reopenTask')}
                 </Button>
               )}
               {!isActuallyMainTask && (
@@ -350,51 +365,51 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   <SelectContent>
                     {taskStatuses.map(status => (
                       <SelectItem key={status} value={status} className="text-xs">
-                        {status}
+                        {t(`status.${status.toLowerCase().replace(/ /g, '')}`)}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               )}
-              <Button variant="outline" size="icon" className="h-9 w-9" title="View Details" onClick={handleViewTask}>
+              <Button variant="outline" size="icon" className="h-9 w-9" title={t('common.viewDetails')} onClick={handleViewTask}>
                   <Eye className="h-4 w-4" />
-                  <span className="sr-only">View Details</span>
+                  <span className="sr-only">{t('common.viewDetails')}</span>
               </Button>
               {showEditButton && (
                <Button
                   variant="outline"
                   size="icon"
                   className="h-9 w-9"
-                  title="Edit Task"
+                  title={t('common.edit')}
                   onClick={handleEditTask}
                 >
                   <Edit2 className="h-4 w-4" />
-                   <span className="sr-only">Edit Task</span>
+                   <span className="sr-only">{t('common.edit')}</span>
               </Button>
               )}
               {canFullyEditOrDeleteThisTask && (
                <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title={isActuallyMainTask ? "Delete Main Task & Sub-tasks" : "Delete Sub-task"} disabled={!user}>
+                    <Button variant="outline" size="icon" className="h-9 w-9 hover:bg-destructive hover:text-destructive-foreground" title={isActuallyMainTask ? t('taskDetails.deleteMainTaskDesc') : t('taskDetails.deleteSubTaskDesc')} disabled={!user}>
                       <Trash2 className="h-4 w-4" />
-                      <span className="sr-only">Delete</span>
+                      <span className="sr-only">{t('common.delete')}</span>
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete "{task.name}"?</AlertDialogTitle>
+                      <AlertDialogTitle>{t('taskDetails.deleteTaskTitle').replace('{name}', task.name)}</AlertDialogTitle>
                       <AlertDialogDescription>
                         {isActuallyMainTask
-                          ? "This action cannot be undone. This will permanently delete this main task and all its sub-tasks and associated issues."
-                          : "This action cannot be undone. This will permanently delete this sub-task and its associated issues."
+                          ? t('taskDetails.deleteMainTaskDesc')
+                          : t('taskDetails.deleteSubTaskDesc')
                         }
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogCancel>{t('taskDetails.cancel')}</AlertDialogCancel>
                       <AlertDialogAction onClick={handleDeleteTask} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
                         {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Delete
+                        {t('taskDetails.delete')}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

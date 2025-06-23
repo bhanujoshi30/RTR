@@ -268,7 +268,7 @@ export default function ProjectDetailsPage() {
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.status')}</p>
               <Badge variant="secondary" className={`${getStatusColor(displayStatus)} text-primary-foreground text-base px-3 py-1`}>
-                {displayStatus}
+                 {t(`status.${displayStatus.toLowerCase().replace(/ /g, '')}`)}
               </Badge>
             </div>
             <div className="space-y-1">

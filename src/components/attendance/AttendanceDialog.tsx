@@ -11,6 +11,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Camera, Upload, MapPin, X, ImagePlus } from 'lucide-react';
 import Image from 'next/image';
 import { Progress } from '@/components/ui/progress';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface AttendanceDialogProps {
   open: boolean;
@@ -29,6 +30,7 @@ interface Location {
 export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, projectName }: AttendanceDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,7 +118,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
     setUploadProgress(0);
 
     try {
-      toast({ title: 'Processing...', description: 'Preparing your image.' });
+      toast({ title: t('attendanceDialog.processingToast'), description: t('attendanceDialog.photoProofHelp') });
 
       const image = await new Promise<HTMLImageElement>((resolve, reject) => {
         const img = new window.Image();
@@ -195,7 +197,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
       const filename = `attendance-${user.uid}-${Date.now()}.jpg`;
       const stampedFile = new File([blob], filename, { type: 'image/jpeg' });
       
-      toast({ title: 'Uploading...', description: 'Your attendance is being submitted.' });
+      toast({ title: t('attendanceDialog.uploading'), description: t('attendanceDialog.uploadingToast') });
       const downloadURL = await uploadAttendancePhoto(stampedFile, (progress) => setUploadProgress(progress));
       
       await addAttendanceRecord({
@@ -207,7 +209,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
         location: location || undefined,
       });
 
-      toast({ title: 'Success!', description: 'Attendance submitted successfully.' });
+      toast({ title: 'Success!', description: t('attendanceDialog.successToast') });
       onSuccess();
 
     } catch (error: any) {
@@ -215,7 +217,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
       if (error.code === 'storage/unauthorized' || (error.message && error.message.toLowerCase().includes('cors'))) {
           description = "Permission denied by storage. Please ensure the storage CORS configuration has been applied correctly.";
       }
-      toast({ title: 'Upload Failed', description: description, variant: 'destructive' });
+      toast({ title: t('attendanceDialog.failToast'), description: description, variant: 'destructive' });
     } finally {
       setIsUploading(false);
       setUploadProgress(null);
@@ -227,18 +229,18 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="font-headline text-xl capitalize">Submit Daily Attendance</DialogTitle>
+          <DialogTitle className="font-headline text-xl capitalize">{t('attendanceDialog.title')}</DialogTitle>
           <DialogDescription>
-            Submit attendance for project: <span className="font-semibold text-primary">{projectName}</span>.
+            {t('attendanceDialog.description').replace('{projectName}', projectName)}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           {locationError && (
             <Alert variant="destructive">
               <MapPin className="h-4 w-4" />
-              <AlertTitle>Location Access Denied</AlertTitle>
+              <AlertTitle>{t('attendanceDialog.locationDenied')}</AlertTitle>
               <AlertDescription>
-                {locationError} Stamping will proceed without location data.
+                {t('attendanceDialog.locationDeniedDesc').replace('{error}', locationError)}
               </AlertDescription>
             </Alert>
           )}
@@ -260,7 +262,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
               disabled={isUploading}
             >
               <Camera className="mr-2 h-4 w-4" />
-              {selectedFile ? 'Change Photo' : 'Take Photo'}
+              {selectedFile ? t('attendanceDialog.changePhoto') : t('attendanceDialog.takePhoto')}
             </Button>
             {previewUrl && (
               <div className="relative w-full aspect-square bg-muted rounded-md overflow-hidden flex items-center justify-center border">
@@ -275,14 +277,14 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
              {!previewUrl && (
               <div className="w-full aspect-square bg-muted rounded-md flex flex-col items-center justify-center border border-dashed">
                 <ImagePlus className="h-12 w-12 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground mt-2">Image preview will appear here</p>
+                <p className="text-sm text-muted-foreground mt-2">{t('attendanceDialog.imagePreview')}</p>
               </div>
             )}
           </div>
           
            {isUploading && uploadProgress !== null && (
             <div className="space-y-1 pt-2">
-              <p className="text-sm text-center text-muted-foreground">Uploading... {Math.round(uploadProgress)}%</p>
+              <p className="text-sm text-center text-muted-foreground">{t('attendanceDialog.uploading')} {Math.round(uploadProgress)}%</p>
               <Progress value={uploadProgress} className="w-full" />
             </div>
           )}
@@ -291,7 +293,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
         </div>
         <div className="flex justify-end gap-2 pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
-            <X className="mr-2 h-4 w-4" /> Cancel
+            <X className="mr-2 h-4 w-4" /> {t('attendanceDialog.cancel')}
           </Button>
           <Button onClick={handleUpload} disabled={!selectedFile || isUploading}>
             {isUploading ? (
@@ -299,7 +301,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
             ) : (
               <Upload className="mr-2 h-4 w-4" />
             )}
-            Submit
+            {t('attendanceDialog.submit')}
           </Button>
         </div>
       </DialogContent>

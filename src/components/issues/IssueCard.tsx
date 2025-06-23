@@ -25,6 +25,7 @@ import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { IssueStatusChangeDialog } from './IssueStatusChangeDialog';
 import Link from 'next/link';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface IssueCardProps {
   issue: Issue;
@@ -36,6 +37,7 @@ interface IssueCardProps {
 
 export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue }: IssueCardProps) {
   const { toast } = useToast();
+  const { t } = useTranslation();
   const [statusChangeState, setStatusChangeState] = useState<{ open: boolean; newStatus: IssueProgressStatus | null }>({ open: false, newStatus: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -133,14 +135,14 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
               {isOverdue && (
                 <Badge variant="destructive">
                     <AlertTriangle className="mr-1 h-3 w-3" />
-                    Overdue
+                    {t('issueCard.overdue')}
                 </Badge>
               )}
               <Badge className={`${getSeverityBadgeColor(issue.severity)}`}>
-                {issue.severity}
+                {t(`severity.${issue.severity.toLowerCase()}`)}
               </Badge>
               <Badge className={`${getStatusBadgeColor(issue.status)}`}>
-                {issue.status}
+                {t(`status.${issue.status.toLowerCase()}`)}
               </Badge>
             </div>
           </div>
@@ -169,24 +171,24 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
           <div className="flex items-center justify-end gap-2 pt-2">
             {issue.status === 'Open' && (
               <Button variant="outline" size="sm" onClick={() => handleInitiateStatusChange('Closed')} disabled={!canChangeStatusOfThisIssue}>
-                <CheckSquare className="mr-2 h-4 w-4" /> Close Issue
+                <CheckSquare className="mr-2 h-4 w-4" /> {t('issueCard.closeIssue')}
               </Button>
             )}
             {issue.status === 'Closed' && (
                <Button variant="outline" size="sm" onClick={() => handleInitiateStatusChange('Open')} disabled={!canChangeStatusOfThisIssue}>
-                <RotateCcw className="mr-2 h-4 w-4" /> Reopen Issue
+                <RotateCcw className="mr-2 h-4 w-4" /> {t('issueCard.reopenIssue')}
               </Button>
             )}
              <Button asChild variant="outline" size="sm">
                <Link href={`/projects/${projectId}/tasks/${taskId}/issues/${issue.id}`}>
-                  <Eye className="mr-2 h-4 w-4" /> View
+                  <Eye className="mr-2 h-4 w-4" /> {t('issueCard.view')}
                </Link>
              </Button>
              {canEditOrDeleteThisIssue && (
                 <AlertDialog>
                 <AlertDialogTrigger asChild>
                     <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={isDeleting}>
-                        <Trash2 className="mr-2 h-4 w-4" /> Delete
+                        <Trash2 className="mr-2 h-4 w-4" /> {t('issueCard.delete')}
                     </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent>
