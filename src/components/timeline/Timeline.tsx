@@ -6,6 +6,7 @@ import type { TimelineEvent } from '@/types';
 import { getTimelineForTask } from '@/services/timelineService';
 import { Loader2, History } from 'lucide-react';
 import { TimelineEventCard } from './TimelineEventCard';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface TimelineProps {
   taskId: string;
@@ -15,6 +16,7 @@ export function Timeline({ taskId }: TimelineProps) {
   const [events, setEvents] = useState<TimelineEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useTranslation(); // Makes the component reactive to language changes
 
   useEffect(() => {
     const fetchTimeline = async () => {

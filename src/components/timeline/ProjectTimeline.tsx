@@ -7,6 +7,7 @@ import { getTimelineForProject } from '@/services/taskService';
 import { Loader2, History } from 'lucide-react';
 import { ProjectTimelineEventCard } from './ProjectTimelineEventCard';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ProjectTimelineProps {
   projectId: string;
@@ -17,6 +18,7 @@ export function ProjectTimeline({ projectId }: ProjectTimelineProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  useTranslation(); // Makes the component reactive to language changes
 
   useEffect(() => {
     const fetchTimeline = async () => {

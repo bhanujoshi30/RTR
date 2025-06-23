@@ -6,6 +6,7 @@ import type { AggregatedEvent } from '@/types';
 import { getTimelineForMainTask } from '@/services/taskService';
 import { Loader2, History } from 'lucide-react';
 import { MainTaskTimelineEventCard } from './MainTaskTimelineEventCard';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface MainTaskTimelineProps {
   mainTaskId: string;
@@ -15,6 +16,7 @@ export function MainTaskTimeline({ mainTaskId }: MainTaskTimelineProps) {
   const [events, setEvents] = useState<AggregatedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  useTranslation(); // Makes the component reactive to language changes
 
   useEffect(() => {
     const fetchTimeline = async () => {
