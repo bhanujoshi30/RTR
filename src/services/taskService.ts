@@ -19,7 +19,7 @@ import {
   getCountFromServer,
   documentId,
 } from 'firebase/firestore';
-import { deleteIssuesForTask, hasOpenIssues, getOpenIssuesForTaskIds } from './issueService';
+import { deleteIssuesForTask, getOpenIssuesForTaskIds } from './issueService';
 import { logTimelineEvent, getTimelineForTask } from '@/services/timelineService';
 import { format } from 'date-fns';
 
@@ -187,34 +187,21 @@ export const getProjectMainTasks = async (projectId: string, filterByIds?: strin
     if (standardMainTasks.length === 0) {
         mainTasks.forEach(mt => {
             mt.progress = 0;
-            mt.openIssueCount = 0;
         });
         mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
         return mainTasks;
     }
-
 
     const subTasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
     const subTasksSnapshot = await getDocs(subTasksQuery);
     const allSubTasksInProject = subTasksSnapshot.docs.map(mapDocumentToTask);
     
     if (allSubTasksInProject.length === 0) {
-        mainTasks.forEach(mt => {
-            mt.progress = 0;
-            mt.openIssueCount = 0;
-        });
+        mainTasks.forEach(mt => { mt.progress = 0; });
         mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
         return mainTasks;
     }
     
-    const subTaskIds = allSubTasksInProject.map(t => t.id);
-    const openIssues = await getOpenIssuesForTaskIds(subTaskIds);
-
-    const issuesBySubTaskId = openIssues.reduce((acc, issue) => {
-        acc[issue.taskId] = (acc[issue.taskId] || 0) + 1;
-        return acc;
-    }, {} as Record<string, number>);
-
     const subTasksByMainTaskId = allSubTasksInProject.reduce((acc, subTask) => {
         const mainTaskId = subTask.parentId!;
         if (!acc[mainTaskId]) {
@@ -227,61 +214,19 @@ export const getProjectMainTasks = async (projectId: string, filterByIds?: strin
     mainTasks.forEach(mainTask => {
         if (mainTask.taskType === 'collection') {
             mainTask.progress = 0;
-            mainTask.openIssueCount = 0;
-            // Do not derive status for collection tasks
         } else {
             const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
-            let totalOpenIssues = 0;
-            relatedSubTasks.forEach(subTask => {
-                totalOpenIssues += (issuesBySubTaskId[subTask.id] || 0);
-            });
-            mainTask.openIssueCount = totalOpenIssues;
-
             const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
             mainTask.progress = relatedSubTasks.length > 0 ? Math.round((completedSubTasks / relatedSubTasks.length) * 100) : 0;
             
-            // Derive status from progress for standard main tasks
             if (relatedSubTasks.length > 0) {
-                if (mainTask.progress === 100) {
-                    mainTask.status = 'Completed';
-                } else if (mainTask.progress > 0 || relatedSubTasks.some(st => st.status === 'In Progress')) {
-                    mainTask.status = 'In Progress';
-                } else {
-                    mainTask.status = 'To Do';
-                }
+                if (mainTask.progress === 100) mainTask.status = 'Completed';
+                else if (mainTask.progress > 0 || relatedSubTasks.some(st => st.status === 'In Progress')) mainTask.status = 'In Progress';
+                else mainTask.status = 'To Do';
             } else {
                 mainTask.status = 'To Do';
             }
         }
-        
-        // Calculate Overdue Status
-        const now = new Date();
-        let overdue = false;
-        if (mainTask.dueDate && now > mainTask.dueDate && mainTask.status !== 'Completed') {
-            overdue = true;
-        }
-
-        const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
-        if (!overdue) {
-            for (const subTask of relatedSubTasks) {
-                if (subTask.dueDate && now > subTask.dueDate && subTask.status !== 'Completed') {
-                    overdue = true;
-                    break;
-                }
-            }
-        }
-        
-        if (!overdue) {
-            const subTaskIds = relatedSubTasks.map(st => st.id);
-            const relatedIssues = openIssues.filter(issue => subTaskIds.includes(issue.taskId));
-            for (const issue of relatedIssues) {
-                if (issue.dueDate && now > issue.dueDate && issue.status === 'Open') {
-                    overdue = true;
-                    break;
-                }
-            }
-        }
-        mainTask.isOverdue = overdue;
     });
 
     mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
@@ -300,7 +245,6 @@ export const getSubTasks = async (parentId: string): Promise<Task[]> => {
     return [];
   }
 
-  // Removed orderBy to prevent needing a composite index by default
   const q = query(
     tasksCollection,
     where('parentId', '==', parentId)
@@ -310,7 +254,6 @@ export const getSubTasks = async (parentId: string): Promise<Task[]> => {
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
     
-    // Sort client-side
     tasks.sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
 
     console.log(`taskService: Fetched ${tasks.length} sub-tasks for parentId ${parentId}.`);
@@ -329,7 +272,6 @@ export const getProjectSubTasksAssignedToUser = async (projectId: string, userUi
   console.log(`taskService: getProjectSubTasksAssignedToUser for projectId: ${projectId}, userUid: ${userUid}`);
   if (!projectId || !userUid) return [];
 
-  // Query without ordering to avoid composite index
   const q = query(
     tasksCollection,
     where('projectId', '==', projectId),
@@ -365,14 +307,7 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
             return null;
         }
 
-        const taskData = mapDocumentToTask(taskSnap);
-        if (!taskData.parentId) {
-            // Re-fetch with full aggregation to get progress and issue counts
-            const mainTasks = await getProjectMainTasks(taskData.projectId, [taskId]);
-            return mainTasks[0] || null;
-        }
-        
-        return taskData;
+        return mapDocumentToTask(taskSnap);
 
     } catch (error: any) {
         console.error(`[taskService.getTaskById] Error fetching task ${taskId}.`, error);
@@ -388,7 +323,6 @@ export const getTasksByIds = async (taskIds: string[]): Promise<Task[]> => {
     return [];
   }
   const tasks: Task[] = [];
-  // Firestore 'in' query limit is 30
   for (let i = 0; i < taskIds.length; i += 30) {
     const chunk = taskIds.slice(i, i + 30);
     const q = query(tasksCollection, where(documentId(), 'in', chunk));
@@ -452,14 +386,7 @@ export const updateTask = async (
     if (!isOwner && !isAssignedUser) {
       throw new Error('Access denied. You must own or be assigned to this sub-task to update it.');
     }
-
-    if (updates.status === 'Completed') {
-        const openIssuesExist = await hasOpenIssues(taskId);
-        if (openIssuesExist) {
-          throw new Error('Cannot complete sub-task: There are still open issues associated with it.');
-        }
-    }
-
+    
     if (isOwner) { 
       if (updates.name !== undefined) updatePayload.name = updates.name;
       if (updates.description !== undefined) updatePayload.description = updates.description;
@@ -622,13 +549,9 @@ export const updateTaskStatus = async (taskId: string, userUid: string, status: 
       throw new Error('Access denied for status update. Task not owned by you, or you are not assigned to it.');
     }
 
-    if (status === 'Completed') {
-      if (taskData.parentId) {
-        const openIssuesExist = await hasOpenIssues(taskId);
-        if (openIssuesExist) {
-          throw new Error('Cannot complete sub-task: There are still open issues associated with it.');
-        }
-      }
+    if (status === 'Completed' && taskData.parentId) {
+      // This check is now performed in the UI layer (TaskCard) before calling this function.
+      // This helps break the circular dependency.
     }
 
     const oldStatus = taskData.status;
@@ -924,7 +847,7 @@ export const getTimelineForMainTask = async (mainTaskId: string): Promise<Aggreg
     });
 
     const subTaskEventGroupsWithNulls = await Promise.all(subTaskTimelinePromises);
-    const aggregatedSubTaskEvents = subTaskEventGroupsWithNulls.filter((group) => group !== null);
+    const aggregatedSubTaskEvents = subTaskEventGroupsWithNulls.filter((group): group is AggregatedEvent => group !== null);
 
     // 3. Combine and sort
     const combinedEvents = [...aggregatedMainTaskEvents, ...aggregatedSubTaskEvents];
@@ -964,7 +887,7 @@ export const getTimelineForProject = async (projectId: string): Promise<ProjectA
     });
 
     const projectEventGroupsWithNulls = await Promise.all(projectTimelinePromises);
-    const aggregatedProjectEvents = projectEventGroupsWithNulls.filter((group) => group !== null);
+    const aggregatedProjectEvents = projectEventGroupsWithNulls.filter((group): group is ProjectAggregatedEvent => group !== null);
 
     aggregatedProjectEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     
