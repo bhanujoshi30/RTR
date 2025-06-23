@@ -61,19 +61,35 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
   const [parentMainTask, setParentMainTask] = useState<Task | null>(null);
 
+  // Fetch parent task details for date constraints if this is a sub-task form
+  useEffect(() => {
+    if (isSubTask && user) {
+        const mainTaskId = parentId || task?.parentId;
+        if (mainTaskId) {
+            const fetchParentTask = async () => {
+                try {
+                    const fetchedMainTask = await getTaskById(mainTaskId, user.uid, user.role);
+                    setParentMainTask(fetchedMainTask);
+                } catch (error) {
+                    console.error("Failed to fetch parent task for date constraints:", error);
+                    toast({
+                        title: "Error",
+                        description: "Could not load parent task details for date constraints.",
+                        variant: "destructive"
+                    });
+                }
+            };
+            fetchParentTask();
+        }
+    }
+  }, [isSubTask, parentId, task?.parentId, user, toast]);
+
+  // Fetch assignable users if they are not preloaded
   useEffect(() => {
     if (isSubTask && user && !preloadedAssignableUsers) {
-      const fetchPrerequisites = async () => {
+      const fetchAssignableUsers = async () => {
         setLoadingAssignableUsers(true);
         try {
-          // Fetch main task for date constraints
-          const mainTaskId = parentId || task?.parentId;
-          if (mainTaskId) {
-            const fetchedMainTask = await getTaskById(mainTaskId, user.uid, user.role);
-            setParentMainTask(fetchedMainTask);
-          }
-
-          // Fetch assignable users
           const allUsers = await getAllUsers(user.uid);
           const assignable = allUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
           setAllAssignableUsers(assignable);
@@ -82,21 +98,28 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAs
             setAssignedUsers(preAssigned);
           }
         } catch (error) {
-          console.error("Failed to fetch prerequisites for TaskForm:", error);
+          console.error("Failed to fetch assignable users for TaskForm:", error);
           toast({
-            title: "Error fetching form data",
-            description: "Could not load required data for the form.",
+            title: "Error fetching users",
+            description: "Could not load list of assignable users.",
             variant: "destructive"
           });
         } finally {
           setLoadingAssignableUsers(false);
         }
       };
-      fetchPrerequisites();
+      fetchAssignableUsers();
+    } else if (preloadedAssignableUsers) {
+        setAllAssignableUsers(preloadedAssignableUsers);
+        if (task?.assignedToUids) {
+            const preAssigned = preloadedAssignableUsers.filter(u => task.assignedToUids!.includes(u.uid));
+            setAssignedUsers(preAssigned);
+        }
+        setLoadingAssignableUsers(false);
     } else {
         setLoadingAssignableUsers(false);
     }
-  }, [isSubTask, user, toast, task, parentId, preloadedAssignableUsers]);
+  }, [isSubTask, user, toast, task, preloadedAssignableUsers]);
 
 
   const handleAddMember = () => {
