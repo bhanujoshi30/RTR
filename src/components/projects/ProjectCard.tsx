@@ -99,19 +99,19 @@ export function ProjectCard({ project }: ProjectCardProps) {
                 {project.totalMainTasks !== undefined && (
                 <div className="flex items-center">
                     <Layers className="mr-2 h-4 w-4 text-indigo-600" />
-                    <span>{project.totalMainTasks} Main Task{project.totalMainTasks !== 1 ? 's' : ''}</span>
+                    <span>{project.totalMainTasks} {t(project.totalMainTasks === 1 ? 'projectCard.mainTask' : 'projectCard.mainTasks')}</span>
                 </div>
                 )}
                 {project.totalSubTasks !== undefined && (
                 <div className="flex items-center">
                     <ListChecks className="mr-2 h-4 w-4 text-sky-600" />
-                    <span>{project.totalSubTasks} Sub-task{project.totalSubTasks !== 1 ? 's' : ''}</span>
+                    <span>{project.totalSubTasks} {t(project.totalSubTasks === 1 ? 'projectCard.subTask' : 'projectCard.subTasks')}</span>
                 </div>
                 )}
                 {project.totalOpenIssues !== undefined && (
                 <div className="flex items-center">
                     <AlertTriangle className="mr-2 h-4 w-4 text-amber-600" />
-                    <span>{project.totalOpenIssues} Open Issue{project.totalOpenIssues !== 1 ? 's' : ''}</span>
+                    <span>{project.totalOpenIssues} {t(project.totalOpenIssues === 1 ? 'projectCard.openIssue' : 'projectCard.openIssues')}</span>
                 </div>
                 )}
             </>

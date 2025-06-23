@@ -43,7 +43,13 @@
   },
   "projectCard": {
     "paymentDue": "Payment Due Soon",
-    "viewProject": "View Project"
+    "viewProject": "View Project",
+    "mainTask": "Main Task",
+    "mainTasks": "Main Tasks",
+    "subTask": "Sub-task",
+    "subTasks": "Sub-tasks",
+    "openIssue": "Open Issue",
+    "openIssues": "Open Issues"
   },
   "projectDetails": {
     "backToDashboard": "Back to Dashboard",
@@ -209,8 +215,8 @@
     "viewDetails": "View Details",
     "edit": "Edit",
     "delete": "Delete",
-    "status": "Status",
-    "severity": "Severity",
+    "status": "Status:",
+    "severity": "Severity:",
     "createdBy": "Created by:",
     "assignedTo": "Assigned to:",
     "created": "Created:",
