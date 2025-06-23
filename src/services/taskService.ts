@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { deleteIssuesForTask, hasOpenIssues, getOpenIssuesForTaskIds } from './issueService';
 import { logTimelineEvent, getTimelineForTask } from '@/services/timelineService';
+import { format } from 'date-fns';
 
 const tasksCollection = collection(db, 'tasks');
 
@@ -143,11 +144,18 @@ export const createTask = async (
           );
       }
     } else { 
+        let description = 'created the main task.';
+        const details: Record<string, any> = {};
+        if (newTaskPayload.taskType === 'collection' && newTaskPayload.cost) {
+            description = `created a collection task for ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(newTaskPayload.cost)}.`;
+            details.cost = newTaskPayload.cost;
+        }
         await logTimelineEvent(
             newTaskId,
             userUid,
             'TASK_CREATED',
-            'created the main task.'
+            description,
+            details
         );
     }
 
@@ -498,11 +506,34 @@ export const updateTask = async (
     }
     
     if (detailsChanged) {
+        let description = 'updated the main task details.';
+        const details: Record<string, any> = { updatedFields: [] };
+        
+        const oldCost = taskDataFromSnap.cost || 0;
+        const newCost = updates.cost !== undefined ? (updates.cost || 0) : oldCost;
+
+        if (taskDataFromSnap.taskType === 'collection' && newCost !== oldCost) {
+             description = `updated collection amount from ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(oldCost)} to ${new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(newCost)}.`;
+             details.oldCost = oldCost;
+             details.newCost = newCost;
+             (details.updatedFields as string[]).push('cost');
+        } else if (updates.name && updates.name !== taskDataFromSnap.name) {
+             description = `renamed task to "${updates.name}".`;
+             (details.updatedFields as string[]).push('name');
+        } else if (updates.dueDate) {
+            const newDate = updates.dueDate ? updates.dueDate : new Date();
+            const oldDate = taskDataFromSnap.dueDate ? taskDataFromSnap.dueDate : new Date();
+            if(format(newDate, 'PP') !== format(oldDate, 'PP')){
+                description = `updated the due date to ${format(newDate, 'PP')}.`;
+                (details.updatedFields as string[]).push('dueDate');
+            }
+        }
         await logTimelineEvent(
             taskId,
             userUid,
             'MAIN_TASK_UPDATED',
-            'updated the main task details.'
+            description,
+            details
         );
     }
     

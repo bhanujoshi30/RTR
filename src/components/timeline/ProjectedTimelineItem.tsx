@@ -7,6 +7,7 @@ import { Layers, ListChecks, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/hooks/useAuth';
+import { numberToWordsInr } from '@/lib/currencyUtils';
 
 const RupeeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
 
@@ -39,6 +40,7 @@ export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTime
   const showReminder = task.taskType === 'collection' && task.status !== 'Completed' && daysRemaining !== null && task.reminderDays && daysRemaining >= 0 && daysRemaining <= task.reminderDays;
   const hasOpenIssues = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
   const isStandardMainTask = !task.parentId && task.taskType !== 'collection';
+  const isCollectionTask = task.taskType === 'collection';
 
   return (
     <div className="flex flex-col space-y-2">
@@ -64,6 +66,13 @@ export function ProjectedTimelineItem({ task, isSubTask = false }: ProjectedTime
           </div>
           <Progress value={task.progress} className="h-1.5 w-full" />
         </div>
+      )}
+
+      {canViewFinancials && isCollectionTask && task.cost && task.cost > 0 && (
+         <div className="flex items-baseline gap-2 text-sm text-foreground pt-1">
+            <span className="font-semibold text-green-700 dark:text-green-500">{new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0 }).format(task.cost)}</span>
+            <span className="text-xs text-muted-foreground">({numberToWordsInr(task.cost)})</span>
+         </div>
       )}
 
       <div className="flex flex-wrap items-center gap-2 pt-1">
