@@ -40,7 +40,7 @@ const eventIcons: Record<TimelineEventType, React.ElementType> = {
 };
 
 const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) => string) => {
-  // Use the stored key if it exists.
+  // New event format with descriptionKey
   if (event.descriptionKey) {
     const statusToKey = (status: string) => `status.${status.toLowerCase().replace(/ /g, '')}`;
 
@@ -82,11 +82,36 @@ const renderDescription = (event: TimelineEvent, t: (key: string, params?: any) 
   }
 
   // Fallback for old events that have the `description` field
-  const legacyDescription = (event as any).description;
+  const legacyDescription = (event as any).description as string | undefined;
   if (legacyDescription) {
+    let translationKey: string | undefined;
+
+    // Map legacy event types to new translation keys
+    switch (event.type) {
+      case 'MAIN_TASK_COMPLETED':
+        translationKey = 'timeline.mainTaskCompleted';
+        break;
+      case 'MAIN_TASK_UPDATED':
+        translationKey = 'timeline.mainTaskUpdated';
+        break;
+      case 'TASK_CREATED':
+        // This is a simplification; we assume it's a main task based on context
+        // where this component is used for main task events.
+        translationKey = 'timeline.mainTaskCreated';
+        break;
+      case 'MAIN_TASK_REOPENED':
+        // Use a generic key for legacy events, which doesn't need params.
+        translationKey = 'timeline.mainTaskReopenedLegacy';
+        break;
+      // Other legacy types can be added here
+    }
+
+    // If we found a key, use it. Otherwise, fallback to the stored English text.
+    const textToShow = translationKey ? t(translationKey) : legacyDescription;
+
     return (
       <p className="text-sm text-foreground">
-        <span className="font-semibold">{event.author.name}</span> {legacyDescription}
+        <span className="font-semibold">{event.author.name}</span> {textToShow}
       </p>
     );
   }

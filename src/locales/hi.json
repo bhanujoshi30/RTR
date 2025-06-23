@@ -44,8 +44,8 @@
   "projectCard": {
     "paymentDue": "भुगतान जल्द ही देय है",
     "viewProject": "प्रोजेक्ट देखें",
-    "mainTask": "मुख्य कार्य",
-    "mainTasks": "मुख्य कार्य",
+    "mainTask": "{{count}} मुख्य कार्य",
+    "mainTasks": "{{count}} मुख्य कार्य",
     "subTask": "{{count}} उप-कार्य",
     "subTasks": "{{count}} उप-कार्य",
     "openIssue": "{{count}} खुला मुद्दा",
@@ -365,6 +365,7 @@
     "statusChanged": "स्थिति को '{{oldStatus}}' से '{{newStatus}}' में बदल दिया।",
     "mainTaskCompleted": "मुख्य कार्य पूरा किया।",
     "mainTaskReopened": "उप-कार्य \"{{subTaskName}}\" को फिर से खोलने के कारण मुख्य कार्य को फिर से खोला।",
+    "mainTaskReopenedLegacy": "मुख्य कार्य को फिर से खोला।",
     "relevantEvent": "{{count}} प्रासंगिक घटना",
     "relevantEvents": "{{count}} प्रासंगिक घटनाएँ",
     "latestActivity": "नवीनतम गतिविधि {{time}}",

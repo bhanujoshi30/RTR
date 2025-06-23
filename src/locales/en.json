@@ -44,8 +44,8 @@
   "projectCard": {
     "paymentDue": "Payment Due Soon",
     "viewProject": "View Project",
-    "mainTask": "Main Task",
-    "mainTasks": "Main Tasks",
+    "mainTask": "{{count}} Main Task",
+    "mainTasks": "{{count}} Main Tasks",
     "subTask": "{{count}} Sub-task",
     "subTasks": "{{count}} Sub-tasks",
     "openIssue": "{{count}} Open Issue",
@@ -365,6 +365,7 @@
     "statusChanged": "changed status from '{{oldStatus}}' to '{{newStatus}}'.",
     "mainTaskCompleted": "completed the main task.",
     "mainTaskReopened": "reopened the main task because sub-task \"{{subTaskName}}\" was reopened.",
+    "mainTaskReopenedLegacy": "reopened the main task.",
     "relevantEvent": "{{count}} relevant event",
     "relevantEvents": "{{count}} relevant events",
     "latestActivity": "Latest activity {{time}}",
