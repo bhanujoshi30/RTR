@@ -1,41 +1,25 @@
 
 "use client";
 
-import { useEffect, useState } from 'react';
-import { useForm, type SubmitHandler } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
+import { useEffect, useState, type FormEvent } from 'react';
 import { createIssue, updateIssue } from '@/services/issueService';
 import { getTaskById, updateTask } from '@/services/taskService';
 import type { Issue, IssueSeverity, IssueProgressStatus, User as AppUser, Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from '@/components/ui/label';
-import { CalendarIcon, Save, Loader2, Users } from 'lucide-react';
+import { CalendarIcon, Save, Loader2, Users, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 
 const issueSeverities: IssueSeverity[] = ['Normal', 'Critical'];
 const issueProgressStatuses: IssueProgressStatus[] = ['Open', 'Closed'];
-
-const issueSchema = z.object({
-  title: z.string().min(3, { message: 'Issue title must be at least 3 characters' }).max(150),
-  description: z.string().max(1000).optional(),
-  severity: z.enum(issueSeverities),
-  status: z.enum(issueProgressStatuses),
-  dueDate: z.date({ required_error: "Due date is required." }),
-  assignedToUids: z.array(z.string()).optional(),
-});
-
-type IssueFormValues = z.infer<typeof issueSchema>;
 
 interface IssueFormProps {
   projectId: string;
@@ -46,24 +30,21 @@ interface IssueFormProps {
 
 export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueFormProps) {
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
   const { user, loading: authLoading } = useAuth();
-  const [assignableUsersForIssue, setAssignableUsersForIssue] = useState<AppUser[]>([]);
+
+  const [title, setTitle] = useState(issue?.title || '');
+  const [description, setDescription] = useState(issue?.description || '');
+  const [severity, setSeverity] = useState<IssueSeverity>(issue?.severity || 'Normal');
+  const [status, setStatus] = useState<IssueProgressStatus>(issue?.status || 'Open');
+  const [dueDate, setDueDate] = useState<Date | undefined>(issue?.dueDate);
+  const [assignedUsers, setAssignedUsers] = useState<AppUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  
+  const [loading, setLoading] = useState(false);
   const [parentSubTask, setParentSubTask] = useState<Task | null>(null);
+  const [allAssignableUsers, setAllAssignableUsers] = useState<AppUser[]>([]);
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
 
-  const form = useForm<IssueFormValues>({
-    resolver: zodResolver(issueSchema),
-    defaultValues: {
-      title: issue?.title || '',
-      description: issue?.description || '',
-      severity: issue?.severity || 'Normal',
-      status: issue?.status || 'Open',
-      dueDate: issue?.dueDate || undefined,
-      assignedToUids: issue?.assignedToUids || [],
-    },
-  });
-  
   useEffect(() => {
     const fetchPrerequisites = async () => {
       if (!user || !taskId) return;
@@ -89,44 +70,73 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             });
         }
         const sortedUsers = Array.from(assignableUsersMap.values()).sort((a, b) => (a.displayName || '').localeCompare(b.displayName || ''));
-        setAssignableUsersForIssue(sortedUsers);
+        setAllAssignableUsers(sortedUsers);
+
+        if (issue?.assignedToUids) {
+            const preAssignedUsers = sortedUsers.filter(u => issue.assignedToUids!.includes(u.uid));
+            setAssignedUsers(preAssignedUsers);
+        }
+
       } catch (error: any) {
         console.error("Failed to fetch prerequisites for IssueForm:", error);
         toast({ title: "Error loading form data", description: `Could not load parent task data. ${error.message}`, variant: "destructive" });
-        setAssignableUsersForIssue([]);
+        setAllAssignableUsers([]);
       } finally {
         setLoadingAssignableUsers(false);
       }
     };
     if (!authLoading && user) fetchPrerequisites();
-  }, [taskId, user, authLoading, toast]);
-  
+  }, [taskId, user, authLoading, toast, issue]);
 
-  const onSubmit: SubmitHandler<IssueFormValues> = async (data) => {
+  const handleAddMember = () => {
+    if (!selectedUserId) return;
+    const userToAdd = allAssignableUsers.find(u => u.uid === selectedUserId);
+    if (userToAdd && !assignedUsers.some(u => u.uid === selectedUserId)) {
+      setAssignedUsers([...assignedUsers, userToAdd]);
+      setSelectedUserId('');
+    }
+  };
+
+  const handleRemoveMember = (uid: string) => {
+    setAssignedUsers(assignedUsers.filter(u => u.uid !== uid));
+  };
+  
+  const availableUsersToAssign = allAssignableUsers.filter(u => !assignedUsers.some(au => au.uid === u.uid));
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
     if (!user || !parentSubTask) {
       toast({ title: 'Error', description: 'User or parent task details are missing. Cannot proceed.', variant: 'destructive' });
       return;
     }
+    if (!title || !dueDate) {
+        toast({ title: 'Missing Fields', description: 'Title and Due Date are required.', variant: 'destructive'});
+        return;
+    }
+
     setLoading(true);
     
-    const assignedToNamesForPayload = data.assignedToUids?.map(uid => {
-      const assignedUser = assignableUsersForIssue.find(u => u.uid === uid);
-      return assignedUser?.displayName || uid;
-    }) || [];
+    const assignedToUids = assignedUsers.map(u => u.uid);
+    const assignedToNames = assignedUsers.map(u => u.displayName || u.email || 'N/A');
 
     const issueDataPayload = { 
-        ...data,
-        assignedToNames: assignedToNamesForPayload, 
+        title,
+        description,
+        severity,
+        status,
+        dueDate,
+        assignedToUids,
+        assignedToNames,
     };
 
     try {
       if (issue) {
         await updateIssue(issue.id, user.uid, taskId, issueDataPayload);
-        toast({ title: 'Issue Updated', description: `"${data.title}" has been updated.` });
+        toast({ title: 'Issue Updated', description: `"${title}" has been updated.` });
       } else {
         const ownerName = user.displayName || user.email || 'Unknown User';
         await createIssue(projectId, taskId, user.uid, ownerName, issueDataPayload);
-        toast({ title: 'Issue Created', description: `"${data.title}" has been added.` });
+        toast({ title: 'Issue Created', description: `"${title}" has been added.` });
 
         if (parentSubTask.status === 'Completed') {
           await updateTask(taskId, user.uid, { status: 'In Progress' }, user.role);
@@ -134,10 +144,10 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
         }
       }
       
-      const newUidsToAdd = (data.assignedToUids || []).filter(uid => !(parentSubTask.assignedToUids || []).includes(uid));
+      const newUidsToAdd = (assignedToUids || []).filter(uid => !(parentSubTask.assignedToUids || []).includes(uid));
 
       if (newUidsToAdd.length > 0) {
-        const newNamesToAdd = newUidsToAdd.map(uid => assignableUsersForIssue.find(u => u.uid === uid)?.displayName || uid);
+        const newNamesToAdd = newUidsToAdd.map(uid => allAssignableUsers.find(u => u.uid === uid)?.displayName || uid);
         await updateTask(taskId, user.uid, {
           assignedToUids: [...(parentSubTask.assignedToUids || []), ...newUidsToAdd],
           assignedToNames: [...(parentSubTask.assignedToNames || []), ...newNamesToAdd],
@@ -153,87 +163,104 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   };
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <FormField control={form.control} name="title" render={({ field }) => ( <FormItem> <FormLabel>Title</FormLabel> <FormControl> <Input placeholder="Describe the issue" {...field} /> </FormControl> <FormMessage /> </FormItem> )} />
-        <FormField control={form.control} name="description" render={({ field }) => ( <FormItem> <FormLabel>Description (Optional)</FormLabel> <FormControl> <Textarea placeholder="More details about the issue" {...field} value={field.value ?? ''} rows={3} /> </FormControl> <FormMessage /> </FormItem> )} />
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <FormField control={form.control} name="severity" render={({ field }) => ( <FormItem> <FormLabel>Severity</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value as string}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select severity" /> </SelectTrigger> </FormControl> <SelectContent> {issueSeverities.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-          <FormField control={form.control} name="status" render={({ field }) => ( <FormItem> <FormLabel>Status</FormLabel> <Select onValueChange={field.onChange} defaultValue={field.value as string}> <FormControl> <SelectTrigger> <SelectValue placeholder="Select status" /> </SelectTrigger> </FormControl> <SelectContent> {issueProgressStatuses.map(s => ( <SelectItem key={s} value={s}>{s}</SelectItem> ))} </SelectContent> </Select> <FormMessage /> </FormItem> )} />
-        </div>
-        
-        <FormField
-          control={form.control}
-          name="assignedToUids"
-          render={() => (
-            <FormItem>
-               <div className="mb-4">
-                <FormLabel className="text-base flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> Assign To</FormLabel>
-                <FormDescription>Select team members to assign this issue to.</FormDescription>
-              </div>
-              <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                {loadingAssignableUsers ? (
+    <Card className="shadow-lg">
+      <form onSubmit={handleSubmit}>
+        <CardContent className="space-y-6 pt-6">
+          <div className="space-y-2">
+            <label htmlFor="title" className="text-sm font-medium">Title</label>
+            <Input id="title" value={title} onChange={e => setTitle(e.target.value)} placeholder="Describe the issue" />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="description" className="text-sm font-medium">Description (Optional)</label>
+            <Textarea id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder="More details about the issue" rows={3} />
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Severity</label>
+              <Select onValueChange={(val: IssueSeverity) => setSeverity(val)} value={severity}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {issueSeverities.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Status</label>
+              <Select onValueChange={(val: IssueProgressStatus) => setStatus(val)} value={status}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {issueProgressStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <div className="space-y-2">
+              <label className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4 text-muted-foreground" /> Assign To</label>
+              <p className="text-sm text-muted-foreground">Select team members to assign this issue to.</p>
+              {loadingAssignableUsers ? (
                   <p className="text-sm text-muted-foreground">Loading users...</p>
-                ) : assignableUsersForIssue.length === 0 ? (
+              ) : allAssignableUsers.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No assignable users found for the parent task.</p>
-                ) : (
-                  assignableUsersForIssue.map((item) => (
-                    <FormField
-                      key={item.uid}
-                      control={form.control}
-                      name="assignedToUids"
-                      render={({ field }) => (
-                        <FormItem
-                          key={item.uid}
-                          className="flex flex-row items-start space-x-3 space-y-0"
+              ) : (
+                <>
+                    <div className="flex gap-2">
+                        <select
+                            value={selectedUserId}
+                            onChange={(e) => setSelectedUserId(e.target.value)}
+                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          <FormControl>
-                            <Checkbox
-                              checked={field.value?.includes(item.uid)}
-                              onCheckedChange={(checked) => {
-                                return checked
-                                  ? field.onChange([...(field.value || []), item.uid])
-                                  : field.onChange(
-                                      field.value?.filter(
-                                        (value) => value !== item.uid
-                                      )
-                                    );
-                              }}
-                            />
-                          </FormControl>
-                          <FormLabel className="font-normal text-sm cursor-pointer">
-                            {item.displayName || item.email}
-                          </FormLabel>
-                        </FormItem>
-                      )}
-                    />
-                  ))
-                )}
-              </div>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+                            <option value="">Select a user to add...</option>
+                            {availableUsersToAssign.map(u => (
+                                <option key={u.uid} value={u.uid}>{u.displayName}</option>
+                            ))}
+                        </select>
+                        <Button type="button" onClick={handleAddMember} disabled={!selectedUserId}>Add</Button>
+                    </div>
+                    {assignedUsers.length > 0 && (
+                        <div className="space-y-2 rounded-md border p-2">
+                            <h4 className="text-xs font-semibold text-muted-foreground">Assigned:</h4>
+                            <ul className="flex flex-wrap gap-2">
+                                {assignedUsers.map(u => (
+                                    <li key={u.uid} className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm text-secondary-foreground">
+                                        {u.displayName}
+                                        <button type="button" onClick={() => handleRemoveMember(u.uid)} className="rounded-full hover:bg-muted p-0.5">
+                                            <X className="h-3 w-3" />
+                                            <span className="sr-only">Remove {u.displayName}</span>
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </>
+              )}
+          </div>
 
-
-        <FormField control={form.control} name="dueDate" render={({ field }) => (
-          <FormItem className="flex flex-col">
-            <FormLabel>Due Date</FormLabel>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Due Date</label>
             <Popover>
-              <PopoverTrigger asChild> <FormControl> <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}> <CalendarIcon className="mr-2 h-4 w-4" /> {field.value ? format(field.value as Date, "PPP") : <span>Pick a date</span>} </Button> </FormControl> </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start"> <Calendar mode="single" selected={field.value as Date | undefined} onSelect={field.onChange} /> </PopoverContent>
+              <PopoverTrigger asChild>
+                <Button variant={"outline"} className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={dueDate} onSelect={setDueDate} />
+              </PopoverContent>
             </Popover>
-            <FormMessage />
-          </FormItem>
-        )} />
-
-        <div className="flex justify-end">
+          </div>
+        </CardContent>
+        <CardFooter>
           <Button type="submit" disabled={loading || !user || loadingAssignableUsers}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {issue ? 'Save Changes' : 'Create Issue'}
           </Button>
-        </div>
+        </CardFooter>
       </form>
-    </Form>
+    </Card>
   );
 }

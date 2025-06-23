@@ -1,25 +1,19 @@
 
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { useForm, type SubmitHandler } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import * as z from 'zod';
 import { createTask, updateTask } from '@/services/taskService';
 import type { Task, TaskStatus, User as AppUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from '@/components/ui/label';
-import { CalendarIcon, Save, Loader2, Users, Layers } from 'lucide-react';
+import { CalendarIcon, Save, Loader2, Users, Layers, X } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -29,148 +23,135 @@ import { getAllUsers } from '@/services/userService';
 const taskStatuses: TaskStatus[] = ['To Do', 'In Progress', 'Completed'];
 const taskTypes = ['standard', 'collection'] as const;
 
-const subTaskSchema = z.object({
-  name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
-  description: z.string().max(1000).optional(),
-  status: z.enum(taskStatuses),
-  dueDate: z.date({ required_error: "Due date is required for sub-tasks." }),
-  assignedToUids: z.array(z.string()).optional(),
-});
-
-const mainTaskSchema = z.object({
-  name: z.string().min(3, { message: 'Task name must be at least 3 characters' }).max(150),
-  description: z.string().max(1000).optional().nullable().default(null),
-  dueDate: z.date({ required_error: "Due date is required." }),
-  taskType: z.enum(taskTypes).default('standard'),
-  reminderDays: z.coerce.number().int().min(0).optional().nullable(),
-  cost: z.coerce.number().positive({ message: "Cost must be a positive number"}).optional().nullable(),
-}).superRefine((data, ctx) => {
-    if (data.taskType === 'collection' && (data.cost === undefined || data.cost === null || data.cost <= 0)) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "A positive cost amount is required for collection tasks.",
-            path: ["cost"],
-        });
-    }
-});
-
-
-type TaskFormValues = z.infer<typeof subTaskSchema> | z.infer<typeof mainTaskSchema>;
-
-
 interface TaskFormProps {
   projectId: string;
   task?: Task;
-  parentId?: string | null; 
+  parentId?: string | null;
   onFormSuccess?: () => void;
 }
 
 export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
   const { user } = useAuth();
-  const [assignableUsers, setAssignableUsers] = useState<AppUser[]>([]);
-  
   const isSubTask = !!(parentId || task?.parentId);
-  const currentSchema = isSubTask ? subTaskSchema : mainTaskSchema;
 
-  const form = useForm<TaskFormValues>({
-    resolver: zodResolver(currentSchema),
-    defaultValues: {
-      name: task?.name || '',
-      description: task?.description || (isSubTask ? '' : null),
-      status: isSubTask ? (task?.status || 'To Do') : undefined,
-      dueDate: task?.dueDate || undefined, 
-      assignedToUids: isSubTask ? (task?.assignedToUids || []) : undefined,
-      taskType: !isSubTask ? (task?.taskType || 'standard') : undefined,
-      reminderDays: !isSubTask ? (task?.reminderDays || null) : undefined,
-      cost: !isSubTask ? (task?.cost || null) : undefined,
-    },
-  });
+  // Form State
+  const [name, setName] = useState(task?.name || '');
+  const [description, setDescription] = useState(task?.description || '');
+  const [status, setStatus] = useState<TaskStatus>(task?.status || 'To Do');
+  const [dueDate, setDueDate] = useState<Date | undefined>(task?.dueDate);
+  const [taskType, setTaskType] = useState<'standard' | 'collection'>(task?.taskType || 'standard');
+  const [reminderDays, setReminderDays] = useState<number | null>(task?.reminderDays || null);
+  const [cost, setCost] = useState<number | null>(task?.cost || null);
+  
+  // Member Assignment State
+  const [assignedUsers, setAssignedUsers] = useState<AppUser[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [allAssignableUsers, setAllAssignableUsers] = useState<AppUser[]>([]);
 
-  const taskTypeWatcher = form.watch('taskType');
+  // Control State
+  const [loading, setLoading] = useState(false);
+  const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
 
   useEffect(() => {
     if (isSubTask && user) {
       const fetchAssignableUsers = async () => {
+        setLoadingAssignableUsers(true);
         try {
           const allUsers = await getAllUsers(user.uid);
           const assignable = allUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
-          setAssignableUsers(assignable);
+          setAllAssignableUsers(assignable);
+          if (task?.assignedToUids) {
+            const preAssigned = assignable.filter(u => task.assignedToUids!.includes(u.uid));
+            setAssignedUsers(preAssigned);
+          }
         } catch (error) {
           console.error("Failed to fetch assignable users for TaskForm:", error);
           toast({
             title: "Error fetching users",
-            description: "Could not load list of users for assignment. This may be a permissions issue.",
+            description: "Could not load list of users for assignment.",
             variant: "destructive"
           });
-          setAssignableUsers([]); 
+        } finally {
+          setLoadingAssignableUsers(false);
         }
       };
       fetchAssignableUsers();
+    } else {
+        setLoadingAssignableUsers(false);
     }
-  }, [isSubTask, toast, user]);
+  }, [isSubTask, user, toast, task]);
+
+  const handleAddMember = () => {
+    if (!selectedUserId) return;
+    const userToAdd = allAssignableUsers.find(u => u.uid === selectedUserId);
+    if (userToAdd && !assignedUsers.some(u => u.uid === selectedUserId)) {
+      setAssignedUsers([...assignedUsers, userToAdd]);
+      setSelectedUserId('');
+    }
+  };
+
+  const handleRemoveMember = (uid: string) => {
+    setAssignedUsers(assignedUsers.filter(u => u.uid !== uid));
+  };
+  
+  const availableUsersToAssign = allAssignableUsers.filter(u => !assignedUsers.some(au => au.uid === u.uid));
 
 
-  const onSubmit: SubmitHandler<TaskFormValues> = async (data) => {
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
     if (!user) {
       toast({ title: 'Authentication Error', description: 'You must be logged in.', variant: 'destructive' });
       return;
     }
+    if (!name || !dueDate) {
+        toast({ title: 'Missing Fields', description: 'Name and Due Date are required.', variant: 'destructive'});
+        return;
+    }
+     if (!isSubTask && taskType === 'collection' && (!cost || cost <= 0)) {
+        toast({ title: 'Invalid Cost', description: 'A positive cost is required for collection tasks.', variant: 'destructive'});
+        return;
+    }
+
     setLoading(true);
 
     const taskPayload: any = {
-      name: data.name,
-      description: data.description || '',
+      name,
+      description,
+      dueDate,
       parentId: parentId || task?.parentId || null,
     };
 
     if (isSubTask) {
-      const subTaskData = data as z.infer<typeof subTaskSchema>;
-      
-      const assignedToNamesForPayload = subTaskData.assignedToUids?.map(uid => {
-        const assignedUser = assignableUsers.find(u => u.uid === uid);
-        return assignedUser?.displayName || uid; 
-      }) || [];
-
-      taskPayload.status = subTaskData.status;
-      taskPayload.dueDate = subTaskData.dueDate;
-      taskPayload.assignedToUids = subTaskData.assignedToUids || [];
-      taskPayload.assignedToNames = assignedToNamesForPayload;
+      taskPayload.status = status;
+      taskPayload.assignedToUids = assignedUsers.map(u => u.uid);
+      taskPayload.assignedToNames = assignedUsers.map(u => u.displayName || u.email || 'N/A');
       taskPayload.taskType = 'standard';
       taskPayload.cost = null;
     } else {
-      const mainTaskData = data as z.infer<typeof mainTaskSchema>;
-      taskPayload.description = mainTaskData.description || '';
-      taskPayload.dueDate = mainTaskData.dueDate;
       taskPayload.status = 'To Do';
-      taskPayload.assignedToUids = []; 
+      taskPayload.assignedToUids = [];
       taskPayload.assignedToNames = [];
-      taskPayload.taskType = mainTaskData.taskType;
-      taskPayload.reminderDays = (mainTaskData.taskType === 'collection' && mainTaskData.reminderDays) ? mainTaskData.reminderDays : null;
-      taskPayload.cost = (mainTaskData.taskType === 'collection' && mainTaskData.cost) ? mainTaskData.cost : null;
+      taskPayload.taskType = taskType;
+      taskPayload.reminderDays = taskType === 'collection' ? reminderDays : null;
+      taskPayload.cost = taskType === 'collection' ? cost : null;
     }
-
 
     try {
       if (task) {
         await updateTask(task.id, user.uid, taskPayload, user.role);
-        toast({ title: 'Task Updated', description: `"${data.name}" has been updated.` });
+        toast({ title: 'Task Updated', description: `"${name}" has been updated.` });
       } else {
         const ownerName = user.displayName || user.email || 'Unknown User';
         await createTask(projectId, user.uid, ownerName, taskPayload);
-        toast({ title: 'Task Created', description: `"${data.name}" has been added.` });
+        toast({ title: 'Task Created', description: `"${name}" has been added.` });
       }
 
       if (onFormSuccess) {
         onFormSuccess();
       } else {
-        if (taskPayload.parentId) {
-          router.push(`/projects/${projectId}/tasks/${taskPayload.parentId}`);
-        } else {
-          router.push(`/projects/${projectId}`);
-        }
+        router.push(taskPayload.parentId ? `/projects/${projectId}/tasks/${taskPayload.parentId}` : `/projects/${projectId}`);
       }
       router.refresh();
     } catch (error: any) {
@@ -183,288 +164,144 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
       setLoading(false);
     }
   };
-  
+
   const formTitle = task
     ? (isSubTask ? "Edit Sub-task" : "Edit Main Task")
     : (isSubTask ? "Add New Sub-task" : "New Main Task");
 
   return (
     <Card className="shadow-lg">
-      <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)}>
-          <CardHeader>
-            <CardTitle className="font-headline text-2xl">{formTitle}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-             {!isSubTask && (
-                <FormField
-                  control={form.control}
-                  name="taskType"
-                  render={({ field }) => (
-                    <FormItem className="space-y-3">
-                      <FormLabel>Main Task Type</FormLabel>
-                      <FormControl>
-                        <RadioGroup
-                          onValueChange={field.onChange}
-                          defaultValue={field.value as string}
-                          className="flex flex-col space-y-1"
-                        >
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="standard" />
-                            </FormControl>
-                            <FormLabel className="font-normal flex items-center gap-2">
-                              <Layers className="h-4 w-4 text-muted-foreground" /> Standard Task (with sub-tasks)
-                            </FormLabel>
-                          </FormItem>
-                          <FormItem className="flex items-center space-x-3 space-y-0">
-                            <FormControl>
-                              <RadioGroupItem value="collection" />
-                            </FormControl>
-                            <FormLabel className="font-normal flex items-center gap-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
-                                Collection Task (payment reminder)
-                            </FormLabel>
-                          </FormItem>
-                        </RadioGroup>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-             )}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder={isSubTask ? "Sub-task name" : "Main task name"} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-             <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Description (Optional)</FormLabel>
-                    <FormControl>
-                      <Textarea 
-                        placeholder={isSubTask ? "Detailed information about the sub-task" : "Brief description of the main task"} 
-                        {...field} 
-                        value={(field.value as string) ?? ''} 
-                        rows={4} 
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+      <form onSubmit={handleSubmit}>
+        <CardHeader>
+          <CardTitle className="font-headline text-2xl">{formTitle}</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {!isSubTask && (
+            <div className="space-y-3">
+              <label className="text-sm font-medium">Main Task Type</label>
+              <RadioGroup value={taskType} onValueChange={(val: 'standard' | 'collection') => setTaskType(val)} className="flex flex-col space-y-1">
+                  <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="standard" id="standard" />
+                      <label htmlFor="standard" className="font-normal flex items-center gap-2">
+                          <Layers className="h-4 w-4 text-muted-foreground" /> Standard Task (with sub-tasks)
+                      </label>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                      <RadioGroupItem value="collection" id="collection" />
+                       <label htmlFor="collection" className="font-normal flex items-center gap-2">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 text-muted-foreground"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>
+                           Collection Task (payment reminder)
+                       </label>
+                  </div>
+              </RadioGroup>
+            </div>
+          )}
 
-            {isSubTask && (
-              <>
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value as TaskStatus}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select sub-task status" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {taskStatuses.map(status => (
-                              <SelectItem key={status} value={status}>{status}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="dueDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Due Date</FormLabel>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <FormControl>
-                              <Button
-                                variant={"outline"}
-                                className={cn(
-                                  "w-full justify-start text-left font-normal",
-                                  !field.value && "text-muted-foreground"
-                                )}
-                              >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value as Date, "PPP") : <span>Pick a date</span>}
-                              </Button>
-                            </FormControl>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              mode="single"
-                              selected={field.value as Date | undefined}
-                              onSelect={field.onChange}
-                              disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() -1))}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                </div>
-                
-                <FormField
-                  control={form.control}
-                  name="assignedToUids"
-                  render={() => (
-                    <FormItem>
-                      <div className="mb-4">
-                        <Label className="flex items-center text-base font-medium"><Users className="mr-2 h-4 w-4 text-muted-foreground"/>Assign To Team Members</Label>
-                        <FormDescription>Select team members to assign this sub-task to.</FormDescription>
-                      </div>
-                      <div className="space-y-2 rounded-md border p-4 max-h-48 overflow-y-auto">
-                        {assignableUsers.length === 0 && !loading && <p className="text-sm text-muted-foreground">No users available to assign.</p>}
-                        {assignableUsers.map((item) => (
-                          <FormField
-                            key={item.uid}
-                            control={form.control}
-                            name="assignedToUids"
-                            render={({ field }) => (
-                              <FormItem
-                                key={item.uid}
-                                className="flex flex-row items-start space-x-3 space-y-0"
-                              >
-                                <FormControl>
-                                  <Checkbox
-                                    checked={field.value?.includes(item.uid)}
-                                    onCheckedChange={(checked) => {
-                                      return checked
-                                        ? field.onChange([
-                                            ...(field.value || []),
-                                            item.uid,
-                                          ])
-                                        : field.onChange(
-                                            field.value?.filter(
-                                              (value) => value !== item.uid
-                                            )
-                                          );
-                                    }}
-                                  />
-                                </FormControl>
-                                <FormLabel className="text-sm font-normal cursor-pointer">
-                                  {item.displayName || item.email} ({item.role})
-                                </FormLabel>
-                              </FormItem>
-                            )}
-                          />
-                        ))}
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </>
-            )}
-            {!isSubTask && (
-                <FormField
-                    control={form.control}
-                    name="dueDate"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel>Due Date</FormLabel>
-                        <Popover>
-                        <PopoverTrigger asChild>
-                            <FormControl>
-                            <Button
-                                variant={"outline"}
-                                className={cn(
-                                "w-full justify-start text-left font-normal",
-                                !field.value && "text-muted-foreground"
-                                )}
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {field.value ? format(field.value as Date, "PPP") : <span>Pick a date</span>}
-                            </Button>
-                            </FormControl>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                            mode="single"
-                            selected={field.value as Date | undefined}
-                            onSelect={field.onChange}
-                            disabled={(date) => date < new Date(new Date().setDate(new Date().getDate() -1))}
-                            />
-                        </PopoverContent>
-                        </Popover>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                />
-            )}
-             {taskTypeWatcher === 'collection' && !isSubTask && (
+          <div className="space-y-2">
+            <label htmlFor="name" className="text-sm font-medium">Name</label>
+            <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder={isSubTask ? "Sub-task name" : "Main task name"} />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="description" className="text-sm font-medium">Description (Optional)</label>
+            <Textarea id="description" value={description} onChange={e => setDescription(e.target.value)} placeholder={isSubTask ? "Detailed information about the sub-task" : "Brief description of the main task"} rows={4} />
+          </div>
+
+          {isSubTask && (
+            <>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="cost"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Cost Amount (INR)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          placeholder="E.g., 10000" 
-                          {...field} 
-                          value={(field.value as number) ?? ''}
-                          onChange={e => field.onChange(e.target.value === '' ? null : e.target.value)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="reminderDays"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Reminder (Days Before Due)</FormLabel>
-                      <FormControl>
-                        <Input 
-                          type="number" 
-                          placeholder="E.g., 7" 
-                          {...field} 
-                          value={(field.value as number) ?? ''}
-                          onChange={e => field.onChange(e.target.value === '' ? null : e.target.value)}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Status</label>
+                    <Select value={status} onValueChange={(v: TaskStatus) => setStatus(v)}>
+                        <SelectTrigger><SelectValue/></SelectTrigger>
+                        <SelectContent>
+                            {taskStatuses.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                        </SelectContent>
+                    </Select>
+                </div>
+                 <div className="space-y-2">
+                    <label className="text-sm font-medium">Due Date</label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-2 h-4 w-4"/>
+                                {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dueDate} onSelect={setDueDate}/></PopoverContent>
+                    </Popover>
+                </div>
               </div>
-            )}
-          </CardContent>
-          <CardFooter>
-            <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-              {task ? 'Save Changes' : (isSubTask ? 'Add Sub-task' : 'Create Main Task')}
-            </Button>
-          </CardFooter>
-        </form>
-      </Form>
+              <div className="space-y-2">
+                  <label className="text-sm font-medium flex items-center gap-2"><Users className="h-4 w-4"/>Assign To</label>
+                  <p className="text-sm text-muted-foreground">Select team members to assign this sub-task to.</p>
+                  {loadingAssignableUsers ? (
+                      <p className="text-sm text-muted-foreground">Loading users...</p>
+                  ) : allAssignableUsers.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No users available for assignment.</p>
+                  ) : (
+                      <>
+                          <div className="flex gap-2">
+                              <select value={selectedUserId} onChange={e => setSelectedUserId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                                  <option value="">Select a user...</option>
+                                  {availableUsersToAssign.map(u => <option key={u.uid} value={u.uid}>{u.displayName} ({u.role})</option>)}
+                              </select>
+                              <Button type="button" onClick={handleAddMember} disabled={!selectedUserId}>Add</Button>
+                          </div>
+                           {assignedUsers.length > 0 && (
+                               <div className="space-y-2 rounded-md border p-2">
+                                   <h4 className="text-xs font-semibold text-muted-foreground">Assigned:</h4>
+                                   <ul className="flex flex-wrap gap-2">
+                                       {assignedUsers.map(u => (
+                                           <li key={u.uid} className="flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-sm">
+                                               {u.displayName}
+                                               <button type="button" onClick={() => handleRemoveMember(u.uid)} className="rounded-full hover:bg-muted p-0.5"><X className="h-3 w-3"/></button>
+                                           </li>
+                                       ))}
+                                   </ul>
+                               </div>
+                           )}
+                      </>
+                  )}
+              </div>
+            </>
+          )}
+
+          {!isSubTask && (
+              <div className="space-y-2">
+                  <label className="text-sm font-medium">Due Date</label>
+                  <Popover>
+                      <PopoverTrigger asChild>
+                          <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !dueDate && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4"/>
+                              {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
+                          </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dueDate} onSelect={setDueDate}/></PopoverContent>
+                  </Popover>
+              </div>
+          )}
+
+          {taskType === 'collection' && !isSubTask && (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Cost Amount (INR)</label>
+                    <Input type="number" value={cost || ''} onChange={e => setCost(e.target.value ? Number(e.target.value) : null)} placeholder="E.g., 10000" />
+                </div>
+                <div className="space-y-2">
+                    <label className="text-sm font-medium">Reminder (Days Before Due)</label>
+                    <Input type="number" value={reminderDays || ''} onChange={e => setReminderDays(e.target.value ? Number(e.target.value) : null)} placeholder="E.g., 7" />
+                </div>
+            </div>
+          )}
+        </CardContent>
+        <CardFooter>
+          <Button type="submit" className="w-full sm:w-auto" disabled={loading || !user}>
+            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            {task ? 'Save Changes' : (isSubTask ? 'Add Sub-task' : 'Create Main Task')}
+          </Button>
+        </CardFooter>
+      </form>
     </Card>
   );
 }

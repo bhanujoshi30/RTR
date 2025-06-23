@@ -21,11 +21,10 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog';
-import { IssueForm } from '@/components/issues/IssueForm';
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { IssueStatusChangeDialog } from './IssueStatusChangeDialog';
+import Link from 'next/link';
 
 interface IssueCardProps {
   issue: Issue;
@@ -37,7 +36,6 @@ interface IssueCardProps {
 
 export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageIssue }: IssueCardProps) {
   const { toast } = useToast();
-  const [showEditModal, setShowEditModal] = useState(false);
   const [statusChangeState, setStatusChangeState] = useState<{ open: boolean; newStatus: IssueProgressStatus | null }>({ open: false, newStatus: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -61,7 +59,6 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
      setStatusChangeState({ open: false, newStatus: null });
      onIssueUpdated(); // Refresh the list
      
-     // Side-effect: If issue was just re-opened, check if parent task needs reopening
      if (statusChangeState.newStatus === 'Open' && issue.status === 'Closed' && user) {
        try {
          const parentTask = await getTaskById(taskId, user.uid, user.role);
@@ -173,20 +170,11 @@ export function IssueCard({ issue, projectId, taskId, onIssueUpdated, canManageI
                 <RotateCcw className="mr-2 h-4 w-4" /> Reopen Issue
               </Button>
             )}
-             <Dialog open={showEditModal} onOpenChange={setShowEditModal}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" disabled={!canEditOrDeleteThisIssue}>
+             <Button asChild variant="outline" size="sm" disabled={!canEditOrDeleteThisIssue}>
+               <Link href={`/projects/${projectId}/tasks/${taskId}/issues/${issue.id}/edit`}>
                   <Edit2 className="mr-2 h-4 w-4" /> Edit
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                  <DialogTitle className="font-headline text-xl">Edit Issue</DialogTitle>
-                  <DialogDescription>Modify the details of this issue.</DialogDescription>
-                </DialogHeader>
-                {user && <IssueForm projectId={projectId} taskId={taskId} issue={issue} onFormSuccess={() => { setShowEditModal(false); onIssueUpdated(); }} />}
-              </DialogContent>
-            </Dialog>
+               </Link>
+             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="outline" size="sm" className="hover:bg-destructive hover:text-destructive-foreground" disabled={!canEditOrDeleteThisIssue}>
