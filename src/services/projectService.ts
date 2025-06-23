@@ -17,6 +17,7 @@ import {
   documentId,
   limit,
   arrayUnion,
+  writeBatch,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { deleteAllTasksForProject, getProjectMainTasks, getAllProjectTasks, mapDocumentToTask } from '@/services/taskService';
@@ -300,7 +301,6 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
 
   // Using Promise.all to fetch project details individually.
   // This avoids complex Firestore queries that are difficult to secure and can hit index limits.
-  // getProjectById already contains the necessary logic for progress calculation and security checks.
   const projectPromises = projectIds.map(id => 
     getProjectById(id, userUid, userRole).catch(err => {
       // Catch errors for individual project fetches to prevent Promise.all from failing completely.
@@ -365,3 +365,36 @@ export const deleteProject = async (projectId: string, userUid: string): Promise
   }
 };
 
+export const ensureUserIsInProjectMembers = async (userUid: string, projectIds: string[]): Promise<void> => {
+  if (!userUid || projectIds.length === 0) return;
+  console.log(`Ensuring user ${userUid} is in member list for projects: ${projectIds.join(', ')}`);
+  
+  const projectChunks: string[][] = [];
+  for (let i = 0; i < projectIds.length; i += 30) {
+    projectChunks.push(projectIds.slice(i, i + 30));
+  }
+
+  try {
+    for (const chunk of projectChunks) {
+        if (chunk.length === 0) continue;
+        const batch = writeBatch(db);
+        const projectsQuery = query(collection(db, 'projects'), where(documentId(), 'in', chunk));
+        const projectsSnapshot = await getDocs(projectsQuery);
+
+        projectsSnapshot.forEach(projectSnap => {
+            if (projectSnap.exists()) {
+                const projectData = projectSnap.data();
+                const memberUids = projectData.memberUids || [];
+                if (!memberUids.includes(userUid)) {
+                    console.log(`User ${userUid} not in members for project ${projectSnap.id}. Adding now.`);
+                    batch.update(projectSnap.ref, { memberUids: arrayUnion(userUid) });
+                }
+            }
+        });
+        await batch.commit();
+    }
+  } catch (error) {
+    console.error("Failed to ensure user is in project members list", error);
+    // Do not throw, as this is a background data-fix operation. The subsequent read might still fail but we tried.
+  }
+};
