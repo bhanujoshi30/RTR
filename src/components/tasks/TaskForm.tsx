@@ -3,7 +3,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { createTask, updateTask } from '@/services/taskService';
+import { createTask, getTaskById, updateTask } from '@/services/taskService';
 import type { Task, TaskStatus, User as AppUser } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -53,12 +53,21 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   // Control State
   const [loading, setLoading] = useState(false);
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
+  const [parentMainTask, setParentMainTask] = useState<Task | null>(null);
 
   useEffect(() => {
     if (isSubTask && user) {
-      const fetchAssignableUsers = async () => {
+      const fetchPrerequisites = async () => {
         setLoadingAssignableUsers(true);
         try {
+          // Fetch main task for date constraints
+          const mainTaskId = parentId || task?.parentId;
+          if (mainTaskId) {
+            const fetchedMainTask = await getTaskById(mainTaskId, user.uid, user.role);
+            setParentMainTask(fetchedMainTask);
+          }
+
+          // Fetch assignable users
           const allUsers = await getAllUsers(user.uid);
           const assignable = allUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
           setAllAssignableUsers(assignable);
@@ -67,21 +76,22 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
             setAssignedUsers(preAssigned);
           }
         } catch (error) {
-          console.error("Failed to fetch assignable users for TaskForm:", error);
+          console.error("Failed to fetch prerequisites for TaskForm:", error);
           toast({
-            title: "Error fetching users",
-            description: "Could not load list of users for assignment.",
+            title: "Error fetching form data",
+            description: "Could not load required data for the form.",
             variant: "destructive"
           });
         } finally {
           setLoadingAssignableUsers(false);
         }
       };
-      fetchAssignableUsers();
+      fetchPrerequisites();
     } else {
         setLoadingAssignableUsers(false);
     }
-  }, [isSubTask, user, toast, task]);
+  }, [isSubTask, user, toast, task, parentId]);
+
 
   const handleAddMember = () => {
     if (!selectedUserId) return;
@@ -228,8 +238,20 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
                                 {dueDate ? format(dueDate, "PPP") : <span>Pick a date</span>}
                             </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0"><Calendar mode="single" selected={dueDate} onSelect={setDueDate}/></PopoverContent>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar
+                            mode="single"
+                            selected={dueDate}
+                            onSelect={setDueDate}
+                            disabled={parentMainTask ? { before: parentMainTask.createdAt, after: parentMainTask.dueDate || undefined } : undefined}
+                          />
+                        </PopoverContent>
                     </Popover>
+                    {parentMainTask?.dueDate && (
+                      <p className="text-xs text-muted-foreground pt-1">
+                          Date must be between {format(parentMainTask.createdAt!, 'PP')} and {format(parentMainTask.dueDate, 'PP')}.
+                      </p>
+                    )}
                 </div>
               </div>
               <div className="space-y-2">

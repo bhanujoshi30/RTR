@@ -60,6 +60,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   // Control State
   const [loading, setLoading] = useState(false);
   const [parentSubTask, setParentSubTask] = useState<Task | null>(null);
+  const [mainTaskDetails, setMainTaskDetails] = useState<Task | null>(null);
   const [allAssignableUsers, setAllAssignableUsers] = useState<AppUser[]>([]);
   const [loadingAssignableUsers, setLoadingAssignableUsers] = useState(true);
   
@@ -108,6 +109,11 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           return;
         }
         setParentSubTask(fetchedParentTask);
+
+        if (fetchedParentTask.parentId) {
+            const fetchedMainTask = await getTaskById(fetchedParentTask.parentId, user.uid, user.role);
+            setMainTaskDetails(fetchedMainTask);
+        }
         
         const assignableUsersMap = new Map<string, AppUser>();
         if (fetchedParentTask.ownerUid && fetchedParentTask.ownerName) {
@@ -398,9 +404,19 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={dueDate} onSelect={setDueDate} />
+                  <Calendar
+                    mode="single"
+                    selected={dueDate}
+                    onSelect={setDueDate}
+                    disabled={mainTaskDetails ? { before: mainTaskDetails.createdAt, after: mainTaskDetails.dueDate || undefined } : undefined}
+                   />
                 </PopoverContent>
               </Popover>
+               {mainTaskDetails?.dueDate && (
+                <p className="text-xs text-muted-foreground pt-1">
+                    Date must be between {format(mainTaskDetails.createdAt!, 'PP')} and {format(mainTaskDetails.dueDate, 'PP')}.
+                </p>
+              )}
             </div>
           </div>
           
