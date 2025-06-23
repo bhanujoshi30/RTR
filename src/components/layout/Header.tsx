@@ -21,7 +21,7 @@ import {
   DropdownMenuRadioItem,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users, CalendarCheck, ClipboardList, Loader2, Language as LanguageIcon } from 'lucide-react';
+import { LogOut, UserCircle, LayoutDashboard, FolderPlus, Menu, Workflow, Users, CalendarCheck, ClipboardList, Loader2, Languages as LanguageIcon } from 'lucide-react';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useState, useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
