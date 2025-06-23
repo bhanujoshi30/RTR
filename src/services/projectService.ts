@@ -307,7 +307,19 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
 
   for (const chunk of projectChunks) {
     if (chunk.length === 0) continue;
-    const q = query(projectsCollection, where(documentId(), 'in', chunk));
+    
+    let q;
+    const isMemberOrSupervisor = userRole === 'member' || userRole === 'supervisor';
+
+    if (isMemberOrSupervisor) {
+      // For members/supervisors, the query must also prove they are a member of the requested projects.
+      // This satisfies the `request.auth.uid in resource.data.memberUids` rule in Firestore.
+      q = query(projectsCollection, where(documentId(), 'in', chunk), where('memberUids', 'array-contains', userUid));
+    } else {
+      // For admins, owners, clients, a simple `in` query is sufficient as other rules will grant access.
+      q = query(projectsCollection, where(documentId(), 'in', chunk));
+    }
+    
     try {
       const querySnapshot = await getDocs(q);
       const projectsFromChunk = querySnapshot.docs.map(mapDocumentToProject);
