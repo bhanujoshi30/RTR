@@ -2,11 +2,14 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { getProjectMainTasks, getProjectSubTasksAssignedToUser, getTasksByIds } from '@/services/taskService';
+import { getProjectMainTasks, getProjectSubTasks } from '@/services/taskService';
 import type { Task } from '@/types';
 import { TaskCard } from '@/components/tasks/TaskCard';
 import { Loader2, ListTodo } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslation } from '@/hooks/useTranslation';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 interface TaskListProps {
   projectId: string;
@@ -18,59 +21,81 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
+  const { t } = useTranslation();
 
   const isSupervisorOrMember = user?.role === 'supervisor' || user?.role === 'member';
 
   const fetchMainTasks = async () => {
     console.log('TaskList: fetchMainTasks called. projectId:', projectId, 'Auth Loading:', authLoading, 'User Role:', user?.role);
     if (authLoading || !user) {
-      console.log('TaskList: Skipping fetch, auth loading or no user.');
-      if (!authLoading && !user) setLoading(false); // Stop loading if auth resolved and no user
+      if (!authLoading && !user) setLoading(false);
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
+      const allProjectSubTasks = await getProjectSubTasks(projectId);
+
+      const subTasksByParent = allProjectSubTasks.reduce((acc, subTask) => {
+        if (subTask.parentId) {
+          if (!acc[subTask.parentId]) acc[subTask.parentId] = [];
+          acc[subTask.parentId].push(subTask);
+        }
+        return acc;
+      }, {} as Record<string, Task[]>);
+
+      const augmentTasks = (tasksToAugment: Task[]): Task[] => {
+        return tasksToAugment.map(mainTask => {
+          if (mainTask.taskType === 'collection') {
+            return { ...mainTask, displaySubTaskCountLabel: t('taskDetails.collectionTaskType') };
+          }
+          
+          const relatedSubTasks = subTasksByParent[mainTask.id] || [];
+          let displaySubTaskCountLabel = '';
+
+          if (isSupervisorOrMember) {
+            const assignedSubtasks = relatedSubTasks.filter(st => st.assignedToUids?.includes(user!.uid));
+            const count = assignedSubtasks.length;
+            const labelKey = count === 1 ? 'taskCard.subTaskAssignedToYou' : 'taskCard.subTasksAssignedToYou';
+            displaySubTaskCountLabel = t(labelKey).replace('{count}', count.toString());
+          } else { // Admin or Owner
+            const count = relatedSubTasks.length;
+            const labelKey = count === 1 ? 'taskCard.subTask' : 'taskCard.subTasks';
+            displaySubTaskCountLabel = t(labelKey).replace('{count}', count.toString());
+          }
+          
+          return { ...mainTask, displaySubTaskCountLabel };
+        });
+      };
+
       const isClientOrAdmin = user?.role === 'client' || user?.role === 'admin';
 
       if (isSupervisorOrMember) {
-        console.log(`TaskList: User is ${user.role}. Fetching sub-tasks assigned to user ${user.uid} within project ${projectId}.`);
-        const projectSpecificAssignedSubTasks = await getProjectSubTasksAssignedToUser(projectId, user.uid);
-        console.log(`TaskList: Fetched ${projectSpecificAssignedSubTasks.length} assigned sub-tasks directly from project.`);
+        const assignedSubTasks = allProjectSubTasks.filter(st => st.assignedToUids?.includes(user.uid));
         
-        if (projectSpecificAssignedSubTasks.length > 0) {
-          const mainTaskIdsUserIsInvolvedWith = [
-            ...new Set(projectSpecificAssignedSubTasks.map((subTask) => subTask.parentId!))
-          ];
-          console.log(`TaskList: User is involved with main task IDs: ${mainTaskIdsUserIsInvolvedWith.join(', ')}. Fetching these tasks.`);
-          
-          // Now fetch the main tasks themselves, with their data aggregated
+        if (assignedSubTasks.length > 0) {
+          const mainTaskIdsUserIsInvolvedWith = [...new Set(assignedSubTasks.map(st => st.parentId!))];
           const involvedMainTasks = await getProjectMainTasks(projectId, mainTaskIdsUserIsInvolvedWith);
-          
-          involvedMainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-          console.log('TaskList: Fetched and processed involved main tasks for supervisor/member:', involvedMainTasks);
-          setTasks(involvedMainTasks);
+          const augmentedTasks = augmentTasks(involvedMainTasks);
+          augmentedTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+          setTasks(augmentedTasks);
         } else {
-          console.log(`TaskList: User ${user.uid} has no sub-tasks assigned in project ${projectId}. Displaying no main tasks.`);
           setTasks([]);
         }
       } else {
-        // Admin or project owner sees all main tasks
-        console.log('TaskList: User is admin/owner. Fetching all main tasks for project.');
         let allMainTasks = await getProjectMainTasks(projectId);
         
-        if (!isClientOrAdmin) { // Filter for project owners who are not admins/clients
+        if (!isClientOrAdmin) {
             allMainTasks = allMainTasks.filter(t => t.taskType !== 'collection');
         }
-
-        setTasks(allMainTasks);
-        console.log('TaskList: Fetched all main tasks for admin/owner:', allMainTasks.length > 0 ? allMainTasks : 'None');
+        const augmentedTasks = augmentTasks(allMainTasks);
+        setTasks(augmentedTasks);
       }
     } catch (err: any) {
       console.error('TaskList: Error fetching main tasks:', err);
       setError(`Failed to load tasks. ${err.message?.includes("index") ? "A database index might be required for main tasks. Check console for details from taskService." : (err.message || "Unknown error")}`);
-      setTasks([]); // Clear tasks on error
+      setTasks([]);
     } finally {
       setLoading(false);
       console.log('TaskList: fetchMainTasks finished. Loading set to false.');
@@ -86,12 +111,11 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
       setLoading(false);
       setError("Project ID is missing, cannot load tasks.");
     } else if (!authLoading && !user) {
-      // Auth has loaded, but there's no user. Stop loading, potentially show "not authenticated" or rely on parent to redirect.
       setLoading(false);
       setError("User not authenticated. Cannot load tasks.");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, authLoading, user]); // Depend on projectId, authLoading, and user
+  }, [projectId, authLoading, user]);
 
   const onTaskUpdated = () => {
     console.log('TaskList: onTaskUpdated called, re-fetching main tasks.');

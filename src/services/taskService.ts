@@ -268,6 +268,25 @@ export const getSubTasks = async (parentId: string): Promise<Task[]> => {
   }
 };
 
+export const getProjectSubTasks = async (projectId: string): Promise<Task[]> => {
+  console.log(`taskService: getProjectSubTasks for projectId: ${projectId}`);
+  if (!projectId) return [];
+  const q = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
+  try {
+    const querySnapshot = await getDocs(q);
+    const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    console.log(`taskService: Fetched ${tasks.length} sub-tasks for project ${projectId}.`);
+    return tasks;
+  } catch (error: any) {
+    console.error(`taskService: Error fetching sub-tasks for project ${projectId}`, error.message);
+    if (error.message.includes("index")) {
+      console.error("Firestore query for getProjectSubTasks requires a composite index on 'projectId' (ASC) and 'parentId' (!= null).");
+    }
+    throw error;
+  }
+};
+
+
 export const getProjectSubTasksAssignedToUser = async (projectId: string, userUid: string): Promise<Task[]> => {
   console.log(`taskService: getProjectSubTasksAssignedToUser for projectId: ${projectId}, userUid: ${userUid}`);
   if (!projectId || !userUid) return [];

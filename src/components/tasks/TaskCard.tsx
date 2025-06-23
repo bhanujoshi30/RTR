@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Progress } from '@/components/ui/progress'; 
 import { CalendarDays, Edit2, Trash2, ListChecks, Eye, Layers, User, Users, Loader2, AlertTriangle, CheckCircle, RotateCcw, IndianRupee } from 'lucide-react';
 import { formatDistanceToNow, format, differenceInCalendarDays } from 'date-fns';
-import { updateTaskStatus, deleteTask, getSubTasks } from '@/services/taskService';
+import { updateTaskStatus, deleteTask } from '@/services/taskService';
 import { hasOpenIssues } from '@/services/issueService';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
@@ -44,8 +44,6 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const router = useRouter();
   const { t } = useTranslation();
   const [task, setTask] = useState<Task>(initialTask);
-  const [subTaskCountLabel, setSubTaskCountLabel] = useState("Sub-tasks");
-  const [loadingSubTaskCount, setLoadingSubTaskCount] = useState(false);
   const [showProofDialog, setShowProofDialog] = useState(false);
   const { user } = useAuth();
   const [daysRemaining, setDaysRemaining] = useState<number | null>(null);
@@ -75,46 +73,6 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   useEffect(() => {
     setTask(initialTask); 
   }, [initialTask]);
-  
-
-  useEffect(() => {
-    console.log(`[TaskCard Debug] useEffect for task '${task.name}' (ID: ${task.id}). isActuallyMainTask: ${isActuallyMainTask}, User: ${user?.uid}, Task ID: ${task.id}`);
-    if (isActuallyMainTask && !isCollectionTask && user && task.id) {
-      const fetchCountAndProgress = async () => {
-        console.log(`[TaskCard Debug] fetchCountAndProgress called for main task '${task.name}' (ID: ${task.id}). Supervisor: ${isSupervisor}, Member: ${isMember}, Owner: ${isOwnerOfThisTask}`);
-        setLoadingSubTaskCount(true); // Set loading true before fetch
-        try {
-          const allSubtasks = await getSubTasks(task.id);
-          const isNonOwnerSupervisorOrMember = !isOwnerOfThisTask && (isSupervisor || isMember);
-
-          if (isNonOwnerSupervisorOrMember) {
-            // Filter client-side to avoid composite index query
-            const assignedSubtasks = allSubtasks.filter(st => st.assignedToUids?.includes(user.uid));
-            const count = assignedSubtasks.length;
-            const labelKey = count === 1 ? 'taskCard.subTaskAssignedToYou' : 'taskCard.subTasksAssignedToYou';
-            setSubTaskCountLabel(t(labelKey).replace('{count}', count.toString()));
-          } else {
-            const count = allSubtasks.length;
-            const labelKey = count === 1 ? 'taskCard.subTask' : 'taskCard.subTasks';
-            setSubTaskCountLabel(t(labelKey).replace('{count}', count.toString()));
-          }
-        } catch (error: any) {
-            if (error.message && (error.message.includes("index is currently building") || error.message.includes("index is building"))) {
-                console.warn(`[TaskCard Debug] Sub-task count for main task ${task.id} is unavailable because a Firestore index is still building. Displaying 0 for now. Error: ${error.message}`);
-            } else {
-                console.error("[TaskCard Debug] Failed to fetch sub-task count for main task:", task.id, error);
-            }
-            const isPotentiallyAssignedViewer = !isOwnerOfThisTask && (isSupervisor || isMember);
-            const errorLabel = isPotentiallyAssignedViewer ? t('taskCard.subTasksAssignedToYou').replace('{count}', '0') : t('taskCard.subTasks').replace('{count}', '0');
-            setSubTaskCountLabel(errorLabel);
-        } finally {
-          setLoadingSubTaskCount(false); // Set loading false after fetch
-        }
-      };
-      fetchCountAndProgress();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [task.id, task.name, task.ownerUid, isActuallyMainTask, user, isSupervisor, isMember, isOwnerOfThisTask, isCollectionTask, t]);
 
   const handleProofSuccess = async () => {
     setShowProofDialog(false);
@@ -227,7 +185,10 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const RupeeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>;
   const cardIcon = isCollectionTask ? <RupeeIcon /> : (isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />);
   const showEditButton = isOwnerOfThisTask;
-  const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 ? task.assignedToNames.join(', ') : 'N/A';
+  const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 
+    ? task.assignedToNames.join(', ') 
+    : 'N/A';
+
   const hasOpenIssuesForCard = typeof task.openIssueCount === 'number' && task.openIssueCount > 0;
   
   const reminderText = () => {
@@ -292,14 +253,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
                   {t(`status.${task.status.toLowerCase().replace(/ /g, '')}`)}
                 </Badge>
               )}
-              {isActuallyMainTask && !isCollectionTask && (
-                loadingSubTaskCount ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                ) : (
-                  <Badge variant="outline">
-                    {subTaskCountLabel}
-                  </Badge>
-                )
+              {isActuallyMainTask && !isCollectionTask && task.displaySubTaskCountLabel && (
+                <Badge variant="outline">{task.displaySubTaskCountLabel}</Badge>
               )}
               {isCollectionTask && <Badge variant="secondary">{t('taskDetails.collectionTaskType')}</Badge>}
             </div>
