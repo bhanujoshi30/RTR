@@ -16,6 +16,7 @@ import {
   orderBy,
   documentId,
   limit,
+  arrayUnion,
 } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { deleteAllTasksForProject, getProjectMainTasks, getAllProjectTasks, mapDocumentToTask } from '@/services/taskService';
@@ -295,55 +296,28 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
   if (!projectIds || projectIds.length === 0) {
     return [];
   }
-  console.log(`projectService: getProjectsByIds for IDs: ${projectIds.join(', ')}`);
+  console.log(`projectService: getProjectsByIds for user ${userUid} on projects: ${projectIds.join(', ')}`);
 
-  const MAX_IDS_PER_QUERY = 30;
-  const projectChunks: string[][] = [];
-  for (let i = 0; i < projectIds.length; i += MAX_IDS_PER_QUERY) {
-    projectChunks.push(projectIds.slice(i, i + MAX_IDS_PER_QUERY));
-  }
+  // Using Promise.all to fetch project details individually.
+  // This avoids complex Firestore queries that are difficult to secure and can hit index limits.
+  // getProjectById already contains the necessary logic for progress calculation and security checks.
+  const projectPromises = projectIds.map(id => 
+    getProjectById(id, userUid, userRole).catch(err => {
+      // Catch errors for individual project fetches to prevent Promise.all from failing completely.
+      console.error(`Failed to fetch project ${id} within getProjectsByIds`, err);
+      return null; // Return null for failed fetches
+    })
+  );
 
-  let fetchedProjectsMapped: Project[] = [];
-
-  for (const chunk of projectChunks) {
-    if (chunk.length === 0) continue;
-    
-    let q;
-    const isMemberOrSupervisor = userRole === 'member' || userRole === 'supervisor';
-
-    if (isMemberOrSupervisor) {
-      // For members/supervisors, the query must also prove they are a member of the requested projects.
-      // This satisfies the `request.auth.uid in resource.data.memberUids` rule in Firestore.
-      q = query(projectsCollection, where(documentId(), 'in', chunk), where('memberUids', 'array-contains', userUid));
-    } else {
-      // For admins, owners, clients, a simple `in` query is sufficient as other rules will grant access.
-      q = query(projectsCollection, where(documentId(), 'in', chunk));
-    }
-    
-    try {
-      const querySnapshot = await getDocs(q);
-      const projectsFromChunk = querySnapshot.docs.map(mapDocumentToProject);
-      fetchedProjectsMapped.push(...projectsFromChunk);
-    } catch (error: any) {
-      console.error('projectService: Error fetching projects by IDs chunk:', chunk, error.message, error.stack);
-      throw error;
-    }
-  }
+  const projects = await Promise.all(projectPromises);
   
-  const projectsWithDetailsPromises = fetchedProjectsMapped.map(async (project) => {
-    const mainTasks = await getProjectMainTasks(project.id);
-    project.progress = await calculateProjectProgress(project.id, mainTasks);
-    project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
-    project.totalCost = mainTasks.filter(task => task.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
-    return project;
-  });
-  const fetchedProjects = await Promise.all(projectsWithDetailsPromises);
+  // Filter out any projects that failed to fetch or returned null (e.g., due to permissions)
+  const validProjects = projects.filter((p): p is Project => p !== null);
+  
+  validProjects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
-
-  fetchedProjects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-
-  console.log(`projectService: Fetched ${fetchedProjects.length} projects by IDs with calculated progress and status.`);
-  return fetchedProjects;
+  console.log(`projectService: Successfully fetched ${validProjects.length} out of ${projectIds.length} requested projects.`);
+  return validProjects;
 };
 
 
@@ -390,3 +364,4 @@ export const deleteProject = async (projectId: string, userUid: string): Promise
     throw error;
   }
 };
+
