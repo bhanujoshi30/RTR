@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getTaskById, deleteTask, updateTaskStatus } from '@/services/taskService';
-import type { Task, UserRole, TaskStatus } from '@/types';
+import type { Task, User as AppUser, UserRole, TaskStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +24,7 @@ import { Timeline } from '@/components/timeline/Timeline';
 import { MainTaskTimeline } from '@/components/timeline/MainTaskTimeline';
 import { numberToWordsInr } from '@/lib/currencyUtils';
 import { useTranslation } from '@/hooks/useTranslation';
+import { getAllUsers } from '@/services/userService';
 
 
 export default function TaskDetailsPage() {
@@ -38,13 +39,20 @@ export default function TaskDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const { t, locale } = useTranslation();
-  const [showAddEditTaskModal, setShowAddEditTaskModal] = useState(false);
+  
+  const [showEditTaskDialog, setShowEditTaskDialog] = useState(false);
+  const [showAddSubTaskDialog, setShowAddSubTaskDialog] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | undefined | null>(null); 
+  
   const [ownerDisplayName, setOwnerDisplayName] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<string>("details");
   const [showDailyReportDialog, setShowDailyReportDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isStatusChanging, setIsStatusChanging] = useState(false);
+  
+  const [isPreparingSubTask, setIsPreparingSubTask] = useState(false);
+  const [preloadedUsers, setPreloadedUsers] = useState<AppUser[] | null>(null);
+
 
   const isSupervisor = user?.role === 'supervisor';
   const isMainTask = task && !task.parentId;
@@ -98,8 +106,24 @@ export default function TaskDetailsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [taskId, projectId, user, authLoading]);
 
+  const handleAddSubTaskClick = async () => {
+    if (!user) return;
+    setIsPreparingSubTask(true);
+    try {
+      const allUsers = await getAllUsers(user.uid);
+      const assignable = allUsers.filter(u => u.role === 'supervisor' || u.role === 'member');
+      setPreloadedUsers(assignable);
+      setShowAddSubTaskDialog(true);
+    } catch (error) {
+      toast({ title: "Error", description: "Could not prepare the sub-task form.", variant: "destructive" });
+    } finally {
+      setIsPreparingSubTask(false);
+    }
+  };
+
   const handleTaskFormSuccess = () => {
-    setShowAddEditTaskModal(false);
+    setShowAddSubTaskDialog(false);
+    setShowEditTaskDialog(false);
     setEditingTask(null);
     fetchTaskDetails();
     router.refresh();
@@ -236,9 +260,9 @@ export default function TaskDetailsPage() {
                   </Button>
                 )}
                 {canEditCurrentTask && (
-                  <Dialog open={showAddEditTaskModal && !!editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen);}}>
+                  <Dialog open={showEditTaskDialog} onOpenChange={setShowEditTaskDialog}>
                     <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" onClick={() => { setEditingTask(task); setShowAddEditTaskModal(true); }}>
+                      <Button variant="outline" size="sm" onClick={() => { setEditingTask(task); setShowEditTaskDialog(true); }}>
                         <Edit className="mr-2 h-4 w-4" /> {isSubTask ? t('taskDetails.editSubTask') : t('taskDetails.editMainTask')}
                       </Button>
                     </DialogTrigger>
@@ -348,20 +372,35 @@ export default function TaskDetailsPage() {
                     {t('projectDetails.subTasks')}
                   </h2>
                   {canAddSubTask && (
-                    <Dialog open={showAddEditTaskModal && !editingTask} onOpenChange={(isOpen) => { if(!isOpen) setEditingTask(null); setShowAddEditTaskModal(isOpen); }}>
-                      <DialogTrigger asChild>
-                        <Button onClick={() => { setEditingTask(null); setShowAddEditTaskModal(true); }}>
-                          <PlusCircle className="mr-2 h-4 w-4" /> {t('taskForm.addSubTaskBtn')}
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="sm:max-w-xl">
-                        <DialogHeader>
-                          <DialogTitle className="font-headline text-xl">{t('taskForm.addSubTask')}</DialogTitle>
-                          <DialogDescription>{t('taskForm.subTaskDescPlaceholder')}</DialogDescription>
-                        </DialogHeader>
-                        {user && <TaskForm projectId={projectId} parentId={taskId} onFormSuccess={handleTaskFormSuccess} />}
-                      </DialogContent>
-                    </Dialog>
+                    <>
+                      <Button onClick={handleAddSubTaskClick} disabled={isPreparingSubTask}>
+                        {isPreparingSubTask ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <PlusCircle className="mr-2 h-4 w-4" />
+                        )}
+                        {t('taskForm.addSubTaskBtn')}
+                      </Button>
+                      <Dialog open={showAddSubTaskDialog} onOpenChange={setShowAddSubTaskDialog}>
+                        <DialogContent className="sm:max-w-xl">
+                            <DialogHeader>
+                                <DialogTitle className="font-headline text-xl">{t('taskForm.addSubTask')}</DialogTitle>
+                                <DialogDescription>{t('taskForm.subTaskDescPlaceholder')}</DialogDescription>
+                            </DialogHeader>
+                            {user && preloadedUsers && (
+                                <TaskForm
+                                    projectId={projectId}
+                                    parentId={taskId}
+                                    onFormSuccess={() => {
+                                        setShowAddSubTaskDialog(false);
+                                        handleTaskFormSuccess();
+                                    }}
+                                    preloadedAssignableUsers={preloadedUsers}
+                                />
+                            )}
+                        </DialogContent>
+                      </Dialog>
+                    </>
                   )}
                 </div>
                 {user && task && task.ownerUid && <SubTaskList mainTaskId={taskId} projectId={projectId} mainTaskOwnerUid={task.ownerUid} />}

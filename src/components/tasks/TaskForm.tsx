@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { createTask, getTaskById, updateTask } from '@/services/taskService';
 import type { Task, TaskStatus, User as AppUser } from '@/types';
@@ -29,9 +29,10 @@ interface TaskFormProps {
   task?: Task;
   parentId?: string | null;
   onFormSuccess?: () => void;
+  preloadedAssignableUsers?: AppUser[];
 }
 
-export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormProps) {
+export function TaskForm({ projectId, task, parentId, onFormSuccess, preloadedAssignableUsers }: TaskFormProps) {
   const router = useRouter();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -50,7 +51,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   // Member Assignment State
   const [assignedUsers, setAssignedUsers] = useState<AppUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
-  const [allAssignableUsers, setAllAssignableUsers] = useState<AppUser[]>([]);
+  const [allAssignableUsers, setAllAssignableUsers] = useState<AppUser[]>(preloadedAssignableUsers || []);
 
   // Control State
   const [loading, setLoading] = useState(false);
@@ -58,7 +59,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
   const [parentMainTask, setParentMainTask] = useState<Task | null>(null);
 
   useEffect(() => {
-    if (isSubTask && user) {
+    if (isSubTask && user && !preloadedAssignableUsers) {
       const fetchPrerequisites = async () => {
         setLoadingAssignableUsers(true);
         try {
@@ -92,7 +93,7 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     } else {
         setLoadingAssignableUsers(false);
     }
-  }, [isSubTask, user, toast, task, parentId]);
+  }, [isSubTask, user, toast, task, parentId, preloadedAssignableUsers]);
 
 
   const handleAddMember = () => {
@@ -108,7 +109,9 @@ export function TaskForm({ projectId, task, parentId, onFormSuccess }: TaskFormP
     setAssignedUsers(assignedUsers.filter(u => u.uid !== uid));
   };
   
-  const availableUsersToAssign = allAssignableUsers.filter(u => !assignedUsers.some(au => au.uid === u.uid));
+  const availableUsersToAssign = useMemo(() => {
+    return allAssignableUsers.filter(u => !assignedUsers.some(au => au.uid === u.uid));
+  }, [allAssignableUsers, assignedUsers]);
 
 
   const handleSubmit = async (e: FormEvent) => {

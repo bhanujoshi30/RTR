@@ -13,13 +13,16 @@ import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/i
 import { getProjectsByIds, getUserProjects, getClientProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useRouter } from 'next/navigation';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
   const { t } = useTranslation();
+  const router = useRouter();
   const [projectsToDisplay, setProjectsToDisplay] = useState<Project[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(true);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [loadingCreateProject, setLoadingCreateProject] = useState(false);
 
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -190,11 +193,19 @@ export default function DashboardPage() {
         <h1 className="font-headline text-3xl font-semibold tracking-tight">{pageTitle}</h1>
         <div className="flex items-center gap-2">
           {canCreateProject && (
-            <Button asChild>
-              <Link href="/projects/create">
+            <Button
+              onClick={() => {
+                setLoadingCreateProject(true);
+                router.push('/projects/create');
+              }}
+              disabled={loadingCreateProject}
+            >
+              {loadingCreateProject ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
                 <FolderPlus className="mr-2 h-4 w-4" />
-                {t('header.newProject')}
-              </Link>
+              )}
+              {t('header.newProject')}
             </Button>
           )}
         </div>

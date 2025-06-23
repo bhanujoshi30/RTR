@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, PlusCircle, Bug } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface IssueListProps {
   projectId: string;
@@ -23,6 +24,8 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
   const [error, setError] = useState<string | null>(null);
   const { user, loading: authLoading } = useAuth();
   const [parentTask, setParentTask] = useState<Task | null>(null);
+  const router = useRouter();
+  const [isCreatingIssue, setIsCreatingIssue] = useState(false);
 
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
@@ -85,11 +88,20 @@ export function IssueList({ projectId, taskId, onIssueListChange }: IssueListPro
           Task Issues
         </h3>
         {canManageIssuesForThisTask && (
-          <Button asChild size="sm">
-            <Link href={`/projects/${projectId}/tasks/${taskId}/issues/create`}>
+          <Button
+            size="sm"
+            onClick={() => {
+              setIsCreatingIssue(true);
+              router.push(`/projects/${projectId}/tasks/${taskId}/issues/create`);
+            }}
+            disabled={isCreatingIssue}
+          >
+            {isCreatingIssue ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
               <PlusCircle className="mr-2 h-4 w-4" />
-              Add New Issue
-            </Link>
+            )}
+            Add New Issue
           </Button>
         )}
       </div>
