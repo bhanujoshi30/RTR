@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -121,16 +122,19 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
 
   return (
     <Accordion type="multiple" className="w-full space-y-2">
-      {mainTasks.map(mainTask => (
-        <AccordionItem key={mainTask.id} value={mainTask.id} className="border bg-card rounded-lg shadow-sm">
-          <AccordionTrigger className="p-4 hover:no-underline [&[data-state=open]>svg]:rotate-90">
-             <div className="flex-1">
-                <ProjectedTimelineItem task={mainTask} />
-             </div>
-          </AccordionTrigger>
-          <AccordionContent>
-            <div className="pl-12 pr-4 pb-4">
-                {mainTask.subTasks.length > 0 ? (
+      {mainTasks.map(mainTask => {
+        const hasSubTasks = mainTask.subTasks && mainTask.subTasks.length > 0;
+        
+        if (hasSubTasks) {
+          return (
+            <AccordionItem key={mainTask.id} value={mainTask.id} className="border bg-card rounded-lg shadow-sm">
+              <AccordionTrigger className="p-4 hover:no-underline [&[data-state=open]>svg]:rotate-90">
+                <div className="flex-1">
+                    <ProjectedTimelineItem task={mainTask} />
+                </div>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="pl-12 pr-4 pb-4">
                     <div className="relative pl-6 border-l-2 border-border space-y-4">
                         {mainTask.subTasks.map(subTask => (
                            <div key={subTask.id} className="relative">
@@ -143,13 +147,19 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
                            </div>
                         ))}
                    </div>
-                ) : (
-                    <p className="text-sm text-muted-foreground italic">No sub-tasks for this main task.</p>
-                )}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          );
+        }
+
+        // Render non-expandable card if no subtasks
+        return (
+            <div key={mainTask.id} className="border bg-card rounded-lg shadow-sm p-4">
+                 <ProjectedTimelineItem task={mainTask} />
             </div>
-          </AccordionContent>
-        </AccordionItem>
-      ))}
+        );
+      })}
     </Accordion>
   );
 }
