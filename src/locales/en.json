@@ -46,10 +46,10 @@
     "viewProject": "View Project",
     "mainTask": "Main Task",
     "mainTasks": "Main Tasks",
-    "subTask": "Sub-task",
-    "subTasks": "Sub-tasks",
-    "openIssue": "Open Issue",
-    "openIssues": "Open Issues"
+    "subTask": "{count} Sub-task",
+    "subTasks": "{count} Sub-tasks",
+    "openIssue": "{count} Open Issue",
+    "openIssues": "{count} Open Issues"
   },
   "projectDetails": {
     "backToDashboard": "Back to Dashboard",
@@ -364,6 +364,11 @@
     "assignmentUpdated": "updated assignments to {{names}}.",
     "statusChanged": "changed status from '{{oldStatus}}' to '{{newStatus}}'.",
     "mainTaskCompleted": "completed the main task.",
-    "mainTaskReopened": "reopened the main task because sub-task \"{{subTaskName}}\" was reopened."
+    "mainTaskReopened": "reopened the main task because sub-task \"{{subTaskName}}\" was reopened.",
+    "relevantEvent": "{count} relevant event",
+    "relevantEvents": "{count} relevant events",
+    "latestActivity": "Latest activity {time}",
+    "eventsOnSubTask_one": "1 event on sub-task: ",
+    "eventsOnSubTask_other": "{count} events on sub-task: "
   }
 }

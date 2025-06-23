@@ -46,10 +46,10 @@
     "viewProject": "प्रोजेक्ट देखें",
     "mainTask": "मुख्य कार्य",
     "mainTasks": "मुख्य कार्य",
-    "subTask": "उप-कार्य",
-    "subTasks": "उप-कार्य",
-    "openIssue": "खुला मुद्दा",
-    "openIssues": "खुले मुद्दे"
+    "subTask": "{count} उप-कार्य",
+    "subTasks": "{count} उप-कार्य",
+    "openIssue": "{count} खुला मुद्दा",
+    "openIssues": "{count} खुले मुद्दे"
   },
   "projectDetails": {
     "backToDashboard": "डैशबोर्ड पर वापस जाएं",
@@ -364,6 +364,11 @@
     "assignmentUpdated": "असाइनमेंट को {{names}} में अपडेट किया।",
     "statusChanged": "स्थिति को '{{oldStatus}}' से '{{newStatus}}' में बदल दिया।",
     "mainTaskCompleted": "मुख्य कार्य पूरा किया।",
-    "mainTaskReopened": "उप-कार्य \"{{subTaskName}}\" को फिर से खोलने के कारण मुख्य कार्य को फिर से खोला।"
+    "mainTaskReopened": "उप-कार्य \"{{subTaskName}}\" को फिर से खोलने के कारण मुख्य कार्य को फिर से खोला।",
+    "relevantEvent": "{count} प्रासंगिक घटना",
+    "relevantEvents": "{count} प्रासंगिक घटनाएँ",
+    "latestActivity": "नवीनतम गतिविधि {time}",
+    "eventsOnSubTask_one": "1 घटना उप-कार्य पर: ",
+    "eventsOnSubTask_other": "{count} घटनाएँ उप-कार्य पर: "
   }
 }

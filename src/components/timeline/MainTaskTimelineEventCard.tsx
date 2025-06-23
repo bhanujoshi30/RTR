@@ -82,6 +82,13 @@ export function MainTaskTimelineEventCard({ event }: { event: AggregatedEvent })
       events: TimelineEvent[];
     };
     
+    const eventsOnSubTaskText = events.length === 1
+        ? t('timeline.eventsOnSubTask_one')
+        : t('timeline.eventsOnSubTask_other', { count: events.length });
+
+    const latestActivityText = t('timeline.latestActivity', { time: formatDistanceToNow(event.timestamp, { addSuffix: true }) });
+
+
     // For clients, render a simplified, non-interactive view
     if (isClient) {
       return (
@@ -91,10 +98,10 @@ export function MainTaskTimelineEventCard({ event }: { event: AggregatedEvent })
           </div>
           <div className="flex-1 space-y-1 pl-8 py-3">
              <p className="font-semibold text-sm">
-                Sub-task: <span className="text-primary">{subTaskInfo.name}</span>
+                {t('projectDetails.subTask')}: <span className="text-primary">{subTaskInfo.name}</span>
              </p>
              <p className="text-xs text-muted-foreground">
-                Last updated {formatDistanceToNow(event.timestamp, { addSuffix: true })}
+                {latestActivityText}
              </p>
           </div>
         </div>
@@ -114,10 +121,10 @@ export function MainTaskTimelineEventCard({ event }: { event: AggregatedEvent })
               <AccordionTrigger className="flex-1 items-center justify-between py-3 font-normal text-sm hover:no-underline [&[data-state=open]>svg]:rotate-90">
                 <div className="text-left">
                   <p className="font-semibold">
-                    {events.length} event{events.length > 1 ? 's' : ''} on sub-task: <span className="text-primary">{subTaskInfo.name}</span>
+                    {eventsOnSubTaskText}<span className="text-primary">{subTaskInfo.name}</span>
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Latest activity {formatDistanceToNow(event.timestamp, { addSuffix: true })}
+                    {latestActivityText}
                   </p>
                 </div>
               </AccordionTrigger>
