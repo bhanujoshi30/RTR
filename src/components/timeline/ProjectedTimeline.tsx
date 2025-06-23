@@ -1,11 +1,10 @@
-
 "use client";
 
 import { useEffect, useState } from 'react';
 import type { Task } from '@/types';
 import { getAllProjectTasks } from '@/services/taskService';
 import { getOpenIssuesForTaskIds } from '@/services/issueService';
-import { Loader2, GanttChartSquare, Layers, ChevronRight } from 'lucide-react';
+import { Loader2, GanttChartSquare, Layers } from 'lucide-react';
 import { ProjectedTimelineItem } from './ProjectedTimelineItem';
 import { useAuth } from '@/hooks/useAuth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
@@ -128,7 +127,6 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
              <div className="flex-1">
                 <ProjectedTimelineItem task={mainTask} />
              </div>
-             <ChevronRight className="h-4 w-4 shrink-0 transition-transform duration-200" />
           </AccordionTrigger>
           <AccordionContent>
             <div className="pl-12 pr-4 pb-4">
