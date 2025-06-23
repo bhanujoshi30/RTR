@@ -149,7 +149,7 @@ export const createTask = async (
         let description = 'created the main task.';
         const details: Record<string, any> = {};
         if (newTaskPayload.taskType === 'collection' && newTaskPayload.cost) {
-            description = `created a collection task for Rs.${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(newTaskPayload.cost)}.`;
+            description = `created a collection task for ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(newTaskPayload.cost)}.`;
             details.cost = newTaskPayload.cost;
         }
         await logTimelineEvent(
@@ -543,7 +543,7 @@ export const updateTask = async (
         const newCost = updates.cost !== undefined ? (updates.cost || 0) : oldCost;
 
         if (taskDataFromSnap.taskType === 'collection' && newCost !== oldCost) {
-             description = `updated collection amount from Rs.${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(oldCost)} to Rs.${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(newCost)}.`;
+             description = `updated collection amount from ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(oldCost)} to ${new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(newCost)}.`;
              details.oldCost = oldCost;
              details.newCost = newCost;
              (details.updatedFields as string[]).push('cost');
@@ -924,7 +924,7 @@ export const getTimelineForMainTask = async (mainTaskId: string): Promise<Aggreg
     });
 
     const subTaskEventGroupsWithNulls = await Promise.all(subTaskTimelinePromises);
-    const aggregatedSubTaskEvents = subTaskEventGroupsWithNulls.filter((group): group is AggregatedEvent => group !== null);
+    const aggregatedSubTaskEvents = subTaskEventGroupsWithNulls.filter((group) => group !== null);
 
     // 3. Combine and sort
     const combinedEvents = [...aggregatedMainTaskEvents, ...aggregatedSubTaskEvents];
@@ -975,5 +975,7 @@ export const getTimelineForProject = async (projectId: string): Promise<ProjectA
     return [];
   }
 };
+
+    
 
     
