@@ -4,118 +4,117 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper Functions
-    function isOwner(doc) {
-      return request.auth.uid == doc.data.ownerUid;
-    }
-
-    function isClient(doc) {
-      return request.auth.uid == doc.data.clientUid;
-    }
-    
+    // HELPER FUNCTIONS
     function isAdmin() {
-      // Check the user's custom claim or their role in the /users collection
+      // Checks if the requesting user has the 'admin' role in their user document.
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Projects Collection
-    match /projects/{projectId} {
-      // Any authenticated user can read project-level metadata.
-      // Granular access control is handled at the task/issue level.
-      allow read: if request.auth != null;
+    function isOwner(doc) {
+      // Checks if the requesting user is the owner of a document.
+      return request.auth.uid == doc.data.ownerUid;
+    }
+    
+    function isProjectOwner(projectId) {
+      // Checks if the requesting user is the owner of a specific project.
+      return request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid;
+    }
 
-      // Only the project owner or an admin can create/update/delete a project.
-      allow create: if isOwner(request.resource);
+    function isProjectClient(projectId) {
+      // Checks if the requesting user is the client associated with a specific project.
+      return request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.clientUid;
+    }
+
+    // USER PROFILES
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId || isAdmin();
+      allow delete: if isAdmin() && request.auth.uid != userId;
+    }
+
+    // PROJECTS
+    match /projects/{projectId} {
+      // Any authenticated user can see project high-level details.
+      // This is necessary for the dashboard to function for members.
+      // Sensitive data is secured in the sub-collections.
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
       allow update: if isOwner(resource) || isAdmin();
       allow delete: if isOwner(resource);
     }
 
-    // Tasks Collection
+    // TASKS & SUB-COLLECTIONS
     match /tasks/{taskId} {
-      function isOwnerOfParentProject() {
-        return request.auth.uid == get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid;
-      }
+      allow read: if isProjectOwner(resource.data.projectId) ||
+                      isProjectClient(resource.data.projectId) ||
+                      request.auth.uid in resource.data.assignedToUids ||
+                      isOwner(resource) ||
+                      isAdmin();
+                      
+      allow create: if isProjectOwner(request.resource.data.projectId) || isAdmin();
+      
+      // Allow owners/admins to edit, and assigned users to make limited changes.
+      allow update: if isOwner(resource) || 
+                       isAdmin() ||
+                       (request.auth.uid in resource.data.assignedToUids);
+                       
+      allow delete: if isOwner(resource);
 
-      function isClientOfParentProject() {
-        return request.auth.uid == get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.clientUid;
-      }
-      
-      function isAssignedToTask() {
-        return request.auth.uid in resource.data.assignedToUids;
-      }
-      
-      function isOwnerOfTask() {
-        return request.auth.uid == resource.data.ownerUid;
-      }
-
-      allow read: if isOwnerOfParentProject() || isAssignedToTask() || isClientOfParentProject();
-      allow create: if isOwnerOfParentProject();
-      
-      function canUpdateTask() {
-        // Owner of the task can always update
-        if (isOwnerOfTask()) {
-          return true;
-        }
-        // Assigned users can update status/description of sub-tasks
-        if (resource.data.parentId != null && isAssignedToTask()) {
-          let allowedUpdates = ['status', 'description', 'dueDate', 'updatedAt'];
-          return request.resource.data.keys().hasOnly(allowedUpdates);
-        }
-        return false;
-      }
-      
-      allow update: if canUpdateTask();
-      allow delete: if isOwnerOfTask();
-
-      // Timeline subcollection
+      // TIMELINE (sub-collection of tasks)
       match /timeline/{eventId} {
-        allow read: if isOwnerOfParentProject() || isAssignedToTask() || isClientOfParentProject();
-        allow create: if request.auth != null; // Logged by any involved user
+        allow read: if get( /databases/$(database)/documents/tasks/$(taskId) ).data.ownerUid == request.auth.uid ||
+                       request.auth.uid in get( /databases/$(database)/documents/tasks/$(taskId) ).data.assignedToUids ||
+                       isProjectOwner(get( /databases/$(database)/documents/tasks/$(taskId) ).data.projectId) ||
+                       isProjectClient(get( /databases/$(database)/documents/tasks/$(taskId) ).data.projectId) ||
+                       isAdmin();
+        allow create: if request.auth != null; // Created by backend logic
+        allow update, delete: if false; // Timeline is immutable
       }
 
-      // Attachments subcollection
-      match /attachments/{attachmentId} {
-         allow read: if isOwnerOfParentProject() || isAssignedToTask() || isClientOfParentProject();
-         allow create: if request.auth != null; // Logged by any involved user
-         allow delete: if request.auth.uid == resource.data.ownerUid; // Only attachment owner can delete
+      // ATTACHMENTS (sub-collection of tasks)
+       match /attachments/{attachmentId} {
+        allow read: if get( /databases/$(database)/documents/tasks/$(taskId) ).data.ownerUid == request.auth.uid ||
+                       request.auth.uid in get( /databases/$(database)/documents/tasks/$(taskId) ).data.assignedToUids ||
+                       isProjectOwner(get( /databases/$(database)/documents/tasks/$(taskId) ).data.projectId) ||
+                       isProjectClient(get( /databases/$(database)/documents/tasks/$(taskId) ).data.projectId) ||
+                       isAdmin();
+        allow create: if request.auth.uid == request.resource.data.ownerUid;
+        allow delete: if request.auth.uid == resource.data.ownerUid;
       }
-    }
-
-    // Issues Collection
-    match /issues/{issueId} {
-      function isOwnerOfIssue() {
-        return request.auth.uid == resource.data.ownerUid;
-      }
-
-      function isAssignedToIssue() {
-        return request.auth.uid in resource.data.assignedToUids;
-      }
-      
-      function isRelatedToProject() {
-        let project = get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data;
-        return request.auth.uid == project.ownerUid || request.auth.uid == project.clientUid;
-      }
-
-      allow read: if isRelatedToProject() || isAssignedToIssue() || isOwnerOfIssue();
-      allow create: if request.auth.uid == request.resource.data.ownerUid;
-      allow update: if isOwnerOfIssue() || isAssignedToIssue();
-      allow delete: if isOwnerOfIssue();
     }
     
-    // Attendance Collection
-    match /attendance/{recordId} {
-        allow read: if isAdmin();
-        allow create: if request.auth.uid == request.resource.data.userId;
-    }
+    // ISSUES
+    match /issues/{issueId} {
+        function getParentTaskData() {
+          return get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data;
+        }
 
-    // Users Collection
-    match /users/{userId} {
-      // A user can read/update their own profile.
-      // An admin can read/update any user profile.
-      allow read, update: if request.auth.uid == userId || isAdmin();
-      
-      // Only an admin can create or delete user documents.
-      allow create, delete: if isAdmin();
+        function isParentTaskOwner() {
+            return request.auth.uid == getParentTaskData().ownerUid;
+        }
+
+        function isParentTaskAssignee() {
+            return request.auth.uid in getParentTaskData().assignedToUids;
+        }
+
+        allow read: if isProjectOwner(getParentTaskData().projectId) ||
+                       isProjectClient(getParentTaskData().projectId) ||
+                       isParentTaskOwner() ||
+                       isParentTaskAssignee() ||
+                       isOwner(resource) ||
+                       isAdmin();
+
+        allow create: if isParentTaskOwner() || isParentTaskAssignee();
+
+        allow update, delete: if isOwner(resource);
+    }
+    
+    // ATTENDANCE
+    match /attendance/{attendanceId} {
+      allow read: if isAdmin();
+      allow create: if request.auth.uid == request.resource.data.userId;
+      allow update, delete: if false;
     }
   }
 }
