@@ -18,6 +18,7 @@ import Image from 'next/image';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { useToast } from '@/hooks/use-toast';
+import { useTranslation } from '@/hooks/useTranslation';
 
 
 const StatsChart = ({ data }: { data: any[] }) => (
@@ -43,6 +44,7 @@ export default function DprPage() {
     const { user, loading: authLoading } = useAuth();
     const router = useRouter();
     const { toast } = useToast();
+    const { t } = useTranslation();
 
     // State for controls
     const [projects, setProjects] = useState<Project[]>([]);
@@ -200,24 +202,24 @@ export default function DprPage() {
                 <div className="flex-1">
                     <h1 className="font-headline text-3xl font-semibold tracking-tight flex items-center">
                         <ClipboardList className="mr-3 h-8 w-8 text-primary" />
-                        Daily Progress Report (DPR)
+                        {t('dpr.pageTitle')}
                     </h1>
                      <p className="text-muted-foreground mt-1">
-                        Report for Today: {format(selectedDate, 'PPP')}
+                        {t('dpr.reportForToday')} {format(selectedDate, 'PPP')}
                     </p>
                 </div>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Report Controls</CardTitle>
-                    <CardDescription>Select a project to generate today's progress report.</CardDescription>
+                    <CardTitle>{t('dpr.controlsTitle')}</CardTitle>
+                    <CardDescription>{t('dpr.controlsDesc')}</CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col sm:flex-row gap-4 items-center">
                     <div className="flex-grow w-full sm:w-auto">
                         <Select onValueChange={setSelectedProjectId} disabled={loadingProjects}>
                             <SelectTrigger>
-                                <SelectValue placeholder={loadingProjects ? "Loading projects..." : "Select a project"} />
+                                <SelectValue placeholder={loadingProjects ? t('dpr.loadingProjects') : t('dpr.selectProject')} />
                             </SelectTrigger>
                             <SelectContent>
                                 {projects.map(p => (
@@ -229,11 +231,11 @@ export default function DprPage() {
                     <div className="flex gap-2 w-full sm:w-auto">
                         <Button onClick={handleGenerateReport} disabled={!selectedProjectId || loadingReport} className="flex-1 sm:flex-none">
                             {loadingReport ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                            Generate Report
+                            {t('dpr.generateReport')}
                         </Button>
                         <Button onClick={handleExportPdf} disabled={!reportData || isExporting} variant="outline" className="flex-1 sm:flex-none">
                              {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileDown className="mr-2 h-4 w-4" />}
-                            Export PDF
+                            {t('dpr.exportPdf')}
                         </Button>
                     </div>
                 </CardContent>
@@ -244,9 +246,9 @@ export default function DprPage() {
             {loadingReport && (
                  <div className="flex flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-card p-12 text-center shadow-sm">
                     <Loader2 className="h-12 w-12 animate-spin text-primary" />
-                    <h3 className="mt-4 font-headline text-xl font-semibold">Generating Report...</h3>
+                    <h3 className="mt-4 font-headline text-xl font-semibold">{t('dpr.generatingReport')}</h3>
                     <p className="mt-2 text-sm text-muted-foreground">
-                        Collecting data and preparing your summary. This may take a moment.
+                        {t('dpr.generatingReportDesc')}
                     </p>
                 </div>
             )}
@@ -256,27 +258,27 @@ export default function DprPage() {
                     <div className="space-y-6">
                         <Card>
                             <CardHeader>
-                                <CardTitle>AI-Generated Summary for {rawReportData.projectName} on {format(selectedDate, 'PPP')}</CardTitle>
+                                <CardTitle>{t('dpr.summaryTitle')} {rawReportData.projectName} {t('dpr.on')} {format(selectedDate, 'PPP')}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                 <div>
-                                    <h4 className="font-semibold text-lg mb-1">Executive Summary</h4>
+                                    <h4 className="font-semibold text-lg mb-1">{t('dpr.executiveSummary')}</h4>
                                     <p className="text-muted-foreground whitespace-pre-wrap">{reportData.executiveSummary}</p>
                                 </div>
                                 <div>
-                                    <h4 className="font-semibold text-lg mb-1">Key Achievements</h4>
+                                    <h4 className="font-semibold text-lg mb-1">{t('dpr.keyAchievements')}</h4>
                                     <ul className="list-disc pl-5 text-muted-foreground space-y-1">
                                         {reportData.keyAchievements.map((item, i) => <li key={i}>{item}</li>)}
                                     </ul>
                                 </div>
                                 <div>
-                                    <h4 className="font-semibold text-lg mb-1">New Issues & Blockers</h4>
+                                    <h4 className="font-semibold text-lg mb-1">{t('dpr.newIssues')}</h4>
                                      <ul className="list-disc pl-5 text-muted-foreground space-y-1">
-                                        {reportData.newIssues.length > 0 ? reportData.newIssues.map((item, i) => <li key={i}>{item}</li>) : <li>No new issues or blockers reported.</li>}
+                                        {reportData.newIssues.length > 0 ? reportData.newIssues.map((item, i) => <li key={i}>{item}</li>) : <li>{t('dpr.noNewIssues')}</li>}
                                     </ul>
                                 </div>
                                 <div>
-                                    <h4 className="font-semibold text-lg mb-1">Outlook</h4>
+                                    <h4 className="font-semibold text-lg mb-1">{t('dpr.outlook')}</h4>
                                     <p className="text-muted-foreground whitespace-pre-wrap">{reportData.outlook}</p>
                                 </div>
                             </CardContent>
@@ -285,7 +287,7 @@ export default function DprPage() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                              <Card>
                                 <CardHeader>
-                                    <CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5" /> Daily Stats</CardTitle>
+                                    <CardTitle className="flex items-center gap-2"><BarChart2 className="h-5 w-5" /> {t('dpr.dailyStats')}</CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <StatsChart data={chartData} />
@@ -293,52 +295,52 @@ export default function DprPage() {
                             </Card>
                             <Card>
                                 <CardHeader>
-                                    <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> Team Attendance ({rawReportData.teamAttendance.present.length} / {rawReportData.teamAttendance.total})</CardTitle>
+                                    <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" /> {t('dpr.teamAttendance')} ({rawReportData.teamAttendance.present.length} / {rawReportData.teamAttendance.total})</CardTitle>
                                     <CardDescription>{reportData.attendanceSummary}</CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                     <h4 className="font-semibold mb-2">Present</h4>
+                                     <h4 className="font-semibold mb-2">{t('dpr.present')}</h4>
                                      {rawReportData.teamAttendance.present.length > 0 ? (
                                         <ul className="list-disc pl-5 text-sm text-muted-foreground">
                                             {rawReportData.teamAttendance.present.map(u => <li key={u.uid}>{u.name}</li>)}
                                         </ul>
-                                     ) : <p className="text-sm text-muted-foreground">No team members were present.</p>}
+                                     ) : <p className="text-sm text-muted-foreground">{t('dpr.noTeamPresent')}</p>}
 
-                                     <h4 className="font-semibold mb-2 mt-4">Absent</h4>
+                                     <h4 className="font-semibold mb-2 mt-4">{t('dpr.absent')}</h4>
                                      {rawReportData.teamAttendance.absent.length > 0 ? (
                                         <ul className="list-disc pl-5 text-sm text-muted-foreground">
                                             {rawReportData.teamAttendance.absent.map(u => <li key={u.uid}>{u.name}</li>)}
                                         </ul>
-                                     ) : <p className="text-sm text-muted-foreground">All assigned team members were present.</p>}
+                                     ) : <p className="text-sm text-muted-foreground">{t('dpr.allTeamPresent')}</p>}
                                 </CardContent>
                             </Card>
                         </div>
 
                          <Card>
                             <CardHeader>
-                                <CardTitle>Activity Feed</CardTitle>
+                                <CardTitle>{t('dpr.activityFeed')}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-4">
                                  <div>
-                                    <h4 className="font-semibold text-lg mb-2 flex items-center gap-2"><CheckCircle className="h-5 w-5 text-green-500" /> Completed Today</h4>
+                                    <h4 className="font-semibold text-lg mb-2 flex items-center gap-2"><CheckCircle className="h-5 w-5 text-green-500" /> {t('dpr.completedToday')}</h4>
                                     {rawReportData.tasksCompleted.length > 0 || rawReportData.issuesClosed.length > 0 ? (
                                         <ul className="list-disc pl-5 text-sm text-muted-foreground">
                                             {rawReportData.tasksCompleted.map(t => <li key={t.id}>{t.name}</li>)}
                                             {rawReportData.issuesClosed.map(i => <li key={i.id}>Closed Issue: {i.title}</li>)}
                                         </ul>
-                                    ) : <p className="text-sm text-muted-foreground">No tasks or issues were completed today.</p>}
+                                    ) : <p className="text-sm text-muted-foreground">{t('dpr.noTasksCompleted')}</p>}
                                 </div>
                                  <div>
-                                    <h4 className="font-semibold text-lg mb-2 flex items-center gap-2"><AlertCircle className="h-5 w-5 text-amber-500" /> Opened Today</h4>
+                                    <h4 className="font-semibold text-lg mb-2 flex items-center gap-2"><AlertCircle className="h-5 w-5 text-amber-500" /> {t('dpr.openedToday')}</h4>
                                     {rawReportData.tasksCreated.length > 0 || rawReportData.issuesOpened.length > 0 ? (
                                         <ul className="list-disc pl-5 text-sm text-muted-foreground">
                                             {rawReportData.tasksCreated.map(t => <li key={t.id}>{t.name}</li>)}
                                             {rawReportData.issuesOpened.map(i => <li key={i.id}>New Issue: {i.title} ({i.severity})</li>)}
                                         </ul>
-                                    ) : <p className="text-sm text-muted-foreground">No new tasks or issues were opened today.</p>}
+                                    ) : <p className="text-sm text-muted-foreground">{t('dpr.noTasksOpened')}</p>}
                                 </div>
                                  <div>
-                                    <h4 className="font-semibold text-lg mb-2 flex items-center gap-2"><ImageIcon className="h-5 w-5 text-sky-500" /> New Attachments</h4>
+                                    <h4 className="font-semibold text-lg mb-2 flex items-center gap-2"><ImageIcon className="h-5 w-5 text-sky-500" /> {t('dpr.newAttachments')}</h4>
                                     {rawReportData.attachments.length > 0 ? (
                                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                                             {rawReportData.attachments.map(att => (
@@ -350,7 +352,7 @@ export default function DprPage() {
                                                 </a>
                                             ))}
                                         </div>
-                                    ) : <p className="text-sm text-muted-foreground">No photos were attached today.</p>}
+                                    ) : <p className="text-sm text-muted-foreground">{t('dpr.noPhotosAttached')}</p>}
                                 </div>
                             </CardContent>
                          </Card>

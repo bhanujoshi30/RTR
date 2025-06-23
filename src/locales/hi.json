@@ -49,7 +49,9 @@
     "subTask": "{{count}} उप-कार्य",
     "subTasks": "{{count}} उप-कार्य",
     "openIssue": "{{count}} खुला मुद्दा",
-    "openIssues": "{{count}} खुले मुद्दे"
+    "openIssues": "{{count}} खुले मुद्दे",
+    "subTaskAssignedToYou": "{{count}} उप-कार्य (आपको सौंपा गया)",
+    "subTasksAssignedToYou": "{{count}} उप-कार्य (आपको सौंपे गए)"
   },
   "projectDetails": {
     "backToDashboard": "डैशबोर्ड पर वापस जाएं",

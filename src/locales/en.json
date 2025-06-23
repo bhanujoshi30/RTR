@@ -49,7 +49,9 @@
     "subTask": "{{count}} Sub-task",
     "subTasks": "{{count}} Sub-tasks",
     "openIssue": "{{count}} Open Issue",
-    "openIssues": "{{count}} Open Issues"
+    "openIssues": "{{count}} Open Issues",
+    "subTaskAssignedToYou": "{{count}} Sub-task (assigned to you)",
+    "subTasksAssignedToYou": "{{count}} Sub-tasks (assigned to you)"
   },
   "projectDetails": {
     "backToDashboard": "Back to Dashboard",
@@ -176,13 +178,13 @@
     "markComplete": "Mark as Complete",
     "reopenTask": "Reopen",
     "taskCompleted": "Task Completed",
-    "taskMarkedComplete": "Task {{name}} has been marked as complete.",
+    "taskMarkedComplete": "Task \"{{name}}\" has been marked as complete.",
     "mainTaskStatusInfo": "Main task status is derived from its sub-tasks.",
     "cannotChangeStatus": "You cannot change the status of this sub-task.",
     "cannotComplete": "Cannot Complete Sub-task",
     "openIssuesExist": "There are still open issues. Please resolve them first.",
     "couldNotVerifyIssues": "Could not verify issues: {{error}}",
-    "statusChanged": "Status of {{name}} changed to {{status}}.",
+    "statusChanged": "Status of \"{{name}}\" changed to \"{{status}}\".",
     "cannotDeleteTask": "Only the task owner can delete this task.",
     "cannotEditTask": "Only the task owner can edit task details."
   },
@@ -230,7 +232,7 @@
     "permissionDenied": "Permission Denied",
     "error": "Error",
     "taskDeleted": "Task Deleted",
-    "taskDeletedSuccess": "Task {{name}} has been deleted.",
+    "taskDeletedSuccess": "Task \"{{name}}\" has been deleted.",
     "deletionFailed": "Deletion Failed",
     "couldNotDeleteTask": "Could not delete the task."
   },
