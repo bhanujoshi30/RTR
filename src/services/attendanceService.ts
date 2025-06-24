@@ -81,13 +81,12 @@ export const addAttendanceRecord = async (data: AttendanceData): Promise<string>
 
 export const getTodaysAttendanceForUserInProject = async (userId: string, projectId: string, dateString: string): Promise<AttendanceRecord | null> => {
   const attendanceCollectionRef = collection(db, 'attendance');
+  // Removed orderBy to prevent missing-index errors. We will sort client-side.
   const q = query(
     attendanceCollectionRef,
     where('userId', '==', userId),
     where('projectId', '==', projectId),
-    where('date', '==', dateString),
-    orderBy('timestamp', 'desc'),
-    limit(1)
+    where('date', '==', dateString)
   );
   
   try {
@@ -95,13 +94,21 @@ export const getTodaysAttendanceForUserInProject = async (userId: string, projec
     if (querySnapshot.empty) {
       return null;
     }
-    const docSnap = querySnapshot.docs[0];
-    const data = docSnap.data();
-    return {
-      id: docSnap.id,
-      ...data,
-      timestamp: (data.timestamp as Timestamp).toDate(),
-    } as AttendanceRecord;
+
+    // Handle multiple submissions by sorting client-side and taking the latest.
+    const records = querySnapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      return {
+        id: docSnap.id,
+        ...data,
+        timestamp: (data.timestamp as Timestamp).toDate(),
+      } as AttendanceRecord;
+    });
+
+    records.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    return records[0]; // Return the most recent record
+
   } catch (error) {
     console.error("Error fetching today's project attendance submission:", error);
     return null;
