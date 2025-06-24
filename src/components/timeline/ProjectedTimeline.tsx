@@ -31,13 +31,8 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
       if (!projectId || !user) return;
       try {
         setLoading(true);
-        const isClientOrAdmin = user.role === 'client' || user.role === 'admin';
-        
-        let allTasks = await getAllProjectTasks(projectId);
-
-        if (!isClientOrAdmin) {
-          allTasks = allTasks.filter(task => task.taskType !== 'collection');
-        }
+        // Pass user role and UID to ensure queries are correctly scoped
+        let allTasks = await getAllProjectTasks(projectId, user.role, user.uid);
 
         const openIssues = await getOpenIssuesForTaskIds(allTasks.map(t => t.id));
         const issuesByTaskId = openIssues.reduce((acc, issue) => {
@@ -63,7 +58,6 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
           .map(mainTask => {
             const relatedSubTasks = subTasksByParentId[mainTask.id] || [];
             
-            // Calculate progress and status for standard main tasks
             if (mainTask.taskType !== 'collection') {
                 if (relatedSubTasks.length > 0) {
                     const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
@@ -79,11 +73,11 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
 
             return {
               ...mainTask,
-              subTasks: relatedSubTasks.sort((a, b) => a.dueDate!.getTime() - b.dueDate!.getTime()),
+              subTasks: relatedSubTasks.sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0)),
             };
           })
-          .filter(task => task.dueDate) // Only include tasks with a due date for the timeline
-          .sort((a, b) => a.dueDate!.getTime() - b.dueDate!.getTime());
+          .filter(task => task.dueDate)
+          .sort((a, b) => (a.dueDate?.getTime() ?? 0) - (b.dueDate?.getTime() ?? 0));
 
         setMainTasks(projectMainTasks);
         setError(null);

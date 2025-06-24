@@ -216,9 +216,7 @@ const augmentMainTasksWithProgress = async (mainTasks: Task[], projectId: string
     return mainTasks;
 };
 
-export const getProjectMainTasks = async (projectId: string, userUid: string, filterByIds?: string[]): Promise<Task[]> => {
-    console.log(`taskService: getProjectMainTasks for projectId: ${projectId}, user: ${userUid}, filterByIds: ${filterByIds?.join(',')}`);
-
+export const getProjectMainTasks = async (projectId: string, userUid: string, filterByIds?: string[], userRole?: UserRole): Promise<Task[]> => {
     let mainTasks: Task[];
 
     if (filterByIds && filterByIds.length > 0) {
@@ -226,11 +224,16 @@ export const getProjectMainTasks = async (projectId: string, userUid: string, fi
         const mainTaskSnapshots = await Promise.all(mainTaskPromises);
         mainTasks = mainTaskSnapshots.filter(snap => snap.exists()).map(mapDocumentToTask);
     } else {
-        const q = query(
-            tasksCollection, 
+        const queryConstraints = [
             where('projectId', '==', projectId), 
             where('parentId', '==', null)
-        );
+        ];
+
+        if (userRole === 'client') {
+            queryConstraints.push(where('clientUid', '==', userUid));
+        }
+
+        const q = query(tasksCollection, ...queryConstraints);
         const snapshot = await getDocs(q);
         mainTasks = snapshot.docs.map(mapDocumentToTask);
     }
@@ -311,9 +314,16 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
     }
 };
 
-export const getAllProjectTasks = async (projectId: string): Promise<Task[]> => {
+export const getAllProjectTasks = async (projectId: string, userRole?: UserRole, userUid?: string): Promise<Task[]> => {
     if (!projectId) return [];
-    const q = query(tasksCollection, where('projectId', '==', projectId));
+    
+    const queryConstraints = [where('projectId', '==', projectId)];
+    if (userRole === 'client' && userUid) {
+        queryConstraints.push(where('clientUid', '==', userUid));
+    }
+    
+    const q = query(tasksCollection, ...queryConstraints);
+
     try {
         const querySnapshot = await getDocs(q);
         const tasks = querySnapshot.docs.map(mapDocumentToTask);
@@ -589,9 +599,9 @@ export const getTimelineForMainTask = async (mainTaskId: string): Promise<Aggreg
   }
 };
 
-export const getTimelineForProject = async (projectId: string, userUid: string): Promise<ProjectAggregatedEvent[]> => {
+export const getTimelineForProject = async (projectId: string, userUid: string, userRole?: UserRole): Promise<ProjectAggregatedEvent[]> => {
   try {
-    const mainTasks = await getProjectMainTasks(projectId, userUid);
+    const mainTasks = await getProjectMainTasks(projectId, userUid, undefined, userRole);
     const projectTimelinePromises = mainTasks.map(async (mainTask) => {
       const events = await getTimelineForMainTask(mainTask.id);
       if (events.length > 0) {

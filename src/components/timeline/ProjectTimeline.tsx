@@ -25,14 +25,10 @@ export function ProjectTimeline({ projectId }: ProjectTimelineProps) {
       if (!projectId || !user) return;
       try {
         setLoading(true);
-        const isClient = user.role === 'client';
-        const fetchedEvents = await getTimelineForProject(projectId, user.uid);
+        // Pass the user's UID and role to the service function
+        const fetchedEvents = await getTimelineForProject(projectId, user.uid, user.role);
         
-        const filteredEvents = isClient
-          ? fetchedEvents.filter(group => group.data.mainTaskInfo.taskType !== 'collection')
-          : fetchedEvents;
-        
-        setEventGroups(filteredEvents);
+        setEventGroups(fetchedEvents);
         setError(null);
       } catch (err: any) {
         setError('Failed to load project timeline.');
