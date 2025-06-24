@@ -121,6 +121,24 @@ export const getUserProjects = async (userUid: string): Promise<Project[]> => {
   }
 };
 
+export const getAllProjects = async (userUid: string): Promise<Project[]> => {
+  const userDocRef = doc(db, 'users', userUid);
+  const userSnap = await getDoc(userDocRef);
+  if (!userSnap.exists() || userSnap.data().role !== 'admin') {
+    throw new Error('Access denied. Only admins can fetch all projects.');
+  }
+
+  const q = query(projectsCollection, orderBy('createdAt', 'desc'));
+  try {
+    const querySnapshot = await getDocs(q);
+    const projects = querySnapshot.docs.map(mapDocumentToProject);
+    return projects;
+  } catch (error: any) {
+    console.error('projectService: Error fetching all projects:', error.message, error.stack);
+    throw error;
+  }
+};
+
 export const getClientProjects = async (clientUid: string): Promise<Project[]> => {
   if (!clientUid) return [];
 

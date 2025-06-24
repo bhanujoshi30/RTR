@@ -230,7 +230,10 @@ export const getProjectMainTasks = async (projectId: string, userUid: string, fi
         ];
 
         if (userRole === 'client') {
-            queryConstraints.push(where('clientUid', '==', userUid));
+            const projectDoc = await getDoc(doc(db, 'projects', projectId));
+            if (!projectDoc.exists() || projectDoc.data().clientUid !== userUid) {
+                return []; // Return empty if client is not assigned to project
+            }
         }
 
         const q = query(tasksCollection, ...queryConstraints);
@@ -318,15 +321,22 @@ export const getAllProjectTasks = async (projectId: string, userRole?: UserRole,
     if (!projectId) return [];
     
     const queryConstraints = [where('projectId', '==', projectId)];
-    if (userRole === 'client' && userUid) {
-        queryConstraints.push(where('clientUid', '==', userUid));
-    }
+    
+    // For clients, we need to ensure they can list tasks for projects they are a client of
+    // The security rules will enforce this, but the query itself doesn't need a clientUid filter
+    // if the rules are set up to allow listing by project id for clients.
     
     const q = query(tasksCollection, ...queryConstraints);
 
     try {
         const querySnapshot = await getDocs(q);
-        const tasks = querySnapshot.docs.map(mapDocumentToTask);
+        let tasks = querySnapshot.docs.map(mapDocumentToTask);
+
+        // For clients, filter out sub-tasks as they should only see main tasks
+        if (userRole === 'client') {
+            tasks = tasks.filter(task => !task.parentId);
+        }
+        
         return tasks;
     } catch(e: any) {
         console.error(`taskService: Error fetching all tasks for project ${projectId}`, e);

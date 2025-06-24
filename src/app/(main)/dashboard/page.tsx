@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import type { Project } from '@/types';
 import { countProjectMainTasks, countProjectSubTasks } from '@/services/taskService';
 import { countProjectOpenIssues } from '@/services/issueService';
-import { getClientProjects, getMemberProjects, getUserProjects } from '@/services/projectService';
+import { getClientProjects, getMemberProjects, getUserProjects, getAllProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
@@ -37,26 +37,31 @@ export default function DashboardPage() {
       const isSupervisor = user.role === 'supervisor';
       const isMember = user.role === 'member';
       const isClient = user.role === 'client';
-      const isAdminOrOwner = user.role === 'admin' || user.role === 'owner';
+      const isAdmin = user.role === 'admin';
+      const isOwner = user.role === 'owner';
 
       setDashboardLoading(true);
       setDashboardError(null);
 
       try {
         let finalProjects: Project[] = [];
+        let projectsToCount: Project[] = [];
 
         if (isClient) {
             const clientProjects = await getClientProjects(user.uid);
-            finalProjects = clientProjects; // Clients see projects, no task counts needed
+            finalProjects = clientProjects;
         } else if (isSupervisor || isMember) {
             const memberProjects = await getMemberProjects(user.uid);
-            // For members/supervisors, task counts are too broad and can cause permission issues.
-            // The project card will show a simplified view based on their direct assignments.
             finalProjects = memberProjects;
-        } else if (isAdminOrOwner) {
-            const adminProjects = await getUserProjects(user.uid);
+        } else if (isAdmin) {
+            projectsToCount = await getAllProjects(user.uid);
+        } else if (isOwner) {
+            projectsToCount = await getUserProjects(user.uid);
+        }
+        
+        if (projectsToCount.length > 0) {
             finalProjects = await Promise.all(
-                adminProjects.map(async (project) => {
+                projectsToCount.map(async (project) => {
                     try {
                         const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
                             countProjectMainTasks(project.id, user.uid),
