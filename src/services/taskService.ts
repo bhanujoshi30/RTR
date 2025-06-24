@@ -177,46 +177,13 @@ export const createTask = async (
   }
 };
 
-export const getProjectMainTasks = async (projectId: string, userUid: string, filterByIds?: string[]): Promise<Task[]> => {
-    console.log(`taskService: getProjectMainTasks for projectId: ${projectId}, user: ${userUid}, filterByIds: ${filterByIds?.join(',')}`);
-
-    let mainTasksQuery;
-
-    if (filterByIds && filterByIds.length > 0) {
-      // This is for supervisors/members who know which main tasks they are part of.
-      // This query is fine as it's specific.
-      mainTasksQuery = query(tasksCollection, where(documentId(), 'in', filterByIds));
-    } else {
-      // This is for admins/owners. Make the query specific to the project owner.
-      mainTasksQuery = query(
-          tasksCollection, 
-          where('projectId', '==', projectId), 
-          where('parentId', '==', null),
-          where('projectOwnerUid', '==', userUid)
-        );
-    }
+const augmentMainTasksWithProgress = async (mainTasks: Task[], projectId: string): Promise<Task[]> => {
+    if (mainTasks.length === 0) return [];
     
-    const allTasksSnapshot = await getDocs(mainTasksQuery);
-    const mainTasks = allTasksSnapshot.docs.map(mapDocumentToTask);
-    
-    const standardMainTasks = mainTasks.filter(mt => mt.taskType !== 'collection');
-    if (standardMainTasks.length === 0) {
-        mainTasks.forEach(mt => {
-            mt.progress = 0;
-        });
-        mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-        return mainTasks;
-    }
-
+    // With the new security rule `isMemberOfProject`, any member can read all tasks, so this query is safe.
     const subTasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
     const subTasksSnapshot = await getDocs(subTasksQuery);
     const allSubTasksInProject = subTasksSnapshot.docs.map(mapDocumentToTask);
-    
-    if (allSubTasksInProject.length === 0) {
-        mainTasks.forEach(mt => { mt.progress = 0; });
-        mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-        return mainTasks;
-    }
     
     const subTasksByMainTaskId = allSubTasksInProject.reduce((acc, subTask) => {
         const mainTaskId = subTask.parentId!;
@@ -232,26 +199,52 @@ export const getProjectMainTasks = async (projectId: string, userUid: string, fi
             mainTask.progress = 0;
         } else {
             const relatedSubTasks = subTasksByMainTaskId[mainTask.id] || [];
-            const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
-            mainTask.progress = relatedSubTasks.length > 0 ? Math.round((completedSubTasks / relatedSubTasks.length) * 100) : 0;
-            
             if (relatedSubTasks.length > 0) {
-                if (mainTask.progress === 100) mainTask.status = 'Completed';
-                else if (mainTask.progress > 0 || relatedSubTasks.some(st => st.status === 'In Progress')) mainTask.status = 'In Progress';
-                else mainTask.status = 'To Do';
+              const completedSubTasks = relatedSubTasks.filter(st => st.status === 'Completed').length;
+              mainTask.progress = Math.round((completedSubTasks / relatedSubTasks.length) * 100);
+              if (mainTask.progress === 100) mainTask.status = 'Completed';
+              else if (mainTask.progress > 0 || relatedSubTasks.some(st => st.status === 'In Progress')) mainTask.status = 'In Progress';
+              else mainTask.status = 'To Do';
             } else {
-                mainTask.status = 'To Do';
+              mainTask.progress = 0;
+              mainTask.status = 'To Do';
             }
         }
     });
 
-    mainTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    return mainTasks;
+};
+
+export const getProjectMainTasks = async (projectId: string, userUid: string, filterByIds?: string[]): Promise<Task[]> => {
+    console.log(`taskService: getProjectMainTasks for projectId: ${projectId}, user: ${userUid}, filterByIds: ${filterByIds?.join(',')}`);
+
+    let mainTasks: Task[];
+
+    if (filterByIds && filterByIds.length > 0) {
+        // For members/supervisors, fetch main tasks individually to comply with security rules that use get()
+        const mainTaskPromises = filterByIds.map(id => getDoc(doc(db, 'tasks', id)));
+        const mainTaskSnapshots = await Promise.all(mainTaskPromises);
+        mainTasks = mainTaskSnapshots.filter(snap => snap.exists()).map(mapDocumentToTask);
+    } else {
+        // This is for admins/owners. Security rules will ensure they can only see projects they own.
+        const q = query(
+            tasksCollection, 
+            where('projectId', '==', projectId), 
+            where('parentId', '==', null)
+        );
+        const snapshot = await getDocs(q);
+        mainTasks = snapshot.docs.map(mapDocumentToTask);
+    }
     
     if (mainTasks.length === 0) {
-      console.log(`taskService: getProjectMainTasks - Query for projectId ${projectId} executed successfully but found 0 main tasks.`);
+        return [];
     }
 
-    return mainTasks;
+    const augmentedTasks = await augmentMainTasksWithProgress(mainTasks, projectId);
+
+    augmentedTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    
+    return augmentedTasks;
 };
 
 export const getSubTasks = async (parentId: string): Promise<Task[]> => {
@@ -289,15 +282,18 @@ export const getProjectSubTasks = async (projectId: string, userUid: string, use
   if (!projectId || !userUid) return [];
   
   let q;
+  // Admin/Owner will see all sub-tasks, member will see only their own.
+  // The new security rule `isMemberOfProject` allows members to query all tasks in a project they are part of.
+  // We can simplify the logic here.
   if (userRole === 'supervisor' || userRole === 'member') {
-      q = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null), where('assignedToUids', 'array-contains', userUid));
+      q = query(tasksCollection, where('projectId', '==', projectId), where('assignedToUids', 'array-contains', userUid));
   } else { // Admin, owner, client
-      q = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null), where('projectOwnerUid', '==', userUid));
+      q = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
   }
 
   try {
     const querySnapshot = await getDocs(q);
-    const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    const tasks = querySnapshot.docs.map(mapDocumentToTask).filter(t => t.parentId);
     console.log(`taskService: Fetched ${tasks.length} sub-tasks for project ${projectId} for user ${userUid}.`);
     return tasks;
   } catch (error: any) {
