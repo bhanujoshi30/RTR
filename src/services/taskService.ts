@@ -85,7 +85,10 @@ export const createTask = async (
 
   const isOwnerOrAdmin = projectData.ownerUid === userUid;
   if (!isOwnerOrAdmin) {
-    throw new Error('Access denied for creating task in this project.');
+    const userDocSnap = await getDoc(doc(db, 'users', userUid));
+    if (userDocSnap.data()?.role !== 'admin') {
+      throw new Error('Access denied for creating task in this project.');
+    }
   }
 
   const newTaskPayload: any = {
@@ -180,7 +183,6 @@ export const createTask = async (
 const augmentMainTasksWithProgress = async (mainTasks: Task[], projectId: string): Promise<Task[]> => {
     if (mainTasks.length === 0) return [];
     
-    // With the new security rule `isMemberOfProject`, any member can read all tasks, so this query is safe.
     const subTasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
     const subTasksSnapshot = await getDocs(subTasksQuery);
     const allSubTasksInProject = subTasksSnapshot.docs.map(mapDocumentToTask);
@@ -221,12 +223,10 @@ export const getProjectMainTasks = async (projectId: string, userUid: string, fi
     let mainTasks: Task[];
 
     if (filterByIds && filterByIds.length > 0) {
-        // For members/supervisors, fetch main tasks individually to comply with security rules that use get()
         const mainTaskPromises = filterByIds.map(id => getDoc(doc(db, 'tasks', id)));
         const mainTaskSnapshots = await Promise.all(mainTaskPromises);
         mainTasks = mainTaskSnapshots.filter(snap => snap.exists()).map(mapDocumentToTask);
     } else {
-        // This is for admins/owners. Security rules will ensure they can only see projects they own.
         const q = query(
             tasksCollection, 
             where('projectId', '==', projectId), 
@@ -282,12 +282,9 @@ export const getProjectSubTasks = async (projectId: string, userUid: string, use
   if (!projectId || !userUid) return [];
   
   let q;
-  // Admin/Owner will see all sub-tasks, member will see only their own.
-  // The new security rule `isMemberOfProject` allows members to query all tasks in a project they are part of.
-  // We can simplify the logic here.
   if (userRole === 'supervisor' || userRole === 'member') {
       q = query(tasksCollection, where('projectId', '==', projectId), where('assignedToUids', 'array-contains', userUid));
-  } else { // Admin, owner, client
+  } else { 
       q = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
   }
 
@@ -736,18 +733,15 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   if (!userUid) return [];
   console.log(`taskService: getAllTasksAssignedToUser (sub-tasks) for userUid: ${userUid}`);
 
-  // Query without ordering to avoid composite index requirement
   const q = query(
     tasksCollection,
-    where('assignedToUids', 'array-contains', userUid),
-    where('parentId', '!=', null)
+    where('assignedToUids', 'array-contains', userUid)
   );
 
   try {
     const querySnapshot = await getDocs(q);
-    const tasks = querySnapshot.docs.map(mapDocumentToTask);
+    const tasks = querySnapshot.docs.map(mapDocumentToTask).filter(task => task.parentId);
     
-    // Sort in application code
     tasks.sort((a, b) => {
         if (a.parentId === b.parentId) {
             return (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0);
@@ -764,7 +758,7 @@ export const getAllTasksAssignedToUser = async (userUid: string): Promise<Task[]
   } catch (error: any) {
     console.error('taskService: Error fetching all sub-tasks assigned to user:', userUid, error.message, error.code ? `(${error.code})` : '', error.stack);
     if (error.message && (error.message.includes("query requires an index") || error.message.includes("needs an index"))) {
-      console.error("Firestore query for getAllTasksAssignedToUser requires a composite index on `assignedToUids` (array-contains) and `parentId` (!= null). Check Firebase console.");
+      console.error("Firestore query for getAllTasksAssignedToUser requires a composite index on `assignedToUids` (array-contains). Check Firebase console.");
     }
     throw error;
   }
