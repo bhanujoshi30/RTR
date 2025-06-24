@@ -24,7 +24,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
   const { user } = useAuth();
   const { t, locale } = useTranslation();
   const dateLocale = locale === 'hi' ? hi : enUS;
-  const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
+  const canViewFinancials = user?.role === 'client' || user?.role === 'admin' || user?.role === 'owner';
   const [isNavigating, setIsNavigating] = useState(false);
 
   const getStatusColor = (status: Project['status']) => {
@@ -90,7 +90,7 @@ export function ProjectCard({ project }: ProjectCardProps) {
         )}
       </CardHeader>
       <CardContent className="flex-grow space-y-3">
-        {(user?.role === 'admin' || user?.role === 'owner') && (
+        {project.progress !== undefined && (
             <div>
               <div className="flex justify-between text-sm text-muted-foreground">
                 <span>{t('projectDetails.progress')}</span>

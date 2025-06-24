@@ -10,12 +10,13 @@ import { useEffect, useState } from 'react';
 import type { Project, Task } from '@/types';
 import { getOpenIssuesForTaskIds } from '@/services/issueService';
 import { getClientProjects, getMemberProjects, getUserProjects, getAllProjects } from '@/services/projectService';
-import { getAllProjectTasks, mapDocumentToTask, getAllTasksAssignedToUser } from '@/services/taskService';
+import { getAllProjectTasks, mapDocumentToTask, getAllTasksAssignedToUser, getProjectMainTasks } from '@/services/taskService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { differenceInCalendarDays } from 'date-fns';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -51,20 +52,33 @@ export default function DashboardPage() {
         if (isClient) {
             const clientProjects = await getClientProjects(user.uid);
             finalProjects = await Promise.all(clientProjects.map(async (project) => {
-                // Fetch main tasks only for cost calculation
-                const mainTasksQuery = query(
-                    collection(db, 'tasks'), 
-                    where('projectId', '==', project.id), 
-                    where('parentId', '==', null)
-                );
-                const mainTasksSnapshot = await getDocs(mainTasksQuery);
-                const mainTasks = mainTasksSnapshot.docs.map(mapDocumentToTask);
+                const mainTasks = await getProjectMainTasks(project.id, user.uid, user.role);
 
-                const totalCost = mainTasks
-                    .filter(task => task.taskType === 'collection')
-                    .reduce((sum, task) => sum + (task.cost || 0), 0);
+                const standardMainTasks = mainTasks.filter(t => t.taskType !== 'collection');
+                let progress = 0;
+                if (standardMainTasks.length > 0) {
+                    const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+                    progress = Math.round(totalProgressSum / standardMainTasks.length);
+                }
                 
-                return { ...project, totalCost };
+                const collectionTasks = mainTasks.filter(t => t.taskType === 'collection');
+                const totalCost = collectionTasks.reduce((sum, task) => sum + (task.cost || 0), 0);
+
+                const now = new Date();
+                const hasUpcomingReminder = collectionTasks.some(task => {
+                    if (task.status !== 'Completed' && task.dueDate && task.reminderDays) {
+                        const daysUntilDue = differenceInCalendarDays(task.dueDate, now);
+                        return daysUntilDue >= 0 && daysUntilDue <= task.reminderDays;
+                    }
+                    return false;
+                });
+
+                return {
+                    ...project,
+                    progress: progress,
+                    totalCost: totalCost,
+                    hasUpcomingReminder: hasUpcomingReminder
+                };
             }));
         
         } else if (isSupervisor || isMember) {
@@ -88,35 +102,45 @@ export default function DashboardPage() {
             }));
 
         } else if (isAdmin || isOwner) {
-            const projectsToCount = isAdmin ? await getAllProjects(user.uid) : await getUserProjects(user.uid);
+            const projectsToProcess = isAdmin ? await getAllProjects(user.uid) : await getUserProjects(user.uid);
             
             finalProjects = await Promise.all(
-                projectsToCount.map(async (project) => {
+                projectsToProcess.map(async (project) => {
                     try {
-                        const allTasks = await getAllProjectTasks(project.id, user.role, user.uid);
-                        const mainTasks = allTasks.filter(t => !t.parentId);
-                        const subTasks = allTasks.filter(t => !!t.parentId);
-                        const openIssues = await getOpenIssuesForTaskIds(allTasks.map(t => t.id));
+                        const mainTasks = await getProjectMainTasks(project.id, user.uid, user.role);
 
-                        const totalCost = mainTasks
-                            .filter(task => task.taskType === 'collection')
-                            .reduce((sum, task) => sum + (task.cost || 0), 0);
+                        const standardMainTasks = mainTasks.filter(t => t.taskType !== 'collection');
+                        let progress = 0;
+                        if (standardMainTasks.length > 0) {
+                            const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+                            progress = Math.round(totalProgressSum / standardMainTasks.length);
+                        }
+                        
+                        const collectionTasks = mainTasks.filter(t => t.taskType === 'collection');
+                        const totalCost = collectionTasks.reduce((sum, task) => sum + (task.cost || 0), 0);
+                        
+                        const now = new Date();
+                        const hasUpcomingReminder = collectionTasks.some(task => {
+                            if (task.status !== 'Completed' && task.dueDate && task.reminderDays) {
+                                const daysUntilDue = differenceInCalendarDays(task.dueDate, now);
+                                return daysUntilDue >= 0 && daysUntilDue <= task.reminderDays;
+                            }
+                            return false;
+                        });
 
                         return {
                             ...project,
-                            totalMainTasks: mainTasks.length,
-                            totalSubTasks: subTasks.length,
-                            totalOpenIssues: openIssues.length,
+                            progress: progress,
                             totalCost: totalCost,
+                            hasUpcomingReminder: hasUpcomingReminder,
                         };
                     } catch (err) {
-                        console.error(`DashboardPage: Failed to get counts for project ${project.id}. Returning project with zero counts.`, err);
+                        console.error(`DashboardPage: Failed to get details for project ${project.id}.`, err);
                         return {
                             ...project,
-                            totalMainTasks: 0,
-                            totalSubTasks: 0,
-                            totalOpenIssues: 0,
+                            progress: 0,
                             totalCost: 0,
+                            hasUpcomingReminder: false,
                         };
                     }
                 })
@@ -147,7 +171,7 @@ export default function DashboardPage() {
   if (isSupervisor || isMember) {
     pageTitle = t('dashboard.assignedWork');
   } else if (isClient) {
-    pageTitle = t('dashboard.myProjects');
+    pageTitle = t('dashboard.clientProjects');
   }
 
   const canCreateProject = user && (user.role === 'admin' || user.role === 'owner');

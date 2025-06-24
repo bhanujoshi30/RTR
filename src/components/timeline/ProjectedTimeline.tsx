@@ -135,7 +135,7 @@ export function ProjectedTimeline({ projectId }: ProjectedTimelineProps) {
                         {mainTask.subTasks.map(subTask => (
                            <div key={subTask.id} className="relative">
                                <div className="absolute left-0 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-background border -translate-x-1/2 z-10">
-                                   <Layers className="h-3 w-3 text-muted-foreground" />
+                                   <ListChecks className="h-3 w-3 text-muted-foreground" />
                                </div>
                                <div className="pl-6">
                                    <ProjectedTimelineItem task={subTask} isSubTask />

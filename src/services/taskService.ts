@@ -356,12 +356,7 @@ export const getAllProjectTasks = async (projectId: string, userRole?: UserRole,
 
     try {
         const querySnapshot = await getDocs(q);
-        let tasks = querySnapshot.docs.map(mapDocumentToTask);
-
-        if (userRole === 'client') {
-            tasks = tasks.filter(task => !task.parentId);
-        }
-        
+        const tasks = querySnapshot.docs.map(mapDocumentToTask);
         return tasks;
     } catch(e: any) {
         console.error(`taskService: Error fetching all tasks for project ${projectId}`, e);
