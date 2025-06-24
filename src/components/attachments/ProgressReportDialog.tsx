@@ -108,6 +108,17 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   }, [open]);
 
 
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
   const handleUpload = async () => {
     if (!selectedFile || !canvasRef.current || !user || !previewUrl) {
       toast({ title: 'Error', description: 'Please select a photo to upload.', variant: 'destructive' });
@@ -374,5 +385,6 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
     </Dialog>
   );
 }
+    
 
     
