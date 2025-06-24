@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import type { Task } from '@/types';
 import { getAllProjectTasks } from '@/services/taskService';
 import { getOpenIssuesForTaskIds } from '@/services/issueService';
-import { Loader2, GanttChartSquare, Layers } from 'lucide-react';
+import { Loader2, GanttChartSquare, Layers, ListChecks } from 'lucide-react';
 import { ProjectedTimelineItem } from './ProjectedTimelineItem';
 import { useAuth } from '@/hooks/useAuth';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
