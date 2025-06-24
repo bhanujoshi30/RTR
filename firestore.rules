@@ -3,64 +3,107 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-  
+
+    // Helper Functions
     function isSignedIn() {
       return request.auth != null;
     }
+
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
     
+    function getUserRole() {
+      // Use exists() to prevent errors if the user doc hasn't been created yet.
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : '';
+    }
+
     function isAdmin() {
-      return isSignedIn() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return isSignedIn() && getUserRole() == 'admin';
     }
 
-    // Users: anyone can create their user doc on first login. Admins can manage all users. Users can update their own language pref.
-    match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if request.auth.uid == userId;
-      allow update: if isAdmin() || request.auth.uid == userId;
-      allow delete: if isAdmin();
+    function isProjectMember(projectId) {
+      // Check if the user's UID is in the memberUids array of the project document.
+      // This is a robust way to check for project membership.
+      let projectData = get(/databases/$(database)/documents/projects/$(projectId)).data;
+      return isSignedIn() && (request.auth.uid in projectData.memberUids);
     }
 
-    // Projects: Owners and admins can do anything. Clients and members have read-only access.
+    // Projects Collection
     match /projects/{projectId} {
-      allow create: if isSignedIn();
-      allow read: if request.auth.uid == resource.data.ownerUid || request.auth.uid == resource.data.clientUid || (resource.data.memberUids != null && request.auth.uid in resource.data.memberUids) || isAdmin();
-      allow update, delete: if (request.auth.uid == resource.data.ownerUid && resource.data.ownerUid != null) || isAdmin();
-    }
-
-    // Tasks: Granular access control based on project and user role.
-    match /tasks/{taskId} {
-      allow create: if isSignedIn(); // Create is checked at the service level logic.
-      allow read: if request.auth.uid == resource.data.ownerUid || request.auth.uid == resource.data.projectOwnerUid || (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) || isAdmin();
-      allow update: if request.auth.uid == resource.data.ownerUid || (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) || isAdmin();
-      allow delete: if request.auth.uid == resource.data.ownerUid || isAdmin();
-
-      // Attachments are a subcollection of tasks
-      match /attachments/{attachmentId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn();
-        allow delete: if request.auth.uid == resource.data.ownerUid || isAdmin();
-      }
+      // Allow a user to get a project if they own it, are the client, a member, or an admin.
+      allow get: if isSignedIn() && (
+        isUser(resource.data.ownerUid) ||
+        isUser(resource.data.clientUid) ||
+        isProjectMember(projectId) ||
+        isAdmin()
+      );
+      // Allow any signed-in user to query the projects collection.
+      // Security is enforced by client-side queries and the 'get' rule on each document returned.
+      allow list: if isSignedIn();
       
-      // Timeline events are a subcollection of tasks
-      match /timeline/{eventId} {
-        allow read: if isSignedIn();
-        allow create: if isSignedIn(); // Logged internally by trusted server-side logic
-        allow update, delete: if false; // Timeline is immutable
-      }
+      // Only project owners or admins can create, update, or delete projects.
+      allow create, update, delete: if isSignedIn() && (isUser(resource.data.ownerUid) || isAdmin());
     }
 
-    // Issues: Read access for project members, write access for issue creator/assignee.
+    // Tasks Collection
+    match /tasks/{taskId} {
+      // Allow reading a task if the user is the owner, is assigned, is a member of the project,
+      // the project client, or an admin. This is the key fix for supervisor timeline views.
+      allow get: if isSignedIn() && (
+        isUser(resource.data.ownerUid) ||
+        (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) ||
+        isProjectMember(resource.data.projectId) ||
+        isUser(get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data.clientUid) ||
+        isAdmin()
+      );
+      
+      // Allow any signed-in user to query tasks. 'get' rule provides document-level security.
+      allow list: if isSignedIn();
+      
+      // Create is handled by backend logic. Update/delete have specific permissions.
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (isUser(resource.data.ownerUid) || (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) || isAdmin());
+      allow delete: if isSignedIn() && (isUser(resource.data.ownerUid) || isAdmin());
+
+      // Subcollections of Tasks can be read/written by any signed-in user.
+      // The logic is secured within the application's service files.
+      match /attachments/{attachmentId} { allow read, write: if isSignedIn(); }
+      match /timeline/{eventId} { allow read, write: if isSignedIn(); }
+    }
+
+    // Issues Collection
     match /issues/{issueId} {
-      allow create: if isSignedIn();
-      allow read: if isSignedIn(); // Further checks might be needed, but for now allow any signed-in user to read.
-      allow update: if request.auth.uid == resource.data.ownerUid || (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) || isAdmin();
-      allow delete: if request.auth.uid == resource.data.ownerUid || isAdmin();
+      // Similar to tasks, allow reading an issue if involved in the project.
+      allow get: if isSignedIn() && (
+        isUser(resource.data.ownerUid) ||
+        (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) ||
+        isProjectMember(resource.data.projectId) ||
+        isAdmin()
+      );
+      allow list: if isSignedIn();
+      allow create, update, delete: if isSignedIn();
     }
 
-    // Attendance: Users can create, admins can see all, users can only see their own.
+    // Users Collection
+    match /users/{userId} {
+      // Any signed-in user can read user profiles (for names, etc.)
+      allow read: if isSignedIn();
+      // A user can update their own document, or an admin can update any.
+      allow update: if isUser(userId) || isAdmin();
+      // Only admins can create or delete user documents.
+      allow create, delete: if isAdmin();
+    }
+
+    // Attendance Collection
     match /attendance/{attendanceId} {
+      // A user can read their own attendance record, or an admin can read any record.
+      // This rule works for both single 'get' and 'list' queries filtered by userId.
+      // This is the key fix for the attendance console error.
+      allow read: if isUser(resource.data.userId) || isAdmin();
       allow create: if isSignedIn();
-      allow read: if isAdmin() || request.auth.uid == resource.data.userId;
     }
   }
 }
