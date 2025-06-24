@@ -306,7 +306,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               url: downloadURL,
               filename,
               reportType: 'issue-report',
-              location: location || undefined,
+              location: location || null,
           });
       }
 

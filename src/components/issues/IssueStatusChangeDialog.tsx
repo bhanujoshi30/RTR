@@ -195,7 +195,7 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
           url: downloadURL,
           filename: filename,
           reportType: 'issue-update-proof',
-          location: location || undefined
+          location: location || null
         }
       });
       

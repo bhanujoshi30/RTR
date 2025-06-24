@@ -249,7 +249,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         url: downloadURL,
         filename,
         reportType,
-        location: location || undefined,
+        location: location || null,
       });
 
       // --- SUCCESS ---
