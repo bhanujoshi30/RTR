@@ -23,7 +23,7 @@ export interface Project {
   totalOpenIssues?: number;
   hasUpcomingReminder?: boolean;
   totalCost?: number;
-  memberUids?: string[];
+  memberUids?: string[]; // Denormalized list of all users assigned to sub-tasks
 }
 
 export interface Task {
