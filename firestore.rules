@@ -1,12 +1,15 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
+    
     // Helper Functions
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
     function getUserData(userId) {
@@ -14,92 +17,90 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) && getUserData(request.auth.uid).role == 'admin';
+      return isSignedIn() && getUserData(request.auth.uid).role == 'admin';
     }
 
-    function getProjectData(projectId) {
-      return get(/databases/$(database)/documents/projects/$(projectId)).data;
-    }
-
-    function isProjectOwner(projectId) {
-      return isSignedIn() && request.auth.uid == getProjectData(projectId).ownerUid;
-    }
-
-    function isProjectClient(projectId) {
-      let projectData = getProjectData(projectId);
-      return isSignedIn() && projectData.clientUid != null && request.auth.uid == projectData.clientUid;
+    // Rules for Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isUser(userId) || isAdmin();
+      allow delete: if isAdmin();
     }
     
-    function isProjectMember(projectId) {
-      let projectData = getProjectData(projectId);
-      return isSignedIn() && request.auth.uid in projectData.memberUids;
-    }
-
-    function getTaskData(taskId) {
-        return get(/databases/$(database)/documents/tasks/$(taskId)).data;
-    }
-    
-    function isTaskOwner(taskId) {
-        return isSignedIn() && request.auth.uid == getTaskData(taskId).ownerUid;
-    }
-
-    function isTaskAssignee(taskId) {
-        return isSignedIn() && request.auth.uid in getTaskData(taskId).assignedToUids;
-    }
-
-    // Projects Collection
+    // Rules for Projects collection
     match /projects/{projectId} {
-      allow get: if isProjectOwner(projectId) || isProjectClient(projectId) || isProjectMember(projectId) || isAdmin();
-      
-      allow list: if isAdmin() || 
-                     (isSignedIn() && request.query.where.find(p => p[0] == 'ownerUid' && p[1] == '==' && p[2] == request.auth.uid) != null) ||
-                     (isSignedIn() && request.query.where.find(p => p[0] == 'clientUid' && p[1] == '==' && p[2] == request.auth.uid) != null) ||
-                     (isSignedIn() && request.query.where.find(p => p[0] == 'memberUids' && p[1] == 'array-contains' && p[2] == request.auth.uid) != null);
-      
-      allow create: if isSignedIn() && (request.resource.data.ownerUid == request.auth.uid || isAdmin());
-      allow update, delete: if isProjectOwner(projectId) || isAdmin();
-    }
+      function getProjectData() {
+        return resource.data;
+      }
+      function isOwner() {
+        return isSignedIn() && request.auth.uid == getProjectData().ownerUid;
+      }
+      function isClient() {
+        return isSignedIn() && getProjectData().clientUid != null && request.auth.uid == getProjectData().clientUid;
+      }
+      function isMember() {
+        return isSignedIn() && request.auth.uid in getProjectData().memberUids;
+      }
 
-    // Tasks Collection
-    match /tasks/{taskId} {
-      allow get: if isTaskOwner(taskId) || isProjectMember(getTaskData(taskId).projectId) || isProjectClient(getTaskData(taskId).projectId) || isAdmin();
-
-      // Broad list access for authenticated users is acceptable here because:
-      // 1. The `get` rule is strict, preventing unauthorized access to task details.
-      // 2. The UI is designed to only query for relevant tasks (e.g., by project, by user assignment),
-      //    so users won't see tasks they aren't supposed to in the app.
-      // This rule unblocks count queries and timeline aggregations that were failing.
+      allow get: if isOwner() || isClient() || isMember() || isAdmin();
       allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerUid;
+      allow update, delete: if isOwner() || isAdmin();
+    }
+    
+    // Rules for Tasks and their Subcollections
+    match /tasks/{taskId} {
+      function getTaskData() {
+        return resource.data;
+      }
+      function isTaskOwner() {
+        return isSignedIn() && request.auth.uid == getTaskData().ownerUid;
+      }
+      function isAssignedToTask() {
+        return isSignedIn() && request.auth.uid in getTaskData().assignedToUids;
+      }
+      function isProjectOwnerForTask() {
+        return isSignedIn() && request.auth.uid == getTaskData().projectOwnerUid;
+      }
       
-      allow create: if isProjectOwner(request.resource.data.projectId) || isProjectMember(request.resource.data.projectId) || isAdmin();
-      allow update: if isTaskOwner(taskId) || isTaskAssignee(taskId) || isAdmin();
-      allow delete: if isTaskOwner(taskId) || isAdmin();
+      allow get: if isTaskOwner() || isAssignedToTask() || isProjectOwnerForTask() || isAdmin();
+      allow list: if isSignedIn();
+      allow create: if isProjectOwnerForTask() || isAdmin();
+      allow update: if isTaskOwner() || isAssignedToTask() || isAdmin();
+      allow delete: if isTaskOwner() || isProjectOwnerForTask() || isAdmin();
 
-      // Subcollections for timeline and attachments
-      match /{subcollection}/{documentId} {
-        allow read, list: if isSignedIn(); // Gated by access to parent task
-        allow create: if isTaskOwner(taskId) || isTaskAssignee(taskId) || isAdmin();
-        allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerUid || isAdmin());
+      // Timeline and Attachment subcollections
+      match /timeline/{eventId} {
+        allow read: if isSignedIn();
+        allow create: if isTaskOwner() || isAssignedToTask() || isAdmin();
+      }
+      match /attachments/{attachmentId} {
+        allow read: if isSignedIn();
+        allow create: if isTaskOwner() || isAssignedToTask() || isAdmin();
+        allow delete: if request.auth.uid == resource.data.ownerUid;
       }
     }
     
-    // Issues Collection
+    // Rules for Issues
     match /issues/{issueId} {
-      allow get: if isTaskOwner(resource.data.taskId) || isTaskAssignee(resource.data.taskId) || isAdmin();
+       function getIssueData() {
+        return resource.data;
+      }
+      function isIssueOwner() {
+        return isSignedIn() && request.auth.uid == getIssueData().ownerUid;
+      }
+      function isAssignedToIssue() {
+        return isSignedIn() && request.auth.uid in getIssueData().assignedToUids;
+      }
+       function isProjectOwnerForIssue() {
+        return isSignedIn() && request.auth.uid == getIssueData().projectOwnerUid;
+      }
       
-      // Broad list access for the same reasons as tasks. Get is the main security gate.
+      allow get: if isIssueOwner() || isAssignedToIssue() || isProjectOwnerForIssue() || isAdmin();
       allow list: if isSignedIn();
-
-      allow create: if isTaskOwner(request.resource.data.taskId) || isTaskAssignee(request.resource.data.taskId) || isAdmin();
-      allow update, delete: if isSignedIn() && (request.auth.uid == resource.data.ownerUid || isAdmin());
-    }
-    
-    // Users Collection
-    match /users/{userId} {
-      allow read, get: if isSignedIn();
-      allow list: if isAdmin();
-      allow create, update: if isAdmin() || request.auth.uid == userId;
-      allow delete: if isAdmin();
+      allow create: if isSignedIn();
+      allow update: if isIssueOwner() || isAssignedToIssue() || isAdmin();
+      allow delete: if isIssueOwner() || isProjectOwnerForIssue() || isAdmin();
     }
   }
 }
