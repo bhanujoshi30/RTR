@@ -7,7 +7,7 @@ import { FolderPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project, Task } from '@/types';
+import type { Project, Task, ProjectStatus } from '@/types';
 import { getOpenIssuesForTaskIds } from '@/services/issueService';
 import { getClientProjects, getMemberProjects, getUserProjects, getAllProjects } from '@/services/projectService';
 import { getAllProjectTasks, mapDocumentToTask, getAllTasksAssignedToUser, getProjectMainTasks } from '@/services/taskService';
@@ -45,6 +45,18 @@ export default function DashboardPage() {
 
       setDashboardLoading(true);
       setDashboardError(null);
+      
+      const calculateStatus = (progress: number, collectionTasks: Task[]): ProjectStatus => {
+          const hasPendingCollectionTasks = collectionTasks.some(task => task.status !== 'Completed');
+          if (progress >= 100) {
+              return hasPendingCollectionTasks ? 'Payment Incomplete' : 'Completed';
+          }
+          if (progress > 0) {
+              return 'In Progress';
+          }
+          return 'Not Started';
+      };
+
 
       try {
         let finalProjects: Project[] = [];
@@ -63,6 +75,7 @@ export default function DashboardPage() {
                 
                 const collectionTasks = mainTasks.filter(t => t.taskType === 'collection');
                 const totalCost = collectionTasks.reduce((sum, task) => sum + (task.cost || 0), 0);
+                const status = calculateStatus(progress, collectionTasks);
 
                 const now = new Date();
                 const hasUpcomingReminder = collectionTasks.some(task => {
@@ -76,6 +89,7 @@ export default function DashboardPage() {
                 return {
                     ...project,
                     progress: progress,
+                    status: status,
                     totalCost: totalCost,
                     hasUpcomingReminder: hasUpcomingReminder
                 };
@@ -86,6 +100,18 @@ export default function DashboardPage() {
             const allAssignedSubTasks = await getAllTasksAssignedToUser(user.uid);
     
             finalProjects = await Promise.all(memberProjects.map(async (project) => {
+                const mainTasks = await getProjectMainTasks(project.id, user.uid, user.role);
+
+                const standardMainTasks = mainTasks.filter(t => t.taskType !== 'collection');
+                let progress = 0;
+                if (standardMainTasks.length > 0) {
+                    const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+                    progress = Math.round(totalProgressSum / standardMainTasks.length);
+                }
+
+                const collectionTasks = mainTasks.filter(t => t.taskType === 'collection');
+                const status = calculateStatus(progress, collectionTasks);
+
                 const subTasksForThisProject = allAssignedSubTasks.filter(t => t.projectId === project.id);
                 const subTaskIds = subTasksForThisProject.map(t => t.id);
         
@@ -95,6 +121,8 @@ export default function DashboardPage() {
         
                 return {
                     ...project,
+                    status: status,
+                    progress: progress,
                     totalMainTasks: uniqueMainTaskIds.size,
                     totalSubTasks: subTasksForThisProject.length,
                     totalOpenIssues: openIssues.length,
@@ -118,6 +146,7 @@ export default function DashboardPage() {
                         
                         const collectionTasks = mainTasks.filter(t => t.taskType === 'collection');
                         const totalCost = collectionTasks.reduce((sum, task) => sum + (task.cost || 0), 0);
+                        const status = calculateStatus(progress, collectionTasks);
                         
                         const now = new Date();
                         const hasUpcomingReminder = collectionTasks.some(task => {
@@ -131,6 +160,7 @@ export default function DashboardPage() {
                         return {
                             ...project,
                             progress: progress,
+                            status: status,
                             totalCost: totalCost,
                             hasUpcomingReminder: hasUpcomingReminder,
                         };
@@ -139,6 +169,7 @@ export default function DashboardPage() {
                         return {
                             ...project,
                             progress: 0,
+                            status: 'Not Started' as ProjectStatus,
                             totalCost: 0,
                             hasUpcomingReminder: false,
                         };
