@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import type { Project, Task } from '@/types';
 import { getOpenIssuesForTaskIds } from '@/services/issueService';
 import { getClientProjects, getMemberProjects, getUserProjects, getAllProjects } from '@/services/projectService';
-import { getAllProjectTasks, mapDocumentToTask } from '@/services/taskService';
+import { getAllProjectTasks, mapDocumentToTask, getAllTasksAssignedToUser } from '@/services/taskService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
@@ -69,7 +69,7 @@ export default function DashboardPage() {
         
         } else if (isSupervisor || isMember) {
             const memberProjects = await getMemberProjects(user.uid);
-            const allAssignedSubTasks = await getAllProjectTasks(undefined, user.role, user.uid);
+            const allAssignedSubTasks = await getAllTasksAssignedToUser(user.uid);
     
             finalProjects = await Promise.all(memberProjects.map(async (project) => {
                 const subTasksForThisProject = allAssignedSubTasks.filter(t => t.projectId === project.id);
