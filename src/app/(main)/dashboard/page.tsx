@@ -7,13 +7,15 @@ import { FolderPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project } from '@/types';
-import { countProjectMainTasks, countProjectSubTasks, getAllTasksAssignedToUser } from '@/services/taskService';
-import { countProjectOpenIssues, getOpenIssuesForTaskIds } from '@/services/issueService';
+import type { Project, Task } from '@/types';
+import { getOpenIssuesForTaskIds } from '@/services/issueService';
 import { getClientProjects, getMemberProjects, getUserProjects, getAllProjects } from '@/services/projectService';
+import { getAllProjectTasks, mapDocumentToTask } from '@/services/taskService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export default function DashboardPage() {
   const { user, loading: authLoading } = useAuth();
@@ -47,11 +49,27 @@ export default function DashboardPage() {
         let finalProjects: Project[] = [];
 
         if (isClient) {
-            finalProjects = await getClientProjects(user.uid);
+            const clientProjects = await getClientProjects(user.uid);
+            finalProjects = await Promise.all(clientProjects.map(async (project) => {
+                // Fetch main tasks only for cost calculation
+                const mainTasksQuery = query(
+                    collection(db, 'tasks'), 
+                    where('projectId', '==', project.id), 
+                    where('parentId', '==', null)
+                );
+                const mainTasksSnapshot = await getDocs(mainTasksQuery);
+                const mainTasks = mainTasksSnapshot.docs.map(mapDocumentToTask);
+
+                const totalCost = mainTasks
+                    .filter(task => task.taskType === 'collection')
+                    .reduce((sum, task) => sum + (task.cost || 0), 0);
+                
+                return { ...project, totalCost };
+            }));
         
         } else if (isSupervisor || isMember) {
             const memberProjects = await getMemberProjects(user.uid);
-            const allAssignedSubTasks = await getAllTasksAssignedToUser(user.uid);
+            const allAssignedSubTasks = await getAllProjectTasks(undefined, user.role, user.uid);
     
             finalProjects = await Promise.all(memberProjects.map(async (project) => {
                 const subTasksForThisProject = allAssignedSubTasks.filter(t => t.projectId === project.id);
@@ -75,16 +93,21 @@ export default function DashboardPage() {
             finalProjects = await Promise.all(
                 projectsToCount.map(async (project) => {
                     try {
-                        const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
-                            countProjectMainTasks(project.id, user.uid),
-                            countProjectSubTasks(project.id, user.uid),
-                            countProjectOpenIssues(project.id, user.uid),
-                        ]);
+                        const allTasks = await getAllProjectTasks(project.id, user.role, user.uid);
+                        const mainTasks = allTasks.filter(t => !t.parentId);
+                        const subTasks = allTasks.filter(t => !!t.parentId);
+                        const openIssues = await getOpenIssuesForTaskIds(allTasks.map(t => t.id));
+
+                        const totalCost = mainTasks
+                            .filter(task => task.taskType === 'collection')
+                            .reduce((sum, task) => sum + (task.cost || 0), 0);
+
                         return {
                             ...project,
-                            totalMainTasks: mainTaskCount,
-                            totalSubTasks: subTaskCount,
-                            totalOpenIssues: openIssueCount,
+                            totalMainTasks: mainTasks.length,
+                            totalSubTasks: subTasks.length,
+                            totalOpenIssues: openIssues.length,
+                            totalCost: totalCost,
                         };
                     } catch (err) {
                         console.error(`DashboardPage: Failed to get counts for project ${project.id}. Returning project with zero counts.`, err);
@@ -93,6 +116,7 @@ export default function DashboardPage() {
                             totalMainTasks: 0,
                             totalSubTasks: 0,
                             totalOpenIssues: 0,
+                            totalCost: 0,
                         };
                     }
                 })
