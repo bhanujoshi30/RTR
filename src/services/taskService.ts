@@ -1,5 +1,4 @@
 
-
 import { db } from '@/lib/firebase';
 import type { Task, TaskStatus, UserRole, AggregatedEvent, ProjectAggregatedEvent, TimelineEvent, Issue } from '@/types';
 import {
@@ -549,13 +548,12 @@ export const updateTask = async (
   }
   
   if (updates.assignedToUids !== undefined && JSON.stringify(updates.assignedToUids) !== JSON.stringify(taskDataFromSnap.assignedToUids)) {
-    const newNames = updates.assignedToNames?.join(', ') || 'nobody';
     await logTimelineEvent(
       taskId,
       userUid,
       'ASSIGNMENT_CHANGED',
       'timeline.assignmentUpdated',
-      { names: newNames }
+      { names: updates.assignedToNames?.join(', ') || 'nobody' }
     );
      // Denormalize new members to the project and parent main task
     const newUids = updates.assignedToUids || [];
@@ -677,7 +675,10 @@ export const deleteTask = async (taskId: string, userUid: string): Promise<void>
   const taskToDelete = mapDocumentToTask(taskSnap);
 
   if (taskToDelete.ownerUid !== userUid) {
-    throw new Error('Access denied. Only the task owner can delete it.');
+    const userDoc = await getDoc(doc(db, 'users', userUid));
+    if (userDoc.data()?.role !== 'admin') {
+      throw new Error('Access denied. Only the task owner or an admin can delete it.');
+    }
   }
 
   const batch = writeBatch(db);

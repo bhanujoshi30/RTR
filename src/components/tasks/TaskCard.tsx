@@ -63,14 +63,17 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
 
   const isActuallyMainTask = !task.parentId;
   const isCollectionTask = isActuallyMainTask && task.taskType === 'collection';
-  const isSupervisor = user?.role === 'supervisor';
-  const isMember = user?.role === 'member';
+  
+  const { role: userRole } = useAuth().user || {};
+  const isOwner = user && task?.ownerUid === user.uid;
+  const isAdmin = userRole === 'admin';
+  const canFullyEditOrDeleteThisTask = isOwner || isAdmin;
 
-  const isOwnerOfThisTask = user && task.ownerUid === user.uid;
-  const canFullyEditOrDeleteThisTask = isOwnerOfThisTask;
   const isAssignedToThisSubTask = !isActuallyMainTask && (task.assignedToUids?.includes(user?.uid || '') ?? false);
-  const canChangeSubTaskStatus = user && (isOwnerOfThisTask || isAssignedToThisSubTask);
+  const canChangeSubTaskStatus = user && (isOwnerOfThisTask || isAssignedToThisSubTask || isAdmin);
+  const isOwnerOfThisTask = user && task.ownerUid === user.uid;
   const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
+
 
   useEffect(() => {
     setTask(initialTask); 
@@ -186,7 +189,7 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
 
   const RupeeIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-6 w-6 text-primary"><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3"/><path d="M9 13c6.667 0 6.667-10 0-10"/></svg>;
   const cardIcon = isCollectionTask ? <RupeeIcon /> : (isActuallyMainTask ? <Layers className="h-6 w-6 text-primary" /> : <ListChecks className="h-6 w-6 text-primary" />);
-  const showEditButton = isOwnerOfThisTask;
+  const showEditButton = isOwnerOfThisTask || isAdmin;
   const displayAssignedNames = task.assignedToNames && task.assignedToNames.length > 0 
     ? task.assignedToNames.join(', ') 
     : 'N/A';
