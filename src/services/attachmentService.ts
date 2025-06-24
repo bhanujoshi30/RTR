@@ -26,11 +26,11 @@ export interface AttachmentMetadata {
   url: string;
   filename: string;
   reportType: 'daily-progress' | 'completion-proof' | 'issue-update-proof' | 'issue-report';
-  location?: {
+  location: {
     latitude: number;
     longitude: number;
     address?: string;
-  };
+  } | null;
 }
 
 // Uploads a file and returns its public URL, with progress reporting
@@ -87,18 +87,23 @@ export const addAttachmentMetadata = async (attachmentData: AttachmentMetadata):
   
   const descriptionKey = attachmentData.issueId ? 'timeline.attachmentAddedToIssue' : 'timeline.attachmentAdded';
   
+  const timelineDetails: Record<string, any> = {
+    reportType: attachmentData.reportType,
+    url: attachmentData.url,
+    filename: attachmentData.filename,
+  };
+
+  if (attachmentData.issueId) {
+    timelineDetails.issueId = attachmentData.issueId;
+  }
+
   // Log timeline event for attachment
   await logTimelineEvent(
     attachmentData.taskId,
     attachmentData.ownerUid,
     'ATTACHMENT_ADDED',
     descriptionKey,
-    { 
-        reportType: attachmentData.reportType, 
-        url: attachmentData.url, 
-        filename: attachmentData.filename,
-        issueId: attachmentData.issueId
-    }
+    timelineDetails
   );
 
   return docRef.id;
