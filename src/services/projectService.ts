@@ -66,7 +66,7 @@ export const mapDocumentToProject = (docSnapshot: any): Project => {
     ownerUid: data.ownerUid,
     clientUid: data.clientUid || null,
     clientName: data.clientName || null,
-    status: data.status as ProjectStatus, // Initial status from Firestore
+    status: data.status as ProjectStatus, 
     progress: data.progress || 0,
     photoURL: data.photoURL || null,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
@@ -74,38 +74,6 @@ export const mapDocumentToProject = (docSnapshot: any): Project => {
     memberUids: data.memberUids || [],
   };
 };
-
-const getDynamicStatusFromProgress = (progress: number, allMainTasks: Task[]): ProjectStatus => {
-  if (progress >= 100) {
-    // Check for any collection tasks that are not yet marked as 'Completed'.
-    const hasPendingCollectionTasks = allMainTasks.some(
-      (task) => task.taskType === 'collection' && task.status !== 'Completed'
-    );
-    if (hasPendingCollectionTasks) {
-      return 'Payment Incomplete';
-    }
-    return 'Completed';
-  } else if (progress > 0) {
-    return 'In Progress';
-  } else {
-    return 'Not Started';
-  }
-};
-
-const calculateProjectProgress = async (projectId: string, userUid: string, mainTasks?: Task[]): Promise<number> => {
-  const allMainTasks = mainTasks || await getProjectMainTasks(projectId, userUid);
-  
-  // Filter out collection tasks from the progress calculation
-  const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
-
-  if (standardMainTasks.length === 0) {
-    return 0;
-  }
-  
-  const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
-  return Math.round(totalProgressSum / standardMainTasks.length);
-};
-
 
 export const createProject = async (
   userUid: string,
@@ -120,8 +88,6 @@ export const createProject = async (
   if (!userUid) {
     throw new Error('User not authenticated for creating project');
   }
-  console.log('projectService: createProject called with data:', projectData);
-  console.log('projectService: currentUser:', userUid);
 
   const projectPayload = {
     ...projectData,
@@ -134,11 +100,9 @@ export const createProject = async (
     clientName: projectData.clientName || null,
     memberUids: [],
   };
-  console.log('projectService: Payload for Firestore addDoc:', projectPayload);
 
   try {
     const newProjectRef = await addDoc(projectsCollection, projectPayload);
-    console.log('projectService: Firestore addDoc successful. New project Ref ID:', newProjectRef.id);
     return newProjectRef.id;
   } catch (error: any) {
     console.error('projectService: Error in createProject:', error.message, error.code ? `(${error.code})` : '', error.stack);
@@ -198,16 +162,18 @@ const processProjectList = async (projectsFromDb: Project[], userContext: { uid:
         }, 0);
         project.progress = Math.round(totalProgressSum / standardMainTasks.length);
       } else {
-        project.progress = standardMainTasks.length > 0 ? 100 : 0;
-        const allStandardTasksDone = standardMainTasks.every(t => t.status === 'Completed');
-        if(standardMainTasks.length > 0 && allStandardTasksDone) {
-            project.progress = 100;
-        } else if (standardMainTasks.length === 0) {
-            project.progress = 0;
-        }
+        project.progress = 0;
       }
       
-      project.status = getDynamicStatusFromProgress(project.progress, mainTasks);
+      const hasPendingCollectionTasks = mainTasks.some(task => task.taskType === 'collection' && task.status !== 'Completed');
+      if (project.progress >= 100) {
+          project.status = hasPendingCollectionTasks ? 'Payment Incomplete' : 'Completed';
+      } else if (project.progress > 0) {
+          project.status = 'In Progress';
+      } else {
+          project.status = 'Not Started';
+      }
+
       project.totalCost = mainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
 
       const now = new Date();
@@ -227,15 +193,13 @@ const processProjectList = async (projectsFromDb: Project[], userContext: { uid:
 }
 
 export const getUserProjects = async (userUid: string, userRole?: UserRole): Promise<Project[]> => {
-  console.log(`projectService: getUserProjects for user: ${userUid}`);
   if (!userUid) return [];
 
   const q = query(projectsCollection, where('ownerUid', '==', userUid));
   try {
     const querySnapshot = await getDocs(q);
-    const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
-    const projects = await processProjectList(projectsFromDb, { uid: userUid, role: 'owner' });
-    console.log(`projectService: Fetched ${projects.length} projects for owner.`);
+    const projects = querySnapshot.docs.map(mapDocumentToProject);
+    projects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
     return projects;
   } catch (error: any) {
     console.error('projectService: Error fetching user projects for uid:', userUid, error.message, error.stack);
@@ -244,15 +208,13 @@ export const getUserProjects = async (userUid: string, userRole?: UserRole): Pro
 };
 
 export const getClientProjects = async (clientUid: string): Promise<Project[]> => {
-  console.log(`projectService: getClientProjects for client: ${clientUid}`);
   if (!clientUid) return [];
 
   const q = query(projectsCollection, where('clientUid', '==', clientUid));
   try {
     const querySnapshot = await getDocs(q);
-    const projectsFromDb = querySnapshot.docs.map(mapDocumentToProject);
-    const projects = await processProjectList(projectsFromDb, { uid: clientUid, role: 'client' });
-    console.log(`projectService: Fetched ${projects.length} projects for client with details.`);
+    const projects = querySnapshot.docs.map(mapDocumentToProject);
+    projects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
     return projects;
   } catch (error: any) {
     console.error('projectService: Error fetching client projects for uid:', clientUid, error.message, error.stack);
@@ -275,16 +237,7 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
 
     if (projectSnap.exists()) {
       const projectData = mapDocumentToProject(projectSnap);
-
-      // Security is now primarily handled by Firestore rules.
-      // If the user got this far, they have read access.
-      
-      const mainTasks = await getProjectMainTasks(projectId, userUid);
-      projectData.progress = await calculateProjectProgress(projectId, userUid, mainTasks);
-      projectData.status = getDynamicStatusFromProgress(projectData.progress, mainTasks);
-      projectData.totalCost = mainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
       return projectData;
-      
     } else {
       console.warn('projectService: Project not found for ID:', projectId);
       return null;
@@ -292,10 +245,9 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
   } catch (error: any) {
     console.error(`projectService: Error fetching project by ID ${projectId}.`, error);
     if ((error as any)?.code === 'permission-denied') {
-        console.warn(`Access denied to project ${projectId} for user ${userUid}. This may be expected if user is not a member.`);
-        return null; // Return null on permission denied to handle gracefully.
+        throw new Error(`Access denied when fetching project ${projectId}. Check Firestore security rules.`);
     }
-    throw error; // Re-throw other unexpected errors
+    throw error; 
   }
 };
 
@@ -304,12 +256,11 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
   if (!projectIds || projectIds.length === 0) {
     return [];
   }
-  console.log(`projectService: getProjectsByIds for user ${userUid} on projects: ${projectIds.join(', ')}`);
 
   const projectPromises = projectIds.map(id => 
     getProjectById(id, userUid, userRole).catch(err => {
       console.error(`Failed to fetch project ${id} within getProjectsByIds`, err);
-      return null; // Return null for failed fetches
+      return null;
     })
   );
 
@@ -319,7 +270,6 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
   
   validProjects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
 
-  console.log(`projectService: Successfully fetched ${validProjects.length} out of ${projectIds.length} requested projects.`);
   return validProjects;
 };
 

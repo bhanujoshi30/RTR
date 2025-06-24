@@ -4,10 +4,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getProjectById, deleteProject } from '@/services/projectService';
-import { getAllTasksAssignedToUser } from '@/services/taskService';
+import { getAllTasksAssignedToUser, getProjectMainTasks } from '@/services/taskService';
 import { getTodaysAttendanceForUserInProject } from '@/services/attendanceService';
 import { AttendanceDialog } from '@/components/attendance/AttendanceDialog';
-import type { Project } from '@/types';
+import type { Project, Task } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -54,6 +54,12 @@ export default function ProjectDetailsPage() {
   const [showAddMainTaskModal, setShowAddMainTaskModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // New state for progress calculation
+  const [projectProgress, setProjectProgress] = useState(0);
+  const [projectStatus, setProjectStatus] = useState<Project['status']>('Not Started');
+  const [totalCost, setTotalCost] = useState(0);
+
+
   // Attendance State
   const [showAttendanceDialog, setShowAttendanceDialog] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(true);
@@ -67,14 +73,38 @@ export default function ProjectDetailsPage() {
   const isClient = user?.role === 'client';
   const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
 
-  const fetchProjectDetails = async () => {
+  const fetchProjectData = async () => {
     if (authLoading || !user || !projectId) return;
 
     try {
       setLoading(true);
       const fetchedProject = await getProjectById(projectId, user.uid, user.role);
+      
       if (fetchedProject) {
         setProject(fetchedProject);
+        // After fetching project, fetch tasks to calculate progress
+        const allMainTasks = await getProjectMainTasks(projectId, user.uid);
+        const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
+        
+        let progress = 0;
+        if (standardMainTasks.length > 0) {
+            const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+            progress = Math.round(totalProgressSum / standardMainTasks.length);
+        }
+        setProjectProgress(progress);
+        
+        const hasPendingCollectionTasks = allMainTasks.some(task => task.taskType === 'collection' && task.status !== 'Completed');
+        if (progress >= 100) {
+            setProjectStatus(hasPendingCollectionTasks ? 'Payment Incomplete' : 'Completed');
+        } else if (progress > 0) {
+            setProjectStatus('In Progress');
+        } else {
+            setProjectStatus('Not Started');
+        }
+
+        const cost = allMainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
+        setTotalCost(cost);
+
       } else {
         setError('Project not found. It may have been deleted or you do not have permission to view it.');
       }
@@ -92,7 +122,7 @@ export default function ProjectDetailsPage() {
 
   useEffect(() => {
     if(user && !authLoading){
-      fetchProjectDetails();
+      fetchProjectData();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, user, authLoading]);
@@ -158,12 +188,12 @@ export default function ProjectDetailsPage() {
 
   const handleProjectFormSuccess = () => {
     setShowEditModal(false);
-    fetchProjectDetails(); 
+    fetchProjectData(); 
   };
   
   const handleTaskFormSuccess = () => {
     setShowAddMainTaskModal(false);
-    fetchProjectDetails();
+    fetchProjectData();
   };
 
 
@@ -194,10 +224,9 @@ export default function ProjectDetailsPage() {
   }
   
   const canManageProject = user && !isSupervisor && !isMember && !isClient;
-  const displayProgress = project.progress !== undefined ? Math.round(project.progress) : 0;
   const defaultTab = isClient ? "timeline" : "tasks";
 
-  let displayStatus = project.status;
+  let displayStatus = projectStatus;
   if (displayStatus === 'Payment Incomplete' && !canViewFinancials) {
       displayStatus = 'Completed';
   }
@@ -283,8 +312,8 @@ export default function ProjectDetailsPage() {
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.progress')}</p>
               <div className="flex items-center gap-2">
-                <Progress value={displayProgress} className="h-3 w-full" aria-label={`Project progress: ${displayProgress}%`} />
-                <span className="text-sm font-semibold text-primary">{displayProgress}%</span>
+                <Progress value={projectProgress} className="h-3 w-full" aria-label={`Project progress: ${projectProgress}%`} />
+                <span className="text-sm font-semibold text-primary">{projectProgress}%</span>
               </div>
             </div>
             <div className="space-y-1">
@@ -303,14 +332,14 @@ export default function ProjectDetailsPage() {
                     </div>
                 </div>
             )}
-             {canViewFinancials && project.totalCost && project.totalCost > 0 && (
+             {canViewFinancials && totalCost > 0 && (
                 <div className="space-y-1">
                     <div className="flex items-center text-base">
                         <IndianRupee className="mr-2 h-4 w-4 text-green-600" />
                         <span className="text-muted-foreground">{t('projectDetails.estCost')}&nbsp;</span>
-                        <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(project.totalCost)}</span>
+                        <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN', { minimumFractionDigits: 0 }).format(totalCost)}</span>
                     </div>
-                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(project.totalCost, locale)}</p>
+                    <p className="text-xs text-muted-foreground pl-6">{numberToWordsInr(totalCost, locale)}</p>
                 </div>
             )}
           </div>
@@ -343,8 +372,8 @@ export default function ProjectDetailsPage() {
         <Tabs defaultValue={defaultTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
               {!isClient && <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> {t('projectDetails.mainTasks')}</TabsTrigger>}
-              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> {t('projectDetails.activityTimeline')}</TabsTrigger>
-              <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> {t('projectDetails.projectedTimeline')}</TabsTrigger>
+              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> {t('projectDetails.activityTimeline')}</TabsTrigger>}
+              <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> {t('projectDetails.projectedTimeline')}</TabsTrigger>}
             </TabsList>
             
             {!isClient && (
@@ -373,7 +402,7 @@ export default function ProjectDetailsPage() {
                             </Dialog>
                           )}
                       </div>
-                      {user && <TaskList projectId={projectId} onTasksUpdated={fetchProjectDetails} />}
+                      {user && <TaskList projectId={projectId} onTasksUpdated={fetchProjectData} />}
                   </div>
               </TabsContent>
             )}

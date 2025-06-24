@@ -39,10 +39,6 @@ export default function DashboardPage() {
       const isClient = user?.role === 'client';
       const isAdminOrOwner = !isSupervisor && !isMember && !isClient; 
 
-      console.log(`DashboardPage: fetchDashboardData called. Auth Loading: ${authLoading}, User: ${user ? `${user.displayName || user.email} (Role: ${user.role || 'owner/admin'}, UID: ${user.uid})` : 'null'}`);
-      console.log(`DashboardPage: Determined roles - isSupervisor: ${isSupervisor}, isMember: ${isMember}, isAdminOrOwner: ${isAdminOrOwner}, isClient: ${isClient}`);
-
-
       setDashboardLoading(true);
       setDashboardError(null);
 
@@ -50,42 +46,26 @@ export default function DashboardPage() {
         let finalProjectsToDisplay: Project[] = [];
         
         if (isClient) {
-            console.log(`DashboardPage: User is client (UID: ${user.uid}). Fetching assigned projects.`);
             const clientProjects = await getClientProjects(user.uid);
             finalProjectsToDisplay = clientProjects;
         } else if (isSupervisor || isMember) {
-          const userRoleForLog = isSupervisor ? 'supervisor' : 'member';
-          console.log(`DashboardPage: User is ${userRoleForLog} (UID: ${user.uid}). Fetching user-specific work details.`);
-          
           const assignedSubTasks = await getAllTasksAssignedToUser(user.uid);
           const assignedIssues = await getAllIssuesAssignedToUser(user.uid);
           
-          console.log(`DashboardPage: ${userRoleForLog} - Fetched ${assignedSubTasks.length} assignedSubTasks.`);
-          console.log(`DashboardPage: ${userRoleForLog} - Fetched ${assignedIssues.length} assignedIssues.`);
-
           const projectIdsFromTasks = assignedSubTasks.map(task => task.projectId).filter(id => !!id);
           const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId).filter(id => !!id);
           const allRelevantProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
-          console.log(`DashboardPage: ${userRoleForLog} - Combined ${allRelevantProjectIds.length} unique projectIds from user's work:`, allRelevantProjectIds);
 
           if (allRelevantProjectIds.length > 0) {
             const baseProjectsForUser = await getProjectsByIds(allRelevantProjectIds, user.uid, user.role);
-            console.log(`DashboardPage: ${userRoleForLog} - Fetched ${baseProjectsForUser.length} base projects for user-specific counts.`);
 
             finalProjectsToDisplay = baseProjectsForUser.map(project => {
-              console.log(`DashboardPage: [${userRoleForLog} View] Processing project ${project.id} (${project.name}) for user-specific counts.`);
-
               const countSubTasksForUser = assignedSubTasks.filter(st => st.projectId === project.id).length;
-              console.log(`DashboardPage: [${userRoleForLog} View][Project: ${project.id}] User-assigned sub-task count: ${countSubTasksForUser}`);
-
               const countOpenIssuesForUser = assignedIssues.filter(i => i.projectId === project.id && i.status === 'Open').length;
-              console.log(`DashboardPage: [${userRoleForLog} View][Project: ${project.id}] User-assigned open issue count: ${countOpenIssuesForUser}`);
-              
               const mainTaskIdsUserInvolvedWith = new Set(
                 assignedSubTasks.filter(st => st.projectId === project.id).map(st => st.parentId).filter(Boolean) as string[]
               );
               const countMainTasksForUser = mainTaskIdsUserInvolvedWith.size;
-              console.log(`DashboardPage: [${userRoleForLog} View][Project: ${project.id}] User-involved main task count (via assigned sub-tasks): ${countMainTasksForUser}`);
 
               return {
                 ...project,
@@ -94,38 +74,19 @@ export default function DashboardPage() {
                 totalOpenIssues: countOpenIssuesForUser,
               };
             });
-          } else {
-            console.log(`DashboardPage: ${userRoleForLog} - No project IDs found from user's tasks or issues. No projects to display.`);
           }
         } else if (isAdminOrOwner) {
-          console.log(`DashboardPage: User is admin/owner (UID: ${user.uid}). Fetching owned projects and project-wide counts.`);
           const baseProjectsAdmin = await getUserProjects(user.uid, user.role);
-          console.log(`DashboardPage: Admin/Owner - Fetched ${baseProjectsAdmin.length} base projects. IDs: ${baseProjectsAdmin.map(p=>p.id).join(', ')}`);
 
           if (baseProjectsAdmin.length > 0) {
             finalProjectsToDisplay = await Promise.all(
               baseProjectsAdmin.map(async (project) => {
                 try {
-                  console.log(`DashboardPage: [Admin/Owner View] Processing project ${project.id} (${project.name}) for project-wide counts.`);
-                  
-                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectMainTasks.`);
-                  const mainTaskCountPromise = countProjectMainTasks(project.id, user.uid);
-                  
-                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectSubTasks (service).`);
-                  const subTaskCountPromise = countProjectSubTasks(project.id, user.uid);
-                  
-                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Initiating countProjectOpenIssues.`);
-                  const openIssueCountPromise = countProjectOpenIssues(project.id, user.uid);
-
                   const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
-                    mainTaskCountPromise,
-                    subTaskCountPromise,
-                    openIssueCountPromise,
+                    countProjectMainTasks(project.id, user.uid),
+                    countProjectSubTasks(project.id, user.uid),
+                    countProjectOpenIssues(project.id, user.uid),
                   ]);
-                  
-                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved mainTaskCount: ${mainTaskCount}`);
-                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved subTaskCount: ${subTaskCount}`);
-                  console.log(`DashboardPage: [Admin/Owner View][Project: ${project.id}] Resolved openIssueCount: ${openIssueCount}`);
                   
                   return {
                     ...project,
@@ -144,8 +105,6 @@ export default function DashboardPage() {
                 }
               })
             );
-          } else {
-             console.log(`DashboardPage: Admin/Owner - No projects found for user ${user.uid}.`);
           }
         }
 
