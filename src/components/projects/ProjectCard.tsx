@@ -90,13 +90,15 @@ export function ProjectCard({ project }: ProjectCardProps) {
         )}
       </CardHeader>
       <CardContent className="flex-grow space-y-3">
-        <div>
-          <div className="flex justify-between text-sm text-muted-foreground">
-            <span>{t('projectDetails.progress')}</span>
-            <span>{Math.round(project.progress)}%</span>
-          </div>
-          <Progress value={project.progress} className="h-2 w-full" aria-label={`Project progress: ${project.progress}%`} />
-        </div>
+        {(user?.role === 'admin' || user?.role === 'owner') && (
+            <div>
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>{t('projectDetails.progress')}</span>
+                <span>{Math.round(project.progress)}%</span>
+              </div>
+              <Progress value={project.progress} className="h-2 w-full" aria-label={`Project progress: ${project.progress}%`} />
+            </div>
+        )}
         <div className="space-y-1 text-sm text-muted-foreground">
             {(project.totalMainTasks !== undefined || project.totalSubTasks !== undefined || project.totalOpenIssues !== undefined) && (
             <>

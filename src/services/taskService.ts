@@ -56,7 +56,6 @@ export const mapDocumentToTask = (docSnapshot: any): Task => {
     ownerName: data.ownerName || null,
     assignedToUids: data.assignedToUids || [],
     assignedToNames: data.assignedToNames || [],
-    memberUids: data.memberUids || [],
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : (data.createdAt ? new Date(data.createdAt) : new Date()),
     dueDate: data.dueDate instanceof Timestamp ? data.dueDate.toDate() : (data.dueDate ? new Date(data.dueDate) : new Date()), // ensure subtask has date, main task can be null
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate() : (data.updatedAt ? new Date(data.updatedAt) : undefined),
@@ -114,7 +113,6 @@ export const createTask = async (
     newTaskPayload.assignedToNames = taskData.assignedToNames || [];
     newTaskPayload.taskType = 'standard'; // Sub-tasks are always standard
     newTaskPayload.cost = null;
-    newTaskPayload.memberUids = []; // Sub-tasks don't need this field themselves
   } else { 
     newTaskPayload.description = taskData.description || ''; 
     newTaskPayload.status = 'To Do'; 
@@ -124,7 +122,6 @@ export const createTask = async (
     newTaskPayload.dueDate = Timestamp.fromDate(taskData.dueDate);
     newTaskPayload.assignedToUids = []; 
     newTaskPayload.assignedToNames = [];
-    newTaskPayload.memberUids = []; // Initialize for main tasks
     newTaskPayload.taskType = taskData.taskType || 'standard';
     newTaskPayload.reminderDays = taskData.taskType === 'collection' ? (taskData.reminderDays || null) : null;
     newTaskPayload.cost = taskData.taskType === 'collection' ? (taskData.cost || null) : null;
@@ -548,7 +545,7 @@ export const updateTask = async (
       taskId,
       userUid,
       'ASSIGNMENT_CHANGED',
-      'timeline.assignmentUpdated',
+      'timeline.assignmentChanged',
       { names: updates.assignedToNames?.join(', ') || 'nobody' }
     );
      // Denormalize new members to the project
