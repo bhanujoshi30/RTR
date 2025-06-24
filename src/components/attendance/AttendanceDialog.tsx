@@ -231,7 +231,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
         <DialogHeader>
           <DialogTitle className="font-headline text-xl capitalize">{t('attendanceDialog.title')}</DialogTitle>
           <DialogDescription>
-            {t('attendanceDialog.description').replace('{projectName}', projectName)}
+            {t('attendanceDialog.description', { projectName: projectName })}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
