@@ -92,8 +92,8 @@ const getDynamicStatusFromProgress = (progress: number, allMainTasks: Task[]): P
   }
 };
 
-const calculateProjectProgress = async (projectId: string, mainTasks?: Task[]): Promise<number> => {
-  const allMainTasks = mainTasks || await getProjectMainTasks(projectId);
+const calculateProjectProgress = async (projectId: string, userUid: string, mainTasks?: Task[]): Promise<number> => {
+  const allMainTasks = mainTasks || await getProjectMainTasks(projectId, userUid);
   
   // Filter out collection tasks from the progress calculation
   const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
@@ -303,8 +303,8 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
           return null; // Return null instead of throwing an error.
       }
       
-      const mainTasks = await getProjectMainTasks(projectId);
-      projectData.progress = await calculateProjectProgress(projectId, mainTasks);
+      const mainTasks = await getProjectMainTasks(projectId, userUid);
+      projectData.progress = await calculateProjectProgress(projectId, userUid, mainTasks);
       projectData.status = getDynamicStatusFromProgress(projectData.progress, mainTasks);
       projectData.totalCost = mainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
       return projectData;
