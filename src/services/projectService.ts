@@ -280,7 +280,23 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       const isClient = projectData.clientUid === userUid;
       const isAdmin = userRole === 'admin';
       const isServiceCall = userUid === 'dpr-service-call';
-      const isMember = projectData.memberUids?.includes(userUid) ?? false;
+      let isMember = projectData.memberUids?.includes(userUid) ?? false;
+
+      // Fallback check for resilience: if a user is assigned to a task in the project,
+      // they should be considered a member even if their UID is not in the project's `memberUids` array.
+      // This handles cases where data might be inconsistent for older projects.
+      if (!isOwner && !isClient && !isAdmin && !isServiceCall && !isMember) {
+        const taskQuery = query(
+            collection(db, 'tasks'), 
+            where('projectId', '==', projectId), 
+            where('assignedToUids', 'array-contains', userUid), 
+            limit(1)
+        );
+        const taskSnap = await getDocs(taskQuery);
+        if (!taskSnap.empty) {
+            isMember = true; // Grant access if they are on at least one task
+        }
+      }
 
       if (!isOwner && !isClient && !isAdmin && !isServiceCall && !isMember) {
           console.warn(`Access denied to project ${projectId}. User ${userUid} is not owner, client, admin, or member.`);
