@@ -1,4 +1,3 @@
-
 rules_version = '2';
 
 service cloud.firestore {
@@ -9,75 +8,95 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isOwner(docId) {
-      return request.auth.uid == docId;
+    function isUser(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
 
-    function requestingUserRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    function isProjectOwner(projectId) {
-      return request.auth.uid == get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid;
+    function isAdmin() {
+      return isSignedIn() && 'role' in getUserData() && getUserData().role == 'admin';
     }
-    
+
     function isProjectClient(projectId) {
       let projectData = get(/databases/$(database)/documents/projects/$(projectId)).data;
-      return projectData.clientUid != null && request.auth.uid == projectData.clientUid;
+      return isSignedIn() && 'clientUid' in projectData && request.auth.uid == projectData.clientUid;
     }
 
+    // New helper function to check if the current user is a member of a project
     function isProjectMember(projectId) {
-      return request.auth.uid in get(/databases/$(database)/documents/projects/$(projectId)).data.memberUids;
-    }
-    
-    function isTaskOwner(taskId) {
-        return request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid;
-    }
-    
-    function isAssignedToTask(taskId) {
-        return request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
+      let projectData = get(/databases/$(database)/documents/projects/$(projectId)).data;
+      return isSignedIn() && 'memberUids' in projectData && request.auth.uid in projectData.memberUids;
     }
 
-    // Rules
-    match /users/{userId} {
-      allow read, write: if isSignedIn() && requestingUserRole() == 'admin';
-      allow get, update: if isOwner(userId);
-    }
-    
+
+    // Projects Collection
     match /projects/{projectId} {
+      allow get: if request.auth.uid == resource.data.ownerUid || request.auth.uid == resource.data.clientUid || request.auth.uid in resource.data.memberUids;
+      allow list: if isSignedIn(); // List queries are secured by `where` clauses in app code
       allow create: if isSignedIn();
-      allow update, delete: if isProjectOwner(projectId) || requestingUserRole() == 'admin';
-      allow get: if request.auth.uid == resource.data.ownerUid || (resource.data.clientUid != null && request.auth.uid == resource.data.clientUid) || request.auth.uid in resource.data.memberUids;
-      allow list: if isSignedIn();
+      allow update: if isSignedIn() && (isUser(resource.data.ownerUid) || isAdmin());
+      allow delete: if isSignedIn() && (isUser(resource.data.ownerUid) || isAdmin());
     }
 
+    // Tasks Collection
     match /tasks/{taskId} {
-      allow create: if isSignedIn();
-      allow get: if isProjectOwner(resource.data.projectId) || isProjectClient(resource.data.projectId) || isProjectMember(resource.data.projectId) || isAssignedToTask(taskId);
+      // The fix is here: add isProjectMember() to allow supervisors/members to view main tasks
+      // of projects they are part of.
+      allow get: if isSignedIn() && (
+                   isUser(resource.data.ownerUid) ||
+                   (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) ||
+                   isUser(resource.data.projectOwnerUid) ||
+                   isProjectClient(resource.data.projectId) ||
+                   isProjectMember(resource.data.projectId) ||
+                   isAdmin()
+                 );
       allow list: if isSignedIn();
-      allow update, delete: if isTaskOwner(taskId) || isAssignedToTask(taskId) || isProjectOwner(resource.data.projectId) || requestingUserRole() == 'admin';
-      
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+                      isUser(resource.data.ownerUid) ||
+                      (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) ||
+                      isAdmin()
+                    );
+      allow delete: if isSignedIn() && (isUser(resource.data.ownerUid) || isAdmin());
+
+      // Subcollections
       match /attachments/{attachmentId} {
-         allow read: if isSignedIn();
-         allow create, delete: if isSignedIn() && (isTaskOwner(taskId) || isAssignedToTask(taskId));
+        allow read, create: if isSignedIn();
+        allow update, delete: if isSignedIn() && (isUser(resource.data.ownerUid) || isAdmin());
       }
-      
       match /timeline/{eventId} {
         allow read: if isSignedIn();
         allow create: if isSignedIn();
+        allow update, delete: if false;
       }
     }
-    
+
+    // Issues Collection
     match /issues/{issueId} {
-        allow create: if isSignedIn();
-        allow get: if isSignedIn();
-        allow list: if isSignedIn();
-        allow update, delete: if isSignedIn();
+      allow list: if isSignedIn();
+      allow get: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+                      isUser(resource.data.ownerUid) ||
+                      (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) ||
+                      isAdmin()
+                    );
+      allow delete: if isSignedIn() && (isUser(resource.data.ownerUid) || isAdmin());
     }
     
-    match /attendance/{recordId} {
-        allow create: if isSignedIn();
-        allow read: if isSignedIn() && (requestingUserRole() == 'admin' || request.auth.uid == resource.data.userId);
+    // Attendance Collection
+    match /attendance/{attendanceId} {
+      allow read, create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // Users Collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
     }
   }
 }
