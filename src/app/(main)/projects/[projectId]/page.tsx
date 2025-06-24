@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getProjectById, deleteProject } from '@/services/projectService';
-import { getAllTasksAssignedToUser, getProjectMainTasks } from '@/services/taskService';
+import { getAllTasksAssignedToUser, getProjectMainTasks, getProjectSubTasksAssignedToUser } from '@/services/taskService';
 import { getTodaysAttendanceForUserInProject } from '@/services/attendanceService';
 import { AttendanceDialog } from '@/components/attendance/AttendanceDialog';
 import type { Project, Task } from '@/types';
@@ -82,28 +82,40 @@ export default function ProjectDetailsPage() {
       
       if (fetchedProject) {
         setProject(fetchedProject);
-        // After fetching project, fetch tasks to calculate progress
-        const allMainTasks = await getProjectMainTasks(projectId, user.uid);
-        const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
         
-        let progress = 0;
-        if (standardMainTasks.length > 0) {
-            const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
-            progress = Math.round(totalProgressSum / standardMainTasks.length);
-        }
-        setProjectProgress(progress);
-        
-        const hasPendingCollectionTasks = allMainTasks.some(task => task.taskType === 'collection' && task.status !== 'Completed');
-        if (progress >= 100) {
-            setProjectStatus(hasPendingCollectionTasks ? 'Payment Incomplete' : 'Completed');
-        } else if (progress > 0) {
-            setProjectStatus('In Progress');
-        } else {
-            setProjectStatus('Not Started');
-        }
+        const isSupervisorOrMember = user.role === 'supervisor' || user.role === 'member';
 
-        const cost = allMainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
-        setTotalCost(cost);
+        if (isSupervisorOrMember) {
+            // Supervisors/Members cannot see overall project progress as they can't read all tasks.
+            // We set default values and let the TaskList component handle showing their assigned tasks.
+            setProjectProgress(0);
+            setProjectStatus('In Progress'); // A neutral status
+            setTotalCost(0);
+        } else {
+            // Admin, Owner, or Client can fetch all tasks to calculate progress.
+            const allMainTasks = await getProjectMainTasks(projectId, user.uid);
+            const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
+            
+            let progress = 0;
+            if (standardMainTasks.length > 0) {
+                // task.progress is calculated in getProjectMainTasks for owners/admins
+                const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+                progress = Math.round(totalProgressSum / standardMainTasks.length);
+            }
+            setProjectProgress(progress);
+            
+            const hasPendingCollectionTasks = allMainTasks.some(task => task.taskType === 'collection' && task.status !== 'Completed');
+            if (progress >= 100) {
+                setProjectStatus(hasPendingCollectionTasks ? 'Payment Incomplete' : 'Completed');
+            } else if (progress > 0) {
+                setProjectStatus('In Progress');
+            } else {
+                setProjectStatus('Not Started');
+            }
+
+            const cost = allMainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
+            setTotalCost(cost);
+        }
 
       } else {
         setError('Project not found. It may have been deleted or you do not have permission to view it.');
@@ -309,13 +321,15 @@ export default function ProjectDetailsPage() {
                  {t(`status.${displayStatus.toLowerCase().replace(/ /g, '')}`)}
               </Badge>
             </div>
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.progress')}</p>
-              <div className="flex items-center gap-2">
-                <Progress value={projectProgress} className="h-3 w-full" aria-label={`Project progress: ${projectProgress}%`} />
-                <span className="text-sm font-semibold text-primary">{projectProgress}%</span>
-              </div>
-            </div>
+            { user && !isSupervisor && !isMember && (
+                <div className="space-y-1">
+                <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.progress')}</p>
+                <div className="flex items-center gap-2">
+                    <Progress value={projectProgress} className="h-3 w-full" aria-label={`Project progress: ${projectProgress}%`} />
+                    <span className="text-sm font-semibold text-primary">{projectProgress}%</span>
+                </div>
+                </div>
+            )}
             <div className="space-y-1">
               <p className="text-sm font-medium text-muted-foreground">{t('common.createdAt')}</p>
               <div className="flex items-center text-base">
