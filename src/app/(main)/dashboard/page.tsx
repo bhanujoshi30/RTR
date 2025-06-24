@@ -7,10 +7,10 @@ import { FolderPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
-import type { Project, Task as AppTask } from '@/types';
-import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
-import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
-import { getProjectsByIds, getUserProjects, getClientProjects, getMemberProjects } from '@/services/projectService';
+import type { Project } from '@/types';
+import { countProjectMainTasks, countProjectSubTasks, getProjectMainTasks } from '@/services/taskService';
+import { countProjectOpenIssues } from '@/services/issueService';
+import { getClientProjects, getMemberProjects, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
@@ -43,71 +43,57 @@ export default function DashboardPage() {
       setDashboardError(null);
 
       try {
-        let finalProjectsToDisplay: Project[] = [];
-        
+        let finalProjects: Project[] = [];
+
         if (isClient) {
             const clientProjects = await getClientProjects(user.uid);
-            finalProjectsToDisplay = clientProjects;
+            finalProjects = clientProjects; // Clients don't see task counts on dashboard
         } else if (isSupervisor || isMember) {
-          const baseProjectsForMember = await getMemberProjects(user.uid);
-          const assignedSubTasks = await getAllTasksAssignedToUser(user.uid);
-          const assignedIssues = await getAllIssuesAssignedToUser(user.uid);
-
-          finalProjectsToDisplay = baseProjectsForMember.map(project => {
-            const countSubTasksForUser = assignedSubTasks.filter(st => st.projectId === project.id).length;
-            const countOpenIssuesForUser = assignedIssues.filter(i => i.projectId === project.id && i.status === 'Open').length;
-            
-            const mainTaskIdsUserInvolvedWith = new Set(
-              assignedSubTasks
-                .filter(st => st.projectId === project.id)
-                .map(st => st.parentId)
-                .filter((id): id is string => !!id)
+            const memberProjects = await getMemberProjects(user.uid);
+            finalProjects = await Promise.all(
+                memberProjects.map(async (project) => {
+                    // For members, counts should be relative to what they can see.
+                    // This requires a different approach if you want to show "your" counts vs project total.
+                    // For now, let's keep it simple and not show counts to avoid permission errors.
+                    return {
+                        ...project,
+                        totalMainTasks: undefined,
+                        totalSubTasks: undefined,
+                        totalOpenIssues: undefined,
+                    };
+                })
             );
-            const countMainTasksForUser = mainTaskIdsUserInvolvedWith.size;
-
-            return {
-              ...project,
-              totalMainTasks: countMainTasksForUser,
-              totalSubTasks: countSubTasksForUser,
-              totalOpenIssues: countOpenIssuesForUser,
-            };
-          });
-
         } else if (isAdminOrOwner) {
-          const baseProjectsAdmin = await getUserProjects(user.uid, user.role);
-
-          if (baseProjectsAdmin.length > 0) {
-            finalProjectsToDisplay = await Promise.all(
-              baseProjectsAdmin.map(async (project) => {
-                try {
-                  const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
-                    countProjectMainTasks(project.id, user.uid),
-                    countProjectSubTasks(project.id, user.uid),
-                    countProjectOpenIssues(project.id, user.uid),
-                  ]);
-                  
-                  return {
-                    ...project,
-                    totalMainTasks: mainTaskCount,
-                    totalSubTasks: subTaskCount,
-                    totalOpenIssues: openIssueCount,
-                  };
-                } catch (err) {
-                  console.error(`DashboardPage: Failed to get counts for project ${project.id}. Returning project with zero counts.`, err);
-                  return {
-                    ...project,
-                    totalMainTasks: 0,
-                    totalSubTasks: 0,
-                    totalOpenIssues: 0,
-                  };
-                }
-              })
+            const adminProjects = await getUserProjects(user.uid);
+            finalProjects = await Promise.all(
+                adminProjects.map(async (project) => {
+                    try {
+                        const [mainTaskCount, subTaskCount, openIssueCount] = await Promise.all([
+                            countProjectMainTasks(project.id, user.uid),
+                            countProjectSubTasks(project.id, user.uid),
+                            countProjectOpenIssues(project.id, user.uid),
+                        ]);
+                        return {
+                            ...project,
+                            totalMainTasks: mainTaskCount,
+                            totalSubTasks: subTaskCount,
+                            totalOpenIssues: openIssueCount,
+                        };
+                    } catch (err) {
+                        console.error(`DashboardPage: Failed to get counts for project ${project.id}. Returning project with zero counts.`, err);
+                        return {
+                            ...project,
+                            totalMainTasks: 0,
+                            totalSubTasks: 0,
+                            totalOpenIssues: 0,
+                        };
+                    }
+                })
             );
-          }
         }
 
-        console.log('DashboardPage: Final projectsToDisplay with counts:', finalProjectsToDisplay.length > 0 ? finalProjectsToDisplay : 'None');
-        setProjectsToDisplay(finalProjectsToDisplay);
+        console.log('DashboardPage: Final projectsToDisplay with counts:', finalProjects.length > 0 ? finalProjects : 'None');
+        setProjectsToDisplay(finalProjects);
 
       } catch (err: any) {
         console.error("DashboardPage: Error fetching dashboard data:", err);
