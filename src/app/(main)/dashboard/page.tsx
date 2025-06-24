@@ -47,6 +47,8 @@ export default function DashboardPage() {
         
         if (isClient) {
             const clientProjects = await getClientProjects(user.uid);
+            // For clients, we just display the project info without task/issue counts
+            // as they don't have permission to read all tasks/issues.
             finalProjectsToDisplay = clientProjects;
         } else if (isSupervisor || isMember) {
           const assignedSubTasks = await getAllTasksAssignedToUser(user.uid);

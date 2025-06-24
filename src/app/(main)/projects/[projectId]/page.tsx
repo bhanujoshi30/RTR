@@ -84,15 +84,16 @@ export default function ProjectDetailsPage() {
         setProject(fetchedProject);
         
         const isSupervisorOrMember = user.role === 'supervisor' || user.role === 'member';
+        const isClientUser = user.role === 'client';
 
-        if (isSupervisorOrMember) {
-            // Supervisors/Members cannot see overall project progress as they can't read all tasks.
+        if (isSupervisorOrMember || isClientUser) {
+            // Supervisors/Members/Clients cannot see overall project progress as they can't read all tasks.
             // We set default values and let the TaskList component handle showing their assigned tasks.
             setProjectProgress(0);
             setProjectStatus('In Progress'); // A neutral status
             setTotalCost(0);
         } else {
-            // Admin, Owner, or Client can fetch all tasks to calculate progress.
+            // Admin, Owner can fetch all tasks to calculate progress.
             const allMainTasks = await getProjectMainTasks(projectId, user.uid);
             const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
             
@@ -321,7 +322,7 @@ export default function ProjectDetailsPage() {
                  {t(`status.${displayStatus.toLowerCase().replace(/ /g, '')}`)}
               </Badge>
             </div>
-            { user && !isSupervisor && !isMember && (
+            { user && !isSupervisor && !isMember && !isClient && (
                 <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.progress')}</p>
                 <div className="flex items-center gap-2">
