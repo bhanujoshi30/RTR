@@ -8,8 +8,8 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
 import type { Project } from '@/types';
-import { countProjectMainTasks, countProjectSubTasks } from '@/services/taskService';
-import { countProjectOpenIssues } from '@/services/issueService';
+import { countProjectMainTasks, countProjectSubTasks, getAllTasksAssignedToUser } from '@/services/taskService';
+import { countProjectOpenIssues, getOpenIssuesForTaskIds } from '@/services/issueService';
 import { getClientProjects, getMemberProjects, getUserProjects, getAllProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
@@ -45,21 +45,33 @@ export default function DashboardPage() {
 
       try {
         let finalProjects: Project[] = [];
-        let projectsToCount: Project[] = [];
 
         if (isClient) {
-            const clientProjects = await getClientProjects(user.uid);
-            finalProjects = clientProjects;
+            finalProjects = await getClientProjects(user.uid);
+        
         } else if (isSupervisor || isMember) {
             const memberProjects = await getMemberProjects(user.uid);
-            finalProjects = memberProjects;
-        } else if (isAdmin) {
-            projectsToCount = await getAllProjects(user.uid);
-        } else if (isOwner) {
-            projectsToCount = await getUserProjects(user.uid);
-        }
+            const allAssignedSubTasks = await getAllTasksAssignedToUser(user.uid);
+    
+            finalProjects = await Promise.all(memberProjects.map(async (project) => {
+                const subTasksForThisProject = allAssignedSubTasks.filter(t => t.projectId === project.id);
+                const subTaskIds = subTasksForThisProject.map(t => t.id);
         
-        if (projectsToCount.length > 0) {
+                const openIssues = subTaskIds.length > 0 ? await getOpenIssuesForTaskIds(subTaskIds) : [];
+                
+                const uniqueMainTaskIds = new Set(subTasksForThisProject.map(t => t.parentId).filter(Boolean));
+        
+                return {
+                    ...project,
+                    totalMainTasks: uniqueMainTaskIds.size,
+                    totalSubTasks: subTasksForThisProject.length,
+                    totalOpenIssues: openIssues.length,
+                };
+            }));
+
+        } else if (isAdmin || isOwner) {
+            const projectsToCount = isAdmin ? await getAllProjects(user.uid) : await getUserProjects(user.uid);
+            
             finalProjects = await Promise.all(
                 projectsToCount.map(async (project) => {
                     try {

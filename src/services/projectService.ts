@@ -142,10 +142,15 @@ export const getAllProjects = async (userUid: string): Promise<Project[]> => {
 export const getClientProjects = async (clientUid: string): Promise<Project[]> => {
   if (!clientUid) return [];
 
-  const q = query(projectsCollection, where('clientUid', '==', clientUid), orderBy('createdAt', 'desc'));
+  // Removing orderBy to avoid needing a composite index. Sorting is handled in application code.
+  const q = query(projectsCollection, where('clientUid', '==', clientUid));
   try {
     const querySnapshot = await getDocs(q);
     const projects = querySnapshot.docs.map(mapDocumentToProject);
+    
+    // Sort in application code
+    projects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
     return projects;
   } catch (error: any) {
     console.error('projectService: Error fetching client projects for uid:', clientUid, error.message, error.stack);
@@ -159,16 +164,45 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
 export const getMemberProjects = async (memberUid: string): Promise<Project[]> => {
   if (!memberUid) return [];
 
-  const q = query(projectsCollection, where('memberUids', 'array-contains', memberUid), orderBy('createdAt', 'desc'));
+  // This more robust method avoids requiring a composite index on memberUids and createdAt.
   try {
-    const querySnapshot = await getDocs(q);
-    const projects = querySnapshot.docs.map(mapDocumentToProject);
+    // 1. Find all sub-tasks assigned to the member to determine which projects they are part of.
+    const tasksAssignedQuery = query(collection(db, 'tasks'), where('assignedToUids', 'array-contains', memberUid), where('parentId', '!=', null));
+    const tasksSnapshot = await getDocs(tasksAssignedQuery);
+
+    if (tasksSnapshot.empty) {
+      return []; // User is not assigned to any sub-tasks, so no projects to show.
+    }
+
+    // 2. Get unique project IDs from those tasks.
+    const projectIds = [...new Set(tasksSnapshot.docs.map(doc => doc.data().projectId as string))];
+
+    if (projectIds.length === 0) {
+      return [];
+    }
+    
+    // 3. Fetch the actual project documents by their IDs in chunks of 30 (Firestore 'in' query limit).
+    const projectChunks: string[][] = [];
+    for (let i = 0; i < projectIds.length; i += 30) {
+        projectChunks.push(projectIds.slice(i, i + 30));
+    }
+    
+    const projects: Project[] = [];
+    for (const chunk of projectChunks) {
+      if (chunk.length > 0) {
+          const projectsQuery = query(projectsCollection, where(documentId(), 'in', chunk));
+          const projectsSnapshot = await getDocs(projectsQuery);
+          projectsSnapshot.forEach(doc => projects.push(mapDocumentToProject(doc)));
+      }
+    }
+    
+    // 4. Sort in application code to maintain consistent ordering.
+    projects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
     return projects;
+
   } catch (error: any) {
     console.error('projectService: Error fetching member projects for uid:', memberUid, error.message, error.stack);
-    if (error.message.includes('index')) {
-        console.error("A Firestore index on 'memberUids' (array-contains) and 'createdAt' (DESC) is required for this query to work.");
-    }
     throw error;
   }
 };
