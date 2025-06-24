@@ -113,7 +113,7 @@
     "noAttendanceRecorded": "No Attendance Recorded",
     "noRecordForDay": "There is no attendance record for this day.",
     "submittedAttendanceFor": "submitted attendance for",
-    "projectsToday": "project(s) today.",
+    "projectsToday": "project(s) today",
     "deletedProject": "(Deleted)",
     "viewPhoto": "View Photo",
     "addressNotAvailable": "Address not available",
@@ -277,12 +277,9 @@
   },
   "attendanceDialog": {
     "title": "Submit Daily Attendance",
-    "description": "Submit attendance for project: {{projectName}}.",
+    "description": "Submit attendance for project: {{projectName}}. A photo with your location is required.",
     "photoProofHelp": "Select a photo as proof. Your name, time, and location will be stamped on the image.",
-    "locationDenied": "Location Access Denied",
-    "locationDeniedDesc": "{{error}} Stamping will proceed without location data.",
     "changePhoto": "Change Photo",
-    "selectPhoto": "Select Photo",
     "takePhoto": "Take Photo",
     "imagePreview": "Image preview will appear here",
     "uploading": "Uploading...",
@@ -292,6 +289,12 @@
     "successToast": "Attendance submitted successfully.",
     "failToast": "Upload Failed",
     "processingToast": "Preparing your image."
+  },
+  "progressReportDialog": {
+    "description": "Select a photo as proof. A photo with your location is required. Your name, time, and location will be stamped on the image."
+  },
+  "issueStatusChangeDialog": {
+    "description": "A photo with your location and comments are required as proof for this status change."
   },
   "common": {
     "created": "Created",
@@ -381,7 +384,6 @@
     "severity": "Severity",
     "dueDate": "Due Date",
     "pickDate": "Pick a date",
-    "dateConstraint": "Date must be between {{startDate}} and {{endDate}}.",
     "assignTo": "Assign To",
     "assignToDesc": "Select team members to assign this issue to.",
     "loadingUsers": "Loading users...",
@@ -433,5 +435,13 @@
     "latestActivity": "Latest activity {{time}}",
     "eventsOnSubTask_one": "1 event on sub-task: ",
     "eventsOnSubTask_other": "{{count}} events on sub-task: "
+  },
+  "location": {
+    "requiredTitle": "Location Required",
+    "requiredDesc": "Location access is mandatory. Please enable location services in your browser and try again.",
+    "fetchingTitle": "Fetching Location...",
+    "fetchingDesc": "Please wait while we acquire your location. You may need to grant permission."
   }
 }
+
+    

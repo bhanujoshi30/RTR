@@ -15,6 +15,7 @@ import { Loader2, Camera, Upload, MapPin, X, ImagePlus } from 'lucide-react';
 import type { Issue, IssueProgressStatus } from '@/types';
 import Image from 'next/image';
 import { Progress } from '@/components/ui/progress';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface IssueStatusChangeDialogProps {
   open: boolean;
@@ -33,6 +34,7 @@ interface Location {
 export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, onSuccess }: IssueStatusChangeDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -45,6 +47,7 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(true);
 
   useEffect(() => {
     if (open) {
@@ -57,6 +60,7 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
       setIsSubmitting(false);
       setUploadProgress(null);
       setFormError(null);
+      setIsFetchingLocation(true);
 
       // Fetch location
       if (navigator.geolocation) {
@@ -72,11 +76,16 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
             } catch (error) { console.error("Reverse geocoding failed:", error); }
 
             setLocation({ latitude, longitude, address: fetchedAddress });
+            setIsFetchingLocation(false);
           },
-          (error) => setLocationError(error.message)
+          (error) => {
+            setLocationError(error.message);
+            setIsFetchingLocation(false);
+          }
         );
       } else {
         setLocationError("Geolocation is not supported by this browser.");
+        setIsFetchingLocation(false);
       }
     } else {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
@@ -97,8 +106,17 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
   const handleSubmit = async () => {
     if (!selectedFile || !comments.trim() || !issue || !newStatus || !user) {
       setFormError("A photo and comments are required to change the issue status.");
-      toast({ title: 'Missing Information', description: formError, variant: 'destructive' });
+      toast({ title: 'Missing Information', description: formError!, variant: 'destructive' });
       return;
+    }
+    
+    if (!location) {
+        toast({
+            title: t('location.requiredTitle'),
+            description: t('location.requiredDesc'),
+            variant: 'destructive'
+        });
+        return;
     }
 
     setIsSubmitting(true);
@@ -123,8 +141,8 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
       // --- New Stamping Logic Start ---
       const userStamp = user.displayName || user.email || 'Unknown User';
       const timeStamp = new Date().toLocaleString();
-      const coords = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Coordinates unavailable';
-      const fullAddress = location?.address || 'Address data unavailable.';
+      const coords = `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}`;
+      const fullAddress = location.address || 'Address data unavailable.';
 
       let addressLine1 = fullAddress;
       let addressLine2 = '';
@@ -195,7 +213,7 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
           url: downloadURL,
           filename: filename,
           reportType: 'issue-update-proof',
-          location: location || null
+          location: location,
         }
       });
       
@@ -214,7 +232,7 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="font-headline text-xl">Change Issue Status to "{newStatus}"</DialogTitle>
-          <DialogDescription>A photo and comments are required as proof for this status change.</DialogDescription>
+          <DialogDescription>{t('issueStatusChangeDialog.description')}</DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
            <div className="grid w-full gap-1.5">
@@ -227,11 +245,21 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
               disabled={isSubmitting}
             />
           </div>
-          {locationError && (
+          
+           {isFetchingLocation && (
+              <Alert>
+                <MapPin className="h-4 w-4 animate-pulse" />
+                <AlertTitle>{t('location.fetchingTitle')}</AlertTitle>
+                <AlertDescription>{t('location.fetchingDesc')}</AlertDescription>
+              </Alert>
+           )}
+           {!isFetchingLocation && locationError && (
             <Alert variant="destructive">
               <MapPin className="h-4 w-4" />
-              <AlertTitle>Location Access Denied</AlertTitle>
-              <AlertDescription>{locationError}</AlertDescription>
+              <AlertTitle>{t('location.requiredTitle')}</AlertTitle>
+              <AlertDescription>
+                 {t('location.requiredDesc')}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -270,7 +298,7 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             <X className="mr-2 h-4 w-4" /> Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={isSubmitting}>
+          <Button onClick={handleSubmit} disabled={isSubmitting || !selectedFile || !comments.trim() || isFetchingLocation || !location}>
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
             Submit
           </Button>
@@ -279,3 +307,5 @@ export function IssueStatusChangeDialog({ open, onOpenChange, issue, newStatus, 
     </Dialog>
   );
 }
+
+    

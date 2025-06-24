@@ -61,6 +61,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [location, setLocation] = useState<Location | null>(null);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(true);
   
   // Control State
   const [loading, setLoading] = useState(false);
@@ -94,11 +95,16 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
             }
             setLocation({ latitude, longitude, address: fetchedAddress });
             setLocationError(null);
+            setIsFetchingLocation(false);
           },
-          (error) => setLocationError(error.message)
+          (error) => {
+            setLocationError(error.message);
+            setIsFetchingLocation(false);
+          }
         );
       } else {
         setLocationError("Geolocation is not supported by this browser.");
+        setIsFetchingLocation(false);
       }
   }, []);
 
@@ -200,11 +206,20 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       return;
     }
     if (!title || !dueDate) {
-        toast({ title: 'Missing Fields', description: 'Title and Due Date are required.', variant: 'destructive'});
+        toast({ title: t('taskForm.missingFields'), description: t('taskForm.nameAndDateRequired'), variant: 'destructive'});
         return;
     }
     if (!issue && !selectedFile) {
         toast({ title: 'Photo Required', description: 'Please attach a photo to report a new issue.', variant: 'destructive'});
+        return;
+    }
+    
+    if (selectedFile && !location) {
+        toast({
+            title: t('location.requiredTitle'),
+            description: t('location.requiredDesc'),
+            variant: 'destructive'
+        });
         return;
     }
 
@@ -238,7 +253,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
       }
 
       // --- Photo Upload Logic (runs for both create and edit if file is selected) ---
-      if (selectedFile && canvasRef.current && previewUrl) {
+      if (selectedFile && canvasRef.current && previewUrl && location) {
           toast({ title: 'Processing photo...', description: 'Please wait.' });
           
           const image = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -257,7 +272,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
 
           const userStamp = user.displayName || user.email || 'Unknown User';
           const timeStamp = new Date().toLocaleString();
-          const fullAddress = location?.address || 'Address data unavailable.';
+          const fullAddress = location.address || 'Address data unavailable.';
           const textLines = [userStamp, timeStamp, fullAddress];
           
           const fontSize = Math.max(20, Math.round(canvas.width / 80));
@@ -306,7 +321,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
               url: downloadURL,
               filename,
               reportType: 'issue-report',
-              location: location || null,
+              location: location,
           });
       }
 
@@ -389,12 +404,21 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
                     <p className="text-sm text-muted-foreground mt-2">{t('issueForm.imagePreview')}</p>
                 </div>
             )}
-            {locationError && (
+            
+            {isFetchingLocation && selectedFile && (
+              <Alert>
+                <MapPin className="h-4 w-4 animate-pulse" />
+                <AlertTitle>{t('location.fetchingTitle')}</AlertTitle>
+                <AlertDescription>{t('location.fetchingDesc')}</AlertDescription>
+              </Alert>
+            )}
+
+            {!isFetchingLocation && selectedFile && locationError && (
               <Alert variant="destructive" className="mt-2">
                 <MapPin className="h-4 w-4" />
-                <AlertTitle>Location Access Denied</AlertTitle>
+                <AlertTitle>{t('location.requiredTitle')}</AlertTitle>
                 <AlertDescription>
-                  {locationError} Stamping will proceed without location data.
+                  {t('location.requiredDesc')}
                 </AlertDescription>
               </Alert>
             )}
@@ -484,7 +508,7 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
           </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" disabled={loading || !user || loadingAssignableUsers}>
+          <Button type="submit" disabled={loading || !user || loadingAssignableUsers || (!!selectedFile && (!location || isFetchingLocation))}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             {issue ? t('issueForm.saveChanges') : t('issueForm.createIssue')}
           </Button>
@@ -493,3 +517,5 @@ export function IssueForm({ projectId, taskId, issue, onFormSuccess }: IssueForm
     </Card>
   );
 }
+
+    

@@ -13,6 +13,7 @@ import type { User } from '@/types';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
 import { Progress } from '@/components/ui/progress';
+import { useTranslation } from '@/hooks/useTranslation';
 
 interface ProgressReportDialogProps {
   open: boolean;
@@ -32,6 +33,7 @@ interface Location {
 export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, reportType, onSuccess }: ProgressReportDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { t } = useTranslation();
   
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -42,6 +44,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(true);
 
 
   useEffect(() => {
@@ -52,7 +55,8 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       setLocation(null);
       setLocationError(null);
       setIsUploading(false);
-      setUploadProgress(null); 
+      setUploadProgress(null);
+      setIsFetchingLocation(true);
 
       // Fetch location and address
       if (navigator.geolocation) {
@@ -82,14 +86,17 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
               address: fetchedAddress,
             });
             setLocationError(null);
+            setIsFetchingLocation(false);
           },
           (error) => {
             setLocationError(error.message);
+            setIsFetchingLocation(false);
             console.error('Error getting location:', error);
           }
         );
       } else {
         setLocationError("Geolocation is not supported by this browser.");
+        setIsFetchingLocation(false);
       }
     } else {
       // Cleanup preview URL to prevent memory leaks
@@ -101,21 +108,19 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
   }, [open]);
 
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-      }
-      setPreviewUrl(URL.createObjectURL(file));
-    }
-  };
-
   const handleUpload = async () => {
     if (!selectedFile || !canvasRef.current || !user || !previewUrl) {
       toast({ title: 'Error', description: 'Please select a photo to upload.', variant: 'destructive' });
       return;
+    }
+    
+    if (!location) {
+        toast({
+            title: t('location.requiredTitle'),
+            description: t('location.requiredDesc'),
+            variant: 'destructive'
+        });
+        return;
     }
 
     setIsUploading(true);
@@ -156,7 +161,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
       // --- New Stamping Logic Start ---
       const userStamp = user.displayName || user.email || 'Unknown User';
       const timeStamp = new Date().toLocaleString();
-      const coords = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Coordinates unavailable';
+      const coords = `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}`;
       const fullAddress = location?.address || 'Address data unavailable.';
 
       let addressLine1 = fullAddress;
@@ -249,7 +254,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         url: downloadURL,
         filename,
         reportType,
-        location: location || null,
+        location: location,
       });
 
       // --- SUCCESS ---
@@ -284,16 +289,23 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
         <DialogHeader>
           <DialogTitle className="font-headline text-xl capitalize">{reportType.replace('-', ' ')} Submission</DialogTitle>
           <DialogDescription>
-            Select a photo as proof. Your name, time, and location will be stamped on the image.
+            {t('progressReportDialog.description')}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {locationError && (
+           {isFetchingLocation && (
+              <Alert>
+                <MapPin className="h-4 w-4 animate-pulse" />
+                <AlertTitle>{t('location.fetchingTitle')}</AlertTitle>
+                <AlertDescription>{t('location.fetchingDesc')}</AlertDescription>
+              </Alert>
+           )}
+           {!isFetchingLocation && locationError && (
             <Alert variant="destructive">
               <MapPin className="h-4 w-4" />
-              <AlertTitle>Location Access Denied</AlertTitle>
+              <AlertTitle>{t('location.requiredTitle')}</AlertTitle>
               <AlertDescription>
-                {locationError} Stamping will proceed without location data.
+                {t('location.requiredDesc')}
               </AlertDescription>
             </Alert>
           )}
@@ -349,7 +361,7 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
             <X className="mr-2 h-4 w-4" /> Cancel
           </Button>
-          <Button onClick={handleUpload} disabled={!selectedFile || isUploading}>
+          <Button onClick={handleUpload} disabled={!selectedFile || isUploading || isFetchingLocation || !location}>
             {isUploading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -362,3 +374,5 @@ export function ProgressReportDialog({ open, onOpenChange, taskId, projectId, re
     </Dialog>
   );
 }
+
+    

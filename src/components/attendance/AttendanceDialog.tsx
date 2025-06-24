@@ -41,6 +41,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [isFetchingLocation, setIsFetchingLocation] = useState(true);
 
 
   useEffect(() => {
@@ -52,6 +53,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
       setLocationError(null);
       setIsUploading(false);
       setUploadProgress(null); 
+      setIsFetchingLocation(true);
 
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
@@ -79,14 +81,17 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
               address: fetchedAddress,
             });
             setLocationError(null);
+            setIsFetchingLocation(false);
           },
           (error) => {
             setLocationError(error.message);
+            setIsFetchingLocation(false);
             console.error('Error getting location:', error);
           }
         );
       } else {
         setLocationError("Geolocation is not supported by this browser.");
+        setIsFetchingLocation(false);
       }
     } else {
       if (previewUrl) {
@@ -112,6 +117,15 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
     if (!selectedFile || !canvasRef.current || !user || !previewUrl) {
       toast({ title: 'Error', description: 'Please select a photo to upload.', variant: 'destructive' });
       return;
+    }
+    
+    if (!location) {
+        toast({
+            title: t('location.requiredTitle'),
+            description: t('location.requiredDesc'),
+            variant: 'destructive'
+        });
+        return;
     }
 
     setIsUploading(true);
@@ -140,8 +154,8 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
       // --- Stamping Logic ---
       const userStamp = user.displayName || user.email || 'Unknown User';
       const timeStamp = new Date().toLocaleString();
-      const coords = location ? `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}` : 'Coordinates unavailable';
-      const fullAddress = location?.address || 'Address data unavailable.';
+      const coords = `Lat: ${location.latitude.toFixed(4)}, Lon: ${location.longitude.toFixed(4)}`;
+      const fullAddress = location.address || 'Address data unavailable.';
 
       let addressLine1 = fullAddress;
       let addressLine2 = '';
@@ -206,7 +220,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
         projectId: projectId,
         projectName: projectName,
         photoUrl: downloadURL,
-        location: location || undefined,
+        location: location,
       });
 
       toast({ title: 'Success!', description: t('attendanceDialog.successToast') });
@@ -235,12 +249,19 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
-          {locationError && (
+          {isFetchingLocation && (
+              <Alert>
+                <MapPin className="h-4 w-4 animate-pulse" />
+                <AlertTitle>{t('location.fetchingTitle')}</AlertTitle>
+                <AlertDescription>{t('location.fetchingDesc')}</AlertDescription>
+              </Alert>
+           )}
+           {!isFetchingLocation && locationError && (
             <Alert variant="destructive">
               <MapPin className="h-4 w-4" />
-              <AlertTitle>{t('attendanceDialog.locationDenied')}</AlertTitle>
+              <AlertTitle>{t('location.requiredTitle')}</AlertTitle>
               <AlertDescription>
-                {t('attendanceDialog.locationDeniedDesc').replace('{error}', locationError)}
+                {t('location.requiredDesc')}
               </AlertDescription>
             </Alert>
           )}
@@ -295,7 +316,7 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isUploading}>
             <X className="mr-2 h-4 w-4" /> {t('attendanceDialog.cancel')}
           </Button>
-          <Button onClick={handleUpload} disabled={!selectedFile || isUploading}>
+          <Button onClick={handleUpload} disabled={!selectedFile || isUploading || isFetchingLocation || !location}>
             {isUploading ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -308,3 +329,5 @@ export function AttendanceDialog({ open, onOpenChange, onSuccess, projectId, pro
     </Dialog>
   );
 }
+
+    
