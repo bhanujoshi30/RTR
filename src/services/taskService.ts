@@ -222,24 +222,17 @@ export const getProjectMainTasks = async (projectId: string, userUid: string, us
     if (userRole === 'supervisor' || userRole === 'member') {
         const assignedSubTasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('assignedToUids', 'array-contains', userUid));
         const assignedSubTasksSnapshot = await getDocs(assignedSubTasksQuery);
-        const involvedMainTaskIds = [...new Set(assignedSubTasksSnapshot.docs.map(doc => doc.data().parentId).filter(Boolean))];
+        const involvedMainTaskIds = [...new Set(assignedSubTasksSnapshot.docs.map(doc => doc.data().parentId).filter(Boolean) as string[])];
 
         if (involvedMainTaskIds.length === 0) {
             return [];
         }
         
-        const mainTaskChunks: string[][] = [];
-        for (let i = 0; i < involvedMainTaskIds.length; i += 30) {
-            mainTaskChunks.push(involvedMainTaskIds.slice(i, i + 30));
-        }
-
-        for (const chunk of mainTaskChunks) {
-            if (chunk.length > 0) {
-                const mainTasksQuery = query(tasksCollection, where(documentId(), 'in', chunk));
-                const mainTasksSnapshot = await getDocs(mainTasksQuery);
-                mainTasksSnapshot.forEach(doc => allMainTasks.push(mapDocumentToTask(doc)));
-            }
-        }
+        // Fetch each main task individually. This uses the 'get' rule, which is more flexible than the 'list' rule,
+        // preventing permission errors for supervisors viewing timelines.
+        const mainTaskPromises = involvedMainTaskIds.map(id => getTaskById(id, userUid, userRole));
+        const resolvedMainTasks = await Promise.all(mainTaskPromises);
+        allMainTasks = resolvedMainTasks.filter((task): task is Task => task !== null);
 
     } else {
         const queryConstraints: any[] = [
@@ -345,15 +338,10 @@ export const getAllProjectTasks = async (projectId: string, userRole?: UserRole,
 
             let mainTasks: Task[] = [];
             if (mainTaskIds.length > 0) {
-                const mainTaskChunks: string[][] = [];
-                for (let i = 0; i < mainTaskIds.length; i += 30) {
-                    mainTaskChunks.push(mainTaskIds.slice(i, i + 30));
-                }
-                for (const chunk of mainTaskChunks) {
-                    const mainTasksQuery = query(tasksCollection, where(documentId(), 'in', chunk));
-                    const mainTasksSnapshot = await getDocs(mainTasksQuery);
-                    mainTasksSnapshot.forEach(doc => mainTasks.push(mapDocumentToTask(doc)));
-                }
+                // Fetch main tasks individually to comply with security rules for 'get' operations
+                const mainTaskPromises = mainTaskIds.map(id => getTaskById(id, userUid, userRole));
+                const resolvedMainTasks = await Promise.all(mainTaskPromises);
+                mainTasks = resolvedMainTasks.filter((task): task is Task => task !== null);
             }
             
             return [...mainTasks, ...assignedSubtasks];
