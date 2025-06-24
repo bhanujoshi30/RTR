@@ -57,7 +57,7 @@ export const uploadProjectPhoto = (file: File): Promise<string> => {
 };
 
 
-const mapDocumentToProject = (docSnapshot: any): Project => {
+export const mapDocumentToProject = (docSnapshot: any): Project => {
   const data = docSnapshot.data();
   return {
     id: docSnapshot.id,
@@ -275,33 +275,9 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
 
     if (projectSnap.exists()) {
       const projectData = mapDocumentToProject(projectSnap);
-      
-      const isOwner = projectData.ownerUid === userUid;
-      const isClient = projectData.clientUid === userUid;
-      const isAdmin = userRole === 'admin';
-      const isServiceCall = userUid === 'dpr-service-call';
-      let isMember = projectData.memberUids?.includes(userUid) ?? false;
 
-      // Fallback check for resilience: if a user is assigned to a task in the project,
-      // they should be considered a member even if their UID is not in the project's `memberUids` array.
-      // This handles cases where data might be inconsistent for older projects.
-      if (!isOwner && !isClient && !isAdmin && !isServiceCall && !isMember) {
-        const taskQuery = query(
-            collection(db, 'tasks'), 
-            where('projectId', '==', projectId), 
-            where('assignedToUids', 'array-contains', userUid), 
-            limit(1)
-        );
-        const taskSnap = await getDocs(taskQuery);
-        if (!taskSnap.empty) {
-            isMember = true; // Grant access if they are on at least one task
-        }
-      }
-
-      if (!isOwner && !isClient && !isAdmin && !isServiceCall && !isMember) {
-          console.warn(`Access denied to project ${projectId}. User ${userUid} is not owner, client, admin, or member.`);
-          return null; // Return null instead of throwing an error.
-      }
+      // Security is now primarily handled by Firestore rules.
+      // If the user got this far, they have read access.
       
       const mainTasks = await getProjectMainTasks(projectId, userUid);
       projectData.progress = await calculateProjectProgress(projectId, userUid, mainTasks);
@@ -330,11 +306,8 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
   }
   console.log(`projectService: getProjectsByIds for user ${userUid} on projects: ${projectIds.join(', ')}`);
 
-  // Using Promise.all to fetch project details individually.
-  // This avoids complex Firestore queries that are difficult to secure and can hit index limits.
   const projectPromises = projectIds.map(id => 
     getProjectById(id, userUid, userRole).catch(err => {
-      // Catch errors for individual project fetches to prevent Promise.all from failing completely.
       console.error(`Failed to fetch project ${id} within getProjectsByIds`, err);
       return null; // Return null for failed fetches
     })
@@ -342,7 +315,6 @@ export const getProjectsByIds = async (projectIds: string[], userUid: string, us
 
   const projects = await Promise.all(projectPromises);
   
-  // Filter out any projects that failed to fetch or returned null (e.g., due to permissions)
   const validProjects = projects.filter((p): p is Project => p !== null);
   
   validProjects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
