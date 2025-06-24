@@ -146,7 +146,7 @@ export const createProject = async (
   }
 };
 
-const processProjectList = async (projectsFromDb: Project[], userContext: { uid: string, role: 'owner' | 'client' }): Promise<Project[]> => {
+const processProjectList = async (projectsFromDb: Project[], userContext: { uid: string, role: 'owner' | 'client' | 'member' | 'supervisor' }): Promise<Project[]> => {
     if (projectsFromDb.length === 0) {
         return [];
     }
@@ -163,10 +163,10 @@ const processProjectList = async (projectsFromDb: Project[], userContext: { uid:
         if (chunk.length === 0) continue;
         
         let tasksQuery;
-        if (userContext.role === 'owner') {
-             tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk), where('projectOwnerUid', '==', userContext.uid));
-        } else { // client
-             tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk), where('clientUid', '==', userContext.uid));
+        if (userContext.role === 'owner' || userContext.role === 'client') {
+             tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk));
+        } else { // member or supervisor
+             tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk), where('assignedToUids', 'array-contains', userContext.uid));
         }
         
         try {
