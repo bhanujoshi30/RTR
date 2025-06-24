@@ -71,19 +71,21 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
         );
       } else {
         // Supervisors/Members only see assigned subtasks.
-        // THIS QUERY REQUIRES A COMPOSITE INDEX in Firestore.
-        // The error message in the browser console will provide a direct link to create it.
-        // Index fields: parentId (ASC), assignedToUids (ARRAY-CONTAINS), createdAt (ASC)
+        // The orderBy was removed to prevent errors from missing composite indexes. Sorting is now done client-side.
         subTasksQuery = query(
           tasksCollectionRef,
           where('parentId', '==', mainTaskId),
-          where('assignedToUids', 'array-contains', user.uid),
-          orderBy('createdAt', 'asc')
+          where('assignedToUids', 'array-contains', user.uid)
         );
       }
 
       const querySnapshot = await getDocs(subTasksQuery);
-      const fetchedSubTasks = querySnapshot.docs.map(mapDocumentToTask);
+      let fetchedSubTasks = querySnapshot.docs.map(mapDocumentToTask);
+      
+      // Client-side sorting for the member/supervisor query
+      if (!isViewerMainTaskOwner && !isAdmin) {
+          fetchedSubTasks.sort((a, b) => (a.createdAt?.getTime() || 0) - (b.createdAt?.getTime() || 0));
+      }
       
       if (fetchedSubTasks.length > 0) {
         const subTaskIds = fetchedSubTasks.map(t => t.id);
@@ -117,7 +119,7 @@ export function SubTaskList({ mainTaskId, projectId, mainTaskOwnerUid }: SubTask
 
     } catch (err: any) {
       console.error('[SubTaskList] Error fetching sub-tasks:', err);
-      let displayError = `Failed to load sub-tasks. This is likely due to a missing database index. Please open your browser's developer console (F12) for an error message from Firestore that contains a direct link to create the required index automatically.`;
+      let displayError = `Failed to load sub-tasks. Missing or insufficient permissions.`;
       setError(displayError);
     } finally {
       setLoading(false);
