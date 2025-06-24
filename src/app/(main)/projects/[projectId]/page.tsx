@@ -7,7 +7,7 @@ import { getProjectById, deleteProject } from '@/services/projectService';
 import { getAllTasksAssignedToUser, getProjectMainTasks, getProjectSubTasksAssignedToUser, getTaskById } from '@/services/taskService';
 import { getTodaysAttendanceForUserInProject } from '@/services/attendanceService';
 import { AttendanceDialog } from '@/components/attendance/AttendanceDialog';
-import type { Project, Task, UserRole } from '@/types';
+import type { Project, Task, UserRole, ProjectStatus } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -55,7 +55,7 @@ export default function ProjectDetailsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const [projectProgress, setProjectProgress] = useState(0);
-  const [projectStatus, setProjectStatus] = useState<Project['status']>('Not Started');
+  const [projectStatus, setProjectStatus] = useState<ProjectStatus>('Not Started');
   const [totalCost, setTotalCost] = useState(0);
 
   const [showAttendanceDialog, setShowAttendanceDialog] = useState(false);
@@ -81,32 +81,32 @@ export default function ProjectDetailsPage() {
       if (fetchedProject) {
         setProject(fetchedProject);
         
-        if (isAdminOrOwner) {
-            const allMainTasks = await getProjectMainTasks(projectId, user.uid);
-            const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
-            
-            let progress = 0;
-            if (standardMainTasks.length > 0) {
-                const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
-                progress = Math.round(totalProgressSum / standardMainTasks.length);
-            }
-            setProjectProgress(progress);
-            
-            const hasPendingCollectionTasks = allMainTasks.some(task => task.taskType === 'collection' && task.status !== 'Completed');
-            if (progress >= 100) {
-                setProjectStatus(hasPendingCollectionTasks ? 'Payment Incomplete' : 'Completed');
-            } else if (progress > 0) {
-                setProjectStatus('In Progress');
-            } else {
-                setProjectStatus('Not Started');
-            }
-            const cost = allMainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
-            setTotalCost(cost);
+        // This logic is now unified for all roles that can view the project.
+        // getProjectMainTasks correctly handles role-based data fetching.
+        const allMainTasks = await getProjectMainTasks(projectId, user.uid, user.role);
+        
+        // Calculate progress from standard tasks
+        const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
+        let progress = 0;
+        if (standardMainTasks.length > 0) {
+            const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
+            progress = Math.round(totalProgressSum / standardMainTasks.length);
+        }
+        setProjectProgress(progress);
+        
+        // Calculate total cost from collection tasks
+        const collectionTasks = allMainTasks.filter(t => t.taskType === 'collection');
+        const cost = collectionTasks.reduce((sum, task) => sum + (task.cost || 0), 0);
+        setTotalCost(cost);
+
+        // Calculate status
+        const hasPendingCollectionTasks = collectionTasks.some(task => task.status !== 'Completed');
+        if (progress >= 100) {
+            setProjectStatus(hasPendingCollectionTasks ? 'Payment Incomplete' : 'Completed');
+        } else if (progress > 0) {
+            setProjectStatus('In Progress');
         } else {
-            // For Supervisor, Member, Client, we don't calculate overall progress to avoid permission issues.
-            setProjectProgress(0);
-            setProjectStatus(fetchedProject.status); // Use status from project doc
-            setTotalCost(fetchedProject.totalCost || 0);
+            setProjectStatus('Not Started');
         }
 
       } else {
@@ -313,7 +313,7 @@ export default function ProjectDetailsPage() {
                  {t(`status.${displayStatus.toLowerCase().replace(/ /g, '')}`)}
               </Badge>
             </div>
-            { isAdminOrOwner && (
+            { (isAdminOrOwner || isClient) && (
                 <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.progress')}</p>
                 <div className="flex items-center gap-2">
