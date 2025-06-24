@@ -70,8 +70,8 @@ export function TaskCard({ task: initialTask, onTaskUpdated, isMainTaskView = fa
   const canFullyEditOrDeleteThisTask = isOwner || isAdmin;
 
   const isAssignedToThisSubTask = !isActuallyMainTask && (task.assignedToUids?.includes(user?.uid || '') ?? false);
-  const canChangeSubTaskStatus = user && (isOwnerOfThisTask || isAssignedToThisSubTask || isAdmin);
   const isOwnerOfThisTask = user && task.ownerUid === user.uid;
+  const canChangeSubTaskStatus = user && (isOwnerOfThisTask || isAssignedToThisSubTask || isAdmin);
   const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
 
 
