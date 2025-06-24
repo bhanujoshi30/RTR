@@ -139,11 +139,11 @@ export default function ProjectDetailsPage() {
           
           if (user.role === 'member' || user.role === 'supervisor') {
               try {
-                  // A user is eligible to submit attendance if they are a member of the project
-                  // which is now stored on the project doc itself.
-                  const projectDoc = await getProjectById(projectId, user.uid, user.role);
+                  // A user is eligible to submit attendance if they are assigned to any task in this project.
+                  const assignedTasks = await getAllTasksAssignedToUser(user.uid);
+                  const isAssignedToThisProject = assignedTasks.some(task => task.projectId === projectId);
 
-                  if (projectDoc && projectDoc.memberUids?.includes(user.uid)) {
+                  if (isAssignedToThisProject) {
                       setCanSubmitAttendance(true);
                       const today = format(new Date(), 'yyyy-MM-dd'); // Use local date
                       const record = await getTodaysAttendanceForUserInProject(user.uid, projectId, today);
@@ -378,8 +378,8 @@ export default function ProjectDetailsPage() {
         <Tabs defaultValue={defaultTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 md:grid-cols-3">
               {!isClient && <TabsTrigger value="tasks"><Layers className="mr-2 h-4 w-4" /> {t('projectDetails.mainTasks')}</TabsTrigger>}
-              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> {t('projectDetails.activityTimeline')}</TabsTrigger>
-              <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> {t('projectDetails.projectedTimeline')}</TabsTrigger>
+              <TabsTrigger value="timeline"><Clock className="mr-2 h-4 w-4" /> {t('projectDetails.activityTimeline')}</TabsTrigger>}
+              <TabsTrigger value="projected"><GanttChartSquare className="mr-2 h-4 w-4" /> {t('projectDetails.projectedTimeline')}</TabsTrigger>}
             </TabsList>
             
             {!isClient && (
