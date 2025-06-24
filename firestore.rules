@@ -4,71 +4,99 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions are removed as they were causing issues with list queries.
-    // Logic is now handled directly in the rules below.
-
-    match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth.uid == userId || request.auth.token.role == 'admin';
-    }
-
+    // Projects:
+    // Any authenticated user can see the list of projects or get a single project's top-level details.
+    // This is safe because sensitive info (tasks/issues) is protected by stricter rules.
     match /projects/{projectId} {
-      // Allow any authenticated user to read the list of projects or a single project.
-      // This is safe because sensitive data is in subcollections or other collections.
-      // The app logic determines which projects to show.
-      // Write access remains restricted to the owner.
       allow read: if request.auth != null;
-      allow write: if request.auth.uid == resource.data.ownerUid;
 
-      // Note: There are no subcollections on projects that need rules.
+      // Only the owner can create, update, or delete a project.
+      allow create: if request.auth.uid == request.resource.data.ownerUid;
+      allow update, delete: if request.auth.uid == resource.data.ownerUid;
     }
 
+    // Tasks and their subcollections
     match /tasks/{taskId} {
-      // Allow read if the user is the project owner OR the assigned client OR is in the assignedToUids list.
-      allow read: if request.auth.uid == resource.data.projectOwnerUid 
-                  || request.auth.uid == resource.data.clientUid
-                  || request.auth.uid in resource.data.assignedToUids;
+      // You can read a task if:
+      // 1. You are the owner of the project it belongs to.
+      // 2. You are the client assigned to the project.
+      // 3. You are directly assigned to the task.
+      // This rule uses data denormalized onto the task document itself, so it's query-compatible.
+      allow read: if request.auth.uid == resource.data.projectOwnerUid
+                   || request.auth.uid == resource.data.clientUid
+                   || request.auth.uid in resource.data.assignedToUids;
 
-      // Allow create for any authenticated user. Validation happens in application logic.
-      allow create: if request.auth != null;
+      // You can create a task if you are the project owner or an admin.
+      allow create: if request.auth.uid == request.resource.data.projectOwnerUid
+                     || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
 
-      // Allow update/delete only by the project owner or the task owner.
-      allow update, delete: if request.auth.uid == resource.data.projectOwnerUid || request.auth.uid == resource.data.ownerUid;
+      // You can update a task if you are the project owner or assigned to it.
+      allow update: if request.auth.uid == resource.data.projectOwnerUid
+                     || request.auth.uid in resource.data.assignedToUids;
 
-      // Secure subcollections
+      // You can delete a task only if you are the project owner.
+      allow delete: if request.auth.uid == resource.data.projectOwnerUid;
+
+      // Attachments subcollection
       match /attachments/{attachmentId} {
+        // Permissions mirror the parent task's read permission.
         allow read: if request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid
-                    || request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.clientUid
-                    || request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
-        allow create, delete: if request.auth.uid == request.resource.data.ownerUid;
+                     || request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.clientUid
+                     || request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
+        
+        // Only the person assigned to the task or the project owner can add attachments.
+        // Only the attachment owner can delete it.
+        allow create: if request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids
+                       || request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid;
+        allow delete: if request.auth.uid == resource.data.ownerUid;
       }
-      
+
+      // Timeline subcollection
       match /timeline/{eventId} {
-          allow read: if request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid 
-                      || request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.clientUid
-                      || request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
-          allow create: if request.auth != null; // Logged by the system/user action
-          allow delete: if false; // Timeline is immutable
+        // Permissions mirror the parent task's read permission.
+        allow read: if request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid
+                     || request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.clientUid
+                     || request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
+        
+        // Only the user performing the action can create a timeline event.
+        allow create: if request.auth.uid == request.resource.data.author.uid;
+        // Timeline events are immutable.
+        allow update, delete: if false;
       }
     }
 
+    // Issues and their subcollections
     match /issues/{issueId} {
-       // Allow read if the user is the project owner OR the assigned client OR is in the assignedToUids list.
-      allow read: if request.auth.uid == resource.data.projectOwnerUid 
-                  || request.auth.uid == resource.data.clientUid
-                  || request.auth.uid in resource.data.assignedToUids;
-      
-      // Allow create for any authenticated user. Validation happens in application logic.
-      allow create: if request.auth != null;
+      // Similar to tasks, you can read an issue if:
+      // 1. You are the project owner.
+      // 2. You are the client assigned to the project.
+      // 3. You created the issue.
+      // 4. You are directly assigned to the issue.
+      allow read: if request.auth.uid == resource.data.projectOwnerUid
+                   || request.auth.uid == resource.data.clientUid
+                   || request.auth.uid == resource.data.ownerUid
+                   || request.auth.uid in resource.data.assignedToUids;
 
-      // Allow update/delete only by the project owner or the issue owner.
-      allow update, delete: if request.auth.uid == resource.data.projectOwnerUid || request.auth.uid == resource.data.ownerUid;
+      // You can create/update an issue if you are the project owner or assigned to the parent task or the issue itself.
+      allow create, update: if request.auth.uid == resource.data.projectOwnerUid
+                          || request.auth.uid in get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedToUids
+                          || request.auth.uid in resource.data.assignedToUids
+                          || request.auth.uid == resource.data.ownerUid;
+
+      // Only the issue creator or project owner can delete it.
+      allow delete: if request.auth.uid == resource.data.ownerUid
+                     || request.auth.uid == resource.data.projectOwnerUid;
     }
-    
-    match /attendance/{attendanceId} {
-        allow read: if request.auth.token.role == 'admin';
-        allow create: if request.auth.uid == request.resource.data.userId;
-        allow update, delete: if false;
+
+    // User management
+    match /users/{userId} {
+      // A user can read/update their own document.
+      // An admin can read/update/list/create/delete any user document.
+      function isUserAdmin() {
+        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      }
+      allow get, update: if request.auth.uid == userId || isUserAdmin();
+      allow list, create, delete: if isUserAdmin();
     }
   }
 }
