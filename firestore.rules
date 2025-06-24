@@ -1,82 +1,83 @@
-
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isUserInRole(role) {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    function isAdmin() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow create: if isUserInRole('admin');
-      allow update: if request.auth.uid == userId || isUserInRole('admin');
-      allow delete: if isUserInRole('admin');
+      allow write: if isAdmin();
     }
 
     match /projects/{projectId} {
-      let projectData = resource.data;
-      let isOwner = request.auth.uid == projectData.ownerUid;
-      let isClient = projectData.clientUid != null && request.auth.uid == projectData.clientUid;
-      let isMember = projectData.memberUids != null && request.auth.uid in projectData.memberUids;
-      let isAdmin = isUserInRole('admin');
-
-      allow read: if isOwner || isClient || isMember || isAdmin;
-      allow create: if request.auth.uid == request.resource.data.ownerUid || isAdmin;
-      allow update: if isOwner || isAdmin;
-      allow delete: if isOwner || isAdmin;
+      allow read: if request.auth != null &&
+                     (resource.data.ownerUid == request.auth.uid ||
+                      resource.data.clientUid == request.auth.uid ||
+                      (resource.data.memberUids != null && request.auth.uid in resource.data.memberUids));
+      allow write: if request.auth != null && (resource.data.ownerUid == request.auth.uid || isAdmin());
     }
 
     match /tasks/{taskId} {
-      let taskData = resource.data;
-      let isProjectOwner = request.auth.uid == taskData.projectOwnerUid;
-      let isProjectClient = taskData.clientUid != null && request.auth.uid == taskData.clientUid;
-      let isAssignedToTask = taskData.assignedToUids != null && request.auth.uid in taskData.assignedToUids;
-      let isTaskCreator = request.auth.uid == taskData.ownerUid;
-      let isAdmin = isUserInRole('admin');
+      // Task document rules
+      allow read: if request.auth != null &&
+                     (resource.data.projectOwnerUid == request.auth.uid ||
+                      resource.data.clientUid == request.auth.uid ||
+                      (resource.data.parentId == null && request.auth.uid in resource.data.memberUids) || // Main task member
+                      (resource.data.parentId != null && request.auth.uid in resource.data.assignedToUids)); // Sub-task assignee
 
-      allow read: if isProjectOwner || isProjectClient || isAssignedToTask || isAdmin;
-      allow create: if get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid || isAdmin;
-      allow update: if isTaskCreator || isAssignedToTask || isAdmin;
-      allow delete: if isTaskCreator || isAdmin;
+      allow create: if request.auth != null;
 
-      // Subcollections
-      match /attachments/{attachmentId} {
-        let parentTaskData = get(/databases/$(database)/documents/tasks/$(taskId)).data;
-        let isParentProjectOwner = request.auth.uid == parentTaskData.projectOwnerUid;
-        let isParentProjectClient = parentTaskData.clientUid != null && request.auth.uid == parentTaskData.clientUid;
-        let isAssignedToParent = parentTaskData.assignedToUids != null && request.auth.uid in parentTaskData.assignedToUids;
+      allow update: if request.auth != null &&
+                       (resource.data.ownerUid == request.auth.uid || isAdmin() ||
+                       (resource.data.parentId != null && request.auth.uid in resource.data.assignedToUids &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'description', 'dueDate', 'updatedAt'])));
 
-        allow read: if isParentProjectOwner || isParentProjectClient || isAssignedToParent || isAdmin;
-        allow create, delete: if request.auth != null;
+      allow delete: if request.auth != null && (resource.data.ownerUid == request.auth.uid || isAdmin());
+
+      // --- SUBCOLLECTION RULES ---
+      function canReadParentTask() {
+        let parentTask = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+        return parentTask.projectOwnerUid == request.auth.uid ||
+               parentTask.clientUid == request.auth.uid ||
+               (parentTask.parentId == null && request.auth.uid in parentTask.memberUids) ||
+               (parentTask.parentId != null && request.auth.uid in parentTask.assignedToUids);
       }
-      match /timeline/{eventId} {
-        let parentTaskData = get(/databases/$(database)/documents/tasks/$(taskId)).data;
-        let isParentProjectOwner = request.auth.uid == parentTaskData.projectOwnerUid;
-        let isParentProjectClient = parentTaskData.clientUid != null && request.auth.uid == parentTaskData.clientUid;
-        let isAssignedToParent = parentTaskData.assignedToUids != null && request.auth.uid in parentTaskData.assignedToUids;
-        
-        allow read: if isParentProjectOwner || isParentProjectClient || isAssignedToParent || isAdmin;
-        allow create: if request.auth.uid == request.resource.data.author.uid;
+
+      match /attachments/{attachmentId} {
+        allow read: if canReadParentTask();
+        allow create: if request.auth != null; // Let app logic handle permissions
+        allow delete: if request.auth != null && (
+                          resource.data.ownerUid == request.auth.uid ||
+                          get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid == request.auth.uid ||
+                          isAdmin()
+                        );
+      }
+
+      match /timeline/{timelineId} {
+        allow read: if canReadParentTask();
+        allow create: if request.auth != null; // App logic handles this
+        allow update, delete: if false; // append-only
       }
     }
 
     match /issues/{issueId} {
-      let issueData = resource.data;
-      let isProjectOwner = request.auth.uid == issueData.projectOwnerUid;
-      let isProjectClient = issueData.clientUid != null && request.auth.uid == issueData.clientUid;
-      let isAssignedToIssue = issueData.assignedToUids != null && request.auth.uid in issueData.assignedToUids;
-      let isIssueCreator = request.auth.uid == issueData.ownerUid;
-      let isAdmin = isUserInRole('admin');
+      allow read: if request.auth != null &&
+                     (resource.data.projectOwnerUid == request.auth.uid ||
+                      resource.data.clientUid == request.auth.uid ||
+                      resource.data.ownerUid == request.auth.uid ||
+                      (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids));
 
-      allow read: if isProjectOwner || isProjectClient || isAssignedToIssue || isAdmin;
-      allow create, update, delete: if isIssueCreator || isAssignedToIssue || isAdmin;
+      allow write: if request.auth != null &&
+                      (resource.data.ownerUid == request.auth.uid ||
+                       (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids));
     }
-    
+
     match /attendance/{attendanceId} {
-      allow read: if isUserInRole('admin');
+      allow read: if isAdmin();
       allow create: if request.auth.uid == request.resource.data.userId;
+      allow update, delete: if false;
     }
   }
 }
