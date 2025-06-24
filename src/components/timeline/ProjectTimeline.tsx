@@ -25,12 +25,12 @@ export function ProjectTimeline({ projectId }: ProjectTimelineProps) {
       if (!projectId || !user) return;
       try {
         setLoading(true);
-        const isClientOrAdmin = user.role === 'client' || user.role === 'admin';
-        const fetchedEvents = await getTimelineForProject(projectId);
+        const isClient = user.role === 'client';
+        const fetchedEvents = await getTimelineForProject(projectId, user.uid);
         
-        const filteredEvents = isClientOrAdmin
-          ? fetchedEvents
-          : fetchedEvents.filter(group => group.data.mainTaskInfo.taskType !== 'collection');
+        const filteredEvents = isClient
+          ? fetchedEvents.filter(group => group.data.mainTaskInfo.taskType !== 'collection')
+          : fetchedEvents;
         
         setEventGroups(filteredEvents);
         setError(null);

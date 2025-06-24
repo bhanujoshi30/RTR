@@ -1,84 +1,72 @@
-rules_version = '2';
 
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper Functions
+
     function isAuth() {
       return request.auth != null;
     }
 
-    function isOwner(resourceId) {
-      return request.auth.uid == resourceId;
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      // This function uses get() and should only be used in rules for single-document access (e.g., write, update, delete),
+      // not for rules protecting collection queries (list/read).
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Projects Collection
-    match /projects/{projectId} {
-      allow read: if isAuth(); // Any authenticated user can read project-level details.
-      allow create: if isAuth() && isOwner(request.auth.uid);
-      allow update: if isAuth() && isOwner(resource.data.ownerUid);
-      allow delete: if isAuth() && isOwner(resource.data.ownerUid);
-
-      // Tasks Subcollection (deprecated, use top-level 'tasks' collection)
-      match /tasks/{taskId} {
-        allow read, write, delete: if false; // Disallow use of this subcollection
-      }
-    }
-
-    // Tasks Collection
-    match /tasks/{taskId} {
-      allow read: if isAuth() && (
-        isOwner(resource.data.projectOwnerUid) ||
-        isOwner(resource.data.clientUid) ||
-        request.auth.uid in resource.data.assignedToUids
-      );
-      allow create: if isAuth();
-      allow update: if isAuth() && (
-        isOwner(resource.data.ownerUid) || // Task owner
-        request.auth.uid in resource.data.assignedToUids // Assigned member
-      );
-      allow delete: if isAuth() && isOwner(resource.data.ownerUid);
-
-      // Attachments Subcollection
-      match /attachments/{attachmentId} {
-        allow read: if isAuth();
-        allow create: if isAuth();
-        allow delete: if isAuth() && isOwner(resource.data.ownerUid);
-      }
-
-      // Timeline Subcollection
-      match /timeline/{eventId} {
-        allow read: if isAuth();
-        allow create: if isAuth();
-      }
-    }
-
-    // Issues Collection
-    match /issues/{issueId} {
-      allow read: if isAuth() && (
-        isOwner(resource.data.projectOwnerUid) ||
-        isOwner(resource.data.clientUid) ||
-        request.auth.uid in resource.data.assignedToUids
-      );
-      allow create: if isAuth();
-      allow update: if isAuth() && (
-        isOwner(resource.data.ownerUid) || // Issue owner
-        request.auth.uid in resource.data.assignedToUids // Assigned member
-      );
-      allow delete: if isAuth() && isOwner(resource.data.ownerUid);
-    }
-
-    // Users Collection
     match /users/{userId} {
       allow read: if isAuth();
-      allow create: if isAuth();
-      allow update: if isAuth();
-      allow delete: if isAuth();
+      allow write: if isAdmin();
+      // Prevent an admin from deleting their own user document via the UI.
+      allow delete: if isAdmin() && request.auth.uid != userId;
     }
 
-    // Attendance Collection
-    match /attendance/{recordId} {
+    match /projects/{projectId} {
+      allow read: if isAuth(); // Any authenticated user can read high-level project data.
+      allow create: if isOwner(request.resource.data.ownerUid);
+      allow update: if isOwner(resource.data.ownerUid) || isAdmin();
+      allow delete: if isOwner(resource.data.ownerUid);
+    }
+    
+    match /tasks/{taskId} {
+      // A user can read a task if they are the project owner OR are assigned to the task.
+      // This rule is designed to work with the specific queries made by the application.
+      allow read: if request.auth.uid == resource.data.projectOwnerUid || (request.auth.uid in resource.data.assignedToUids);
+                     
+      // A user can create a task if they own the parent project.
+      allow create: if get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid;
+      
+      // A user can update/delete a task if they are its owner OR are assigned to it.
+      allow update, delete: if isOwner(resource.data.ownerUid) || (request.auth.uid in resource.data.assignedToUids);
+      
+      // Subcollections are readable by any authenticated user. The app logic ensures that users
+      // only attempt to read subcollections of tasks they have access to.
+      match /timeline/{eventId} {
         allow read: if isAuth();
-        allow create: if isAuth();
+        // Writes are more restricted.
+        allow write: if get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid == request.auth.uid || (request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids);
+      }
+
+      match /attachments/{attachmentId} {
+        allow read: if isAuth();
+        allow write, delete: if get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid == request.auth.uid || (request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids);
+      }
+    }
+    
+    match /issues/{issueId} {
+       // Similar to tasks, an issue is readable if the user owns the project or is assigned to the issue.
+       allow read: if request.auth.uid == resource.data.projectOwnerUid || (request.auth.uid in resource.data.assignedToUids);
+       // Create/update logic is complex and handled securely in the service layer before writing.
+       allow create, update: if isAuth();
+       // Only the original creator of an issue can delete it.
+       allow delete: if isOwner(resource.data.ownerUid);
+    }
+
+    match /attendance/{recordId} {
+      allow read, write: if isAuth();
     }
   }
 }

@@ -35,7 +35,7 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
     setLoading(true);
     setError(null);
     try {
-      const allProjectSubTasks = await getProjectSubTasks(projectId);
+      const allProjectSubTasks = await getProjectSubTasks(projectId, user.uid, user.role);
 
       const subTasksByParent = allProjectSubTasks.reduce((acc, subTask) => {
         if (subTask.parentId) {
@@ -69,24 +69,24 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
         });
       };
 
-      const isClientOrAdmin = user?.role === 'client' || user?.role === 'admin';
+      const isClient = user?.role === 'client';
 
       if (isSupervisorOrMember) {
         const assignedSubTasks = allProjectSubTasks.filter(st => st.assignedToUids?.includes(user.uid));
         
         if (assignedSubTasks.length > 0) {
           const mainTaskIdsUserIsInvolvedWith = [...new Set(assignedSubTasks.map(st => st.parentId!))];
-          const involvedMainTasks = await getProjectMainTasks(projectId, mainTaskIdsUserIsInvolvedWith);
+          const involvedMainTasks = await getProjectMainTasks(projectId, user.uid, mainTaskIdsUserIsInvolvedWith);
           const augmentedTasks = augmentTasks(involvedMainTasks);
           augmentedTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
           setTasks(augmentedTasks);
         } else {
           setTasks([]);
         }
-      } else {
-        let allMainTasks = await getProjectMainTasks(projectId);
+      } else { // Admin, Owner, or Client
+        let allMainTasks = await getProjectMainTasks(projectId, user.uid);
         
-        if (!isClientOrAdmin) {
+        if (isClient) {
             allMainTasks = allMainTasks.filter(t => t.taskType !== 'collection');
         }
         const augmentedTasks = augmentTasks(allMainTasks);

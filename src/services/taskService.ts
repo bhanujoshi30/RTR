@@ -177,18 +177,26 @@ export const createTask = async (
   }
 };
 
-export const getProjectMainTasks = async (projectId: string, filterByIds?: string[]): Promise<Task[]> => {
-    console.log(`taskService: getProjectMainTasks for projectId: ${projectId}, filterByIds: ${filterByIds?.join(',')}`);
+export const getProjectMainTasks = async (projectId: string, userUid: string, filterByIds?: string[]): Promise<Task[]> => {
+    console.log(`taskService: getProjectMainTasks for projectId: ${projectId}, user: ${userUid}, filterByIds: ${filterByIds?.join(',')}`);
 
-    const allTasksQuery = filterByIds 
-      ? query(tasksCollection, where(documentId(), 'in', filterByIds))
-      : query(
+    let mainTasksQuery;
+
+    if (filterByIds && filterByIds.length > 0) {
+      // This is for supervisors/members who know which main tasks they are part of.
+      // This query is fine as it's specific.
+      mainTasksQuery = query(tasksCollection, where(documentId(), 'in', filterByIds));
+    } else {
+      // This is for admins/owners. Make the query specific to the project owner.
+      mainTasksQuery = query(
           tasksCollection, 
           where('projectId', '==', projectId), 
-          where('parentId', '==', null)
+          where('parentId', '==', null),
+          where('projectOwnerUid', '==', userUid)
         );
-
-    const allTasksSnapshot = await getDocs(allTasksQuery);
+    }
+    
+    const allTasksSnapshot = await getDocs(mainTasksQuery);
     const mainTasks = allTasksSnapshot.docs.map(mapDocumentToTask);
     
     const standardMainTasks = mainTasks.filter(mt => mt.taskType !== 'collection');
@@ -276,19 +284,26 @@ export const getSubTasks = async (parentId: string): Promise<Task[]> => {
   }
 };
 
-export const getProjectSubTasks = async (projectId: string): Promise<Task[]> => {
-  console.log(`taskService: getProjectSubTasks for projectId: ${projectId}`);
-  if (!projectId) return [];
-  const q = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null));
+export const getProjectSubTasks = async (projectId: string, userUid: string, userRole?: UserRole): Promise<Task[]> => {
+  console.log(`taskService: getProjectSubTasks for projectId: ${projectId}, user: ${userUid}, role: ${userRole}`);
+  if (!projectId || !userUid) return [];
+  
+  let q;
+  if (userRole === 'supervisor' || userRole === 'member') {
+      q = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null), where('assignedToUids', 'array-contains', userUid));
+  } else { // Admin, owner, client
+      q = query(tasksCollection, where('projectId', '==', projectId), where('parentId', '!=', null), where('projectOwnerUid', '==', userUid));
+  }
+
   try {
     const querySnapshot = await getDocs(q);
     const tasks = querySnapshot.docs.map(mapDocumentToTask);
-    console.log(`taskService: Fetched ${tasks.length} sub-tasks for project ${projectId}.`);
+    console.log(`taskService: Fetched ${tasks.length} sub-tasks for project ${projectId} for user ${userUid}.`);
     return tasks;
   } catch (error: any) {
     console.error(`taskService: Error fetching sub-tasks for project ${projectId}`, error.message);
     if (error.message.includes("index")) {
-      console.error("Firestore query for getProjectSubTasks requires a composite index on 'projectId' (ASC) and 'parentId' (!= null).");
+      console.error("Firestore query for getProjectSubTasks requires a composite index.");
     }
     throw error;
   }
@@ -904,9 +919,9 @@ export const getTimelineForMainTask = async (mainTaskId: string): Promise<Aggreg
  * @param projectId The ID of the project.
  * @returns A promise that resolves to an array of project-aggregated events.
  */
-export const getTimelineForProject = async (projectId: string): Promise<ProjectAggregatedEvent[]> => {
+export const getTimelineForProject = async (projectId: string, userUid: string): Promise<ProjectAggregatedEvent[]> => {
   try {
-    const mainTasks = await getProjectMainTasks(projectId);
+    const mainTasks = await getProjectMainTasks(projectId, userUid);
 
     const projectTimelinePromises = mainTasks.map(async (mainTask) => {
       const events = await getTimelineForMainTask(mainTask.id);
