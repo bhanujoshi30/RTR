@@ -81,11 +81,12 @@ export const addAttendanceRecord = async (data: AttendanceData): Promise<string>
 
 export const getTodaysAttendanceForUserInProject = async (userId: string, projectId: string, dateString: string): Promise<AttendanceRecord | null> => {
   const attendanceCollectionRef = collection(db, 'attendance');
-  // Removed orderBy to prevent missing-index errors. We will sort client-side.
+
+  // To avoid needing a composite index, we make the simplest possible query: fetch all records for the user for the given day.
+  // We will then filter by projectId in the application code. This is more robust against permission errors.
   const q = query(
     attendanceCollectionRef,
     where('userId', '==', userId),
-    where('projectId', '==', projectId),
     where('date', '==', dateString)
   );
   
@@ -95,8 +96,7 @@ export const getTodaysAttendanceForUserInProject = async (userId: string, projec
       return null;
     }
 
-    // Handle multiple submissions by sorting client-side and taking the latest.
-    const records = querySnapshot.docs.map(docSnap => {
+    const allRecordsForDay = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
       return {
         id: docSnap.id,
@@ -105,15 +105,24 @@ export const getTodaysAttendanceForUserInProject = async (userId: string, projec
       } as AttendanceRecord;
     });
 
-    records.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    // Now, filter the results by projectId in the application code.
+    const recordsForProject = allRecordsForDay.filter(rec => rec.projectId === projectId);
+
+    if (recordsForProject.length === 0) {
+      return null;
+    }
     
-    return records[0]; // Return the most recent record
+    // Sort to get the most recent one for that specific project on that day.
+    recordsForProject.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    
+    return recordsForProject[0]; // Return the most recent record
 
   } catch (error) {
     console.error("Error fetching today's project attendance submission:", error);
     return null;
   }
 };
+
 
 export const getAttendanceForUser = async (userId: string): Promise<AttendanceRecord[]> => {
   const attendanceCollectionRef = collection(db, 'attendance');
