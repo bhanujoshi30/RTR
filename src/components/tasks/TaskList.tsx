@@ -68,30 +68,11 @@ export function TaskList({ projectId, onTasksUpdated }: TaskListProps) {
           return { ...mainTask, displaySubTaskCountLabel };
         });
       };
-
-      const isClient = user?.role === 'client';
-
-      if (isSupervisorOrMember) {
-        const assignedSubTasks = allProjectSubTasks.filter(st => st.assignedToUids?.includes(user.uid));
-        
-        if (assignedSubTasks.length > 0) {
-          const mainTaskIdsUserIsInvolvedWith = [...new Set(assignedSubTasks.map(st => st.parentId!))];
-          const involvedMainTasks = await getProjectMainTasks(projectId, user.uid, mainTaskIdsUserIsInvolvedWith);
-          const augmentedTasks = augmentTasks(involvedMainTasks);
-          augmentedTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-          setTasks(augmentedTasks);
-        } else {
-          setTasks([]);
-        }
-      } else { // Admin, Owner, or Client
-        let allMainTasks = await getProjectMainTasks(projectId, user.uid);
-        
-        if (isClient) {
-            allMainTasks = allMainTasks.filter(t => t.taskType !== 'collection');
-        }
-        const augmentedTasks = augmentTasks(allMainTasks);
-        setTasks(augmentedTasks);
-      }
+      
+      const mainTasksResult = await getProjectMainTasks(projectId, user.uid, user.role);
+      const augmentedTasks = augmentTasks(mainTasksResult);
+      setTasks(augmentedTasks);
+      
     } catch (err: any) {
       console.error('TaskList: Error fetching main tasks:', err);
       setError(`Failed to load tasks. ${err.message?.includes("index") ? "A database index might be required for main tasks. Check console for details from taskService." : (err.message || "Unknown error")}`);

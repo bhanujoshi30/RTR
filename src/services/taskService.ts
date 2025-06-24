@@ -216,36 +216,51 @@ const augmentMainTasksWithProgress = async (mainTasks: Task[], projectId: string
     return mainTasks;
 };
 
-export const getProjectMainTasks = async (projectId: string, userUid: string, filterByIds?: string[], userRole?: UserRole): Promise<Task[]> => {
-    let mainTasks: Task[];
+export const getProjectMainTasks = async (projectId: string, userUid: string, userRole?: UserRole): Promise<Task[]> => {
+    let allMainTasks: Task[] = [];
 
-    if (filterByIds && filterByIds.length > 0) {
-        const mainTaskPromises = filterByIds.map(id => getDoc(doc(db, 'tasks', id)));
-        const mainTaskSnapshots = await Promise.all(mainTaskPromises);
-        mainTasks = mainTaskSnapshots.filter(snap => snap.exists()).map(mapDocumentToTask);
-    } else {
-        const queryConstraints = [
-            where('projectId', '==', projectId), 
-            where('parentId', '==', null)
-        ];
+    if (userRole === 'supervisor' || userRole === 'member') {
+        const assignedSubTasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('assignedToUids', 'array-contains', userUid));
+        const assignedSubTasksSnapshot = await getDocs(assignedSubTasksQuery);
+        const involvedMainTaskIds = [...new Set(assignedSubTasksSnapshot.docs.map(doc => doc.data().parentId).filter(Boolean))];
 
-        if (userRole === 'client') {
-            const projectDoc = await getDoc(doc(db, 'projects', projectId));
-            if (!projectDoc.exists() || projectDoc.data().clientUid !== userUid) {
-                return []; // Return empty if client is not assigned to project
+        if (involvedMainTaskIds.length === 0) {
+            return [];
+        }
+        
+        const mainTaskChunks: string[][] = [];
+        for (let i = 0; i < involvedMainTaskIds.length; i += 30) {
+            mainTaskChunks.push(involvedMainTaskIds.slice(i, i + 30));
+        }
+
+        for (const chunk of mainTaskChunks) {
+            if (chunk.length > 0) {
+                const mainTasksQuery = query(tasksCollection, where(documentId(), 'in', chunk));
+                const mainTasksSnapshot = await getDocs(mainTasksQuery);
+                mainTasksSnapshot.forEach(doc => allMainTasks.push(mapDocumentToTask(doc)));
             }
         }
 
+    } else {
+        const queryConstraints: any[] = [
+            where('projectId', '==', projectId), 
+            where('parentId', '==', null)
+        ];
+        
+        if (userRole === 'client') {
+            queryConstraints.push(where('clientUid', '==', userUid));
+        }
+        
         const q = query(tasksCollection, ...queryConstraints);
         const snapshot = await getDocs(q);
-        mainTasks = snapshot.docs.map(mapDocumentToTask);
+        allMainTasks = snapshot.docs.map(mapDocumentToTask);
     }
     
-    if (mainTasks.length === 0) {
+    if (allMainTasks.length === 0) {
         return [];
     }
 
-    const augmentedTasks = await augmentMainTasksWithProgress(mainTasks, projectId);
+    const augmentedTasks = await augmentMainTasksWithProgress(allMainTasks, projectId);
 
     augmentedTasks.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
     
@@ -320,21 +335,16 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
 export const getAllProjectTasks = async (projectId: string, userRole?: UserRole, userUid?: string): Promise<Task[]> => {
     if (!projectId) return [];
 
-    // If the user is a supervisor or member, fetch only their assigned tasks and the parent main tasks.
     if ((userRole === 'supervisor' || userRole === 'member') && userUid) {
         try {
-            // 1. Get all subtasks assigned to the user in this project
             const assignedSubtasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('assignedToUids', 'array-contains', userUid));
             const assignedSubtasksSnapshot = await getDocs(assignedSubtasksQuery);
             const assignedSubtasks = assignedSubtasksSnapshot.docs.map(mapDocumentToTask);
 
-            // 2. Get the unique IDs of their parent main tasks
             const mainTaskIds = [...new Set(assignedSubtasks.map(t => t.parentId).filter(Boolean) as string[])];
 
-            // 3. Fetch those specific main tasks
             let mainTasks: Task[] = [];
             if (mainTaskIds.length > 0) {
-                // Fetch main tasks in chunks if there are more than 30 to avoid query limits
                 const mainTaskChunks: string[][] = [];
                 for (let i = 0; i < mainTaskIds.length; i += 30) {
                     mainTaskChunks.push(mainTaskIds.slice(i, i + 30));
@@ -346,16 +356,13 @@ export const getAllProjectTasks = async (projectId: string, userRole?: UserRole,
                 }
             }
             
-            // 4. Return the combination of the main tasks they are involved in and their assigned sub-tasks
             return [...mainTasks, ...assignedSubtasks];
         } catch (e: any) {
             console.error(`taskService: Error fetching role-specific tasks for project ${projectId}`, e);
-            throw e; // Re-throw the error to be handled by the caller
+            throw e;
         }
     }
     
-    // For admin, owner, client, or if userUid is not provided, fetch based on project ID.
-    // The security rules will enforce what they can actually see.
     const queryConstraints = [where('projectId', '==', projectId)];
     const q = query(tasksCollection, ...queryConstraints);
 
@@ -363,7 +370,6 @@ export const getAllProjectTasks = async (projectId: string, userRole?: UserRole,
         const querySnapshot = await getDocs(q);
         let tasks = querySnapshot.docs.map(mapDocumentToTask);
 
-        // For clients, filter out sub-tasks as they should only see main tasks
         if (userRole === 'client') {
             tasks = tasks.filter(task => !task.parentId);
         }
@@ -648,7 +654,7 @@ export const getTimelineForMainTask = async (mainTaskId: string, userUid: string
 
 export const getTimelineForProject = async (projectId: string, userUid: string, userRole?: UserRole): Promise<ProjectAggregatedEvent[]> => {
   try {
-    const mainTasks = await getProjectMainTasks(projectId, userUid, undefined, userRole);
+    const mainTasks = await getProjectMainTasks(projectId, userUid, userRole);
     const projectTimelinePromises = mainTasks.map(async (mainTask) => {
       const events = await getTimelineForMainTask(mainTask.id, userUid, userRole);
       if (events.length > 0) {
