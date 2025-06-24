@@ -540,6 +540,7 @@ export const updateTask = async (
     if (Object.keys(updatePayload).length <= 1) return;
   }
   
+  // Denormalize memberUids to the project document
   if (updates.assignedToUids !== undefined && JSON.stringify(updates.assignedToUids) !== JSON.stringify(taskDataFromSnap.assignedToUids)) {
     await logTimelineEvent(
       taskId,

@@ -225,6 +225,24 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
   }
 };
 
+export const getMemberProjects = async (memberUid: string): Promise<Project[]> => {
+  if (!memberUid) return [];
+
+  const q = query(projectsCollection, where('memberUids', 'array-contains', memberUid));
+  try {
+    const querySnapshot = await getDocs(q);
+    const projects = querySnapshot.docs.map(mapDocumentToProject);
+    projects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    return projects;
+  } catch (error: any) {
+    console.error('projectService: Error fetching member projects for uid:', memberUid, error.message, error.stack);
+    if (error.message.includes('index')) {
+        console.error("A Firestore index on 'memberUids' (array-contains) is required for this query to work.");
+    }
+    throw error;
+  }
+};
+
 
 export const getProjectById = async (projectId: string, userUid: string, userRole?: UserRole): Promise<Project | null> => {
   if (!userUid) {

@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import type { Project, Task as AppTask } from '@/types';
 import { getAllTasksAssignedToUser, countProjectSubTasks, countProjectMainTasks } from '@/services/taskService';
 import { getAllIssuesAssignedToUser, countProjectOpenIssues } from '@/services/issueService';
-import { getProjectsByIds, getUserProjects, getClientProjects } from '@/services/projectService';
+import { getProjectsByIds, getUserProjects, getClientProjects, getMemberProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { useRouter } from 'next/navigation';
@@ -34,9 +34,9 @@ export default function DashboardPage() {
         return;
       }
       
-      const isSupervisor = user?.role === 'supervisor';
-      const isMember = user?.role === 'member';
-      const isClient = user?.role === 'client';
+      const isSupervisor = user.role === 'supervisor';
+      const isMember = user.role === 'member';
+      const isClient = user.role === 'client';
       const isAdminOrOwner = !isSupervisor && !isMember && !isClient; 
 
       setDashboardLoading(true);
@@ -47,36 +47,32 @@ export default function DashboardPage() {
         
         if (isClient) {
             const clientProjects = await getClientProjects(user.uid);
-            // For clients, we just display the project info without task/issue counts
-            // as they don't have permission to read all tasks/issues.
             finalProjectsToDisplay = clientProjects;
         } else if (isSupervisor || isMember) {
+          const baseProjectsForMember = await getMemberProjects(user.uid);
           const assignedSubTasks = await getAllTasksAssignedToUser(user.uid);
           const assignedIssues = await getAllIssuesAssignedToUser(user.uid);
-          
-          const projectIdsFromTasks = assignedSubTasks.map(task => task.projectId).filter(id => !!id);
-          const projectIdsFromIssues = assignedIssues.map(issue => issue.projectId).filter(id => !!id);
-          const allRelevantProjectIds = [...new Set([...projectIdsFromTasks, ...projectIdsFromIssues])];
 
-          if (allRelevantProjectIds.length > 0) {
-            const baseProjectsForUser = await getProjectsByIds(allRelevantProjectIds, user.uid, user.role);
+          finalProjectsToDisplay = baseProjectsForMember.map(project => {
+            const countSubTasksForUser = assignedSubTasks.filter(st => st.projectId === project.id).length;
+            const countOpenIssuesForUser = assignedIssues.filter(i => i.projectId === project.id && i.status === 'Open').length;
+            
+            const mainTaskIdsUserInvolvedWith = new Set(
+              assignedSubTasks
+                .filter(st => st.projectId === project.id)
+                .map(st => st.parentId)
+                .filter((id): id is string => !!id)
+            );
+            const countMainTasksForUser = mainTaskIdsUserInvolvedWith.size;
 
-            finalProjectsToDisplay = baseProjectsForUser.map(project => {
-              const countSubTasksForUser = assignedSubTasks.filter(st => st.projectId === project.id).length;
-              const countOpenIssuesForUser = assignedIssues.filter(i => i.projectId === project.id && i.status === 'Open').length;
-              const mainTaskIdsUserInvolvedWith = new Set(
-                assignedSubTasks.filter(st => st.projectId === project.id).map(st => st.parentId).filter(Boolean) as string[]
-              );
-              const countMainTasksForUser = mainTaskIdsUserInvolvedWith.size;
+            return {
+              ...project,
+              totalMainTasks: countMainTasksForUser,
+              totalSubTasks: countSubTasksForUser,
+              totalOpenIssues: countOpenIssuesForUser,
+            };
+          });
 
-              return {
-                ...project,
-                totalMainTasks: countMainTasksForUser,
-                totalSubTasks: countSubTasksForUser,
-                totalOpenIssues: countOpenIssuesForUser,
-              };
-            });
-          }
         } else if (isAdminOrOwner) {
           const baseProjectsAdmin = await getUserProjects(user.uid, user.role);
 
