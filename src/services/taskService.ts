@@ -566,7 +566,7 @@ export const countProjectMainTasks = async (projectId: string, userUid: string):
   }
 };
 
-export const getTimelineForMainTask = async (mainTaskId: string): Promise<AggregatedEvent[]> => {
+export const getTimelineForMainTask = async (mainTaskId: string, userUid: string, userRole?: UserRole): Promise<AggregatedEvent[]> => {
   try {
     const mainTaskEvents = await getTimelineForTask(mainTaskId);
     const aggregatedMainTaskEvents: AggregatedEvent[] = mainTaskEvents.map(event => ({
@@ -575,6 +575,12 @@ export const getTimelineForMainTask = async (mainTaskId: string): Promise<Aggreg
       type: 'mainTaskEvent',
       data: event,
     }));
+
+    if (userRole === 'client') {
+      aggregatedMainTaskEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+      return aggregatedMainTaskEvents;
+    }
+
     const subTasks = await getSubTasks(mainTaskId);
     const subTaskTimelinePromises = subTasks.map(async (subTask) => {
       const events = await getTimelineForTask(subTask.id);
@@ -603,7 +609,7 @@ export const getTimelineForProject = async (projectId: string, userUid: string, 
   try {
     const mainTasks = await getProjectMainTasks(projectId, userUid, undefined, userRole);
     const projectTimelinePromises = mainTasks.map(async (mainTask) => {
-      const events = await getTimelineForMainTask(mainTask.id);
+      const events = await getTimelineForMainTask(mainTask.id, userUid, userRole);
       if (events.length > 0) {
         return {
           id: mainTask.id,
@@ -621,8 +627,8 @@ export const getTimelineForProject = async (projectId: string, userUid: string, 
     const aggregatedProjectEvents = projectEventGroupsWithNulls.filter((group): group is ProjectAggregatedEvent => group !== null);
     aggregatedProjectEvents.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     return aggregatedProjectEvents;
-  } catch (error) {
+  } catch (error: any) {
     console.error(`TimelineService: Failed to aggregate timeline for project ${projectId}`, error);
-    return [];
+    throw error; // Re-throw to be caught by the UI component
   }
 };
