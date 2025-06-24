@@ -82,12 +82,11 @@ export const addAttendanceRecord = async (data: AttendanceData): Promise<string>
 export const getTodaysAttendanceForUserInProject = async (userId: string, projectId: string, dateString: string): Promise<AttendanceRecord | null> => {
   const attendanceCollectionRef = collection(db, 'attendance');
 
-  // To avoid needing a composite index, we make the simplest possible query: fetch all records for the user for the given day.
-  // We will then filter by projectId in the application code. This is more robust against permission errors.
+  // Query ONLY by userId to avoid needing a composite index. This is allowed by security rules.
+  // We will filter by date and projectId in the application code.
   const q = query(
     attendanceCollectionRef,
-    where('userId', '==', userId),
-    where('date', '==', dateString)
+    where('userId', '==', userId)
   );
   
   try {
@@ -96,7 +95,7 @@ export const getTodaysAttendanceForUserInProject = async (userId: string, projec
       return null;
     }
 
-    const allRecordsForDay = querySnapshot.docs.map(docSnap => {
+    const allUserRecords = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
       return {
         id: docSnap.id,
@@ -105,21 +104,21 @@ export const getTodaysAttendanceForUserInProject = async (userId: string, projec
       } as AttendanceRecord;
     });
 
-    // Now, filter the results by projectId in the application code.
-    const recordsForProject = allRecordsForDay.filter(rec => rec.projectId === projectId);
+    // Now, filter the user's records by date and projectId in the application code.
+    const recordsForProjectToday = allUserRecords.filter(rec => rec.date === dateString && rec.projectId === projectId);
 
-    if (recordsForProject.length === 0) {
+    if (recordsForProjectToday.length === 0) {
       return null;
     }
     
     // Sort to get the most recent one for that specific project on that day.
-    recordsForProject.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    recordsForProjectToday.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
     
-    return recordsForProject[0]; // Return the most recent record
+    return recordsForProjectToday[0]; // Return the most recent record
 
   } catch (error) {
     console.error("Error fetching today's project attendance submission:", error);
-    return null;
+    return null; // Return null if there's an error. The UI will handle it.
   }
 };
 
