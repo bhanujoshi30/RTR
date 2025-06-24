@@ -44,6 +44,7 @@ export interface Task {
   ownerName?: string | null;
   assignedToUids?: string[] | null; // Array of UIDs, applicable for sub-tasks
   assignedToNames?: string[] | null; // Array of names, applicable for sub-tasks
+  memberUids?: string[]; // Denormalized from sub-tasks for main task access
   updatedAt?: Date;
   progress?: number; // For main tasks: % completion based on sub-tasks
   openIssueCount?: number;
