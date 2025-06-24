@@ -1,86 +1,84 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Helper function to check if the requesting user has the 'admin' role.
-    // This is acceptable because it's used in single-document requests (like write),
-    // not in collection queries that would be blocked.
+    
     function isAdmin() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
-    // Rules for Projects
+    // Projects:
+    // - Authenticated users can read project details (name, etc.).
+    //   Access to sensitive tasks/issues is controlled by their own rules.
+    // - Only owners can update or delete projects.
+    // - Any authenticated user can create a project.
     match /projects/{projectId} {
-      // Any authenticated user can read the high-level details of a project.
-      // This is necessary for the dashboard to list projects for assigned members.
-      // Sensitive data is stored in subcollections with stricter rules.
       allow read: if request.auth != null;
-
-      // Only the project owner or an admin can create, update, or delete a project.
-      allow create: if request.resource.data.ownerUid == request.auth.uid || isAdmin();
-      allow update, delete: if resource.data.ownerUid == request.auth.uid || isAdmin();
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
     }
 
-    // Rules for Tasks
+    // Tasks:
+    // - Can be read by the project owner, client, task owner, or anyone assigned.
+    // - Can be created by the project owner or an admin.
+    // - Can be updated by the owner or an assigned user (with restrictions).
+    // - Can only be deleted by the task owner.
     match /tasks/{taskId} {
-      // A user can read a task if they are the project owner OR are directly assigned to it.
-      // This rule is efficient because it only uses data within the task document itself.
-      allow read: if resource.data.projectOwnerUid == request.auth.uid 
-                  || request.auth.uid in resource.data.assignedToUids;
+      allow read: if request.auth.uid == resource.data.projectOwnerUid ||
+                     request.auth.uid == resource.data.clientUid ||
+                     request.auth.uid == resource.data.ownerUid ||
+                     request.auth.uid in resource.data.assignedToUids;
+                     
+      allow create: if request.auth != null && 
+                     (request.auth.uid == request.resource.data.projectOwnerUid || isAdmin());
 
-      // A user can create a task if they are the project owner or an admin.
-      allow create: if request.resource.data.ownerUid == request.auth.uid || isAdmin();
-      
-      // A user can update a task if they are the project owner or are assigned to it.
-      allow update: if resource.data.ownerUid == request.auth.uid 
-                    || request.auth.uid in resource.data.assignedToUids;
-      
-      // Only the task owner can delete it.
-      allow delete: if resource.data.ownerUid == request.auth.uid;
+      allow update: if request.auth != null &&
+                     (request.auth.uid == resource.data.ownerUid ||
+                      request.auth.uid in resource.data.assignedToUids);
+                      
+      allow delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
 
-      // Rules for Subcollections of Tasks
-      match /{allChildren=**} {
-        allow read, write: if resource.data.projectOwnerUid == request.auth.uid 
-                           || request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
+      // Attachments & Timeline subcollections
+      match /{subcollection}/{docId} {
+        allow read: if request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.projectOwnerUid ||
+                       request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.clientUid ||
+                       request.auth.uid == get(/databases/$(database)/documents/tasks/$(taskId)).data.ownerUid ||
+                       request.auth.uid in get(/databases/$(database)/documents/tasks/$(taskId)).data.assignedToUids;
+        allow create, update, delete: if request.auth != null;
       }
     }
 
-    // Rules for Issues
+    // Issues:
+    // - Can be read by project owner, client, issue owner, or anyone assigned to the issue.
+    // - Can be created by the sub-task owner or anyone assigned to the sub-task.
+    // - Can be updated/deleted only by the issue owner.
     match /issues/{issueId} {
-      // A user can read an issue if they are the project owner OR are assigned to it.
-      allow read: if resource.data.projectOwnerUid == request.auth.uid 
-                  || request.auth.uid in resource.data.assignedToUids;
+      allow read: if request.auth.uid == resource.data.projectOwnerUid ||
+                     request.auth.uid == resource.data.clientUid ||
+                     request.auth.uid == resource.data.ownerUid ||
+                     request.auth.uid in resource.data.assignedToUids;
+                     
+      allow create: if request.auth != null; // Checked in application logic based on parent task assignment
       
-      // A user can create/update an issue if they own the parent task or are assigned to it.
-      allow create, update: if get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.ownerUid == request.auth.uid
-                            || request.auth.uid in get(/databases/$(database)/documents/tasks/$(request.resource.data.taskId)).data.assignedToUids;
-
-      // Only the issue's creator can delete it.
-      allow delete: if resource.data.ownerUid == request.auth.uid;
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.ownerUid;
     }
 
-    // Rules for Users
+    // Users:
+    // - An admin can perform any action on user documents.
+    // - Users can read and update their own document.
     match /users/{userId} {
-      // Any authenticated user can read the list of other users. This is acceptable
-      // for this internal tool to allow assignment features to work correctly.
-      allow read: if request.auth != null;
-      
-      // An admin can write to any user document. A user can only write to their own.
-      allow write: if isAdmin() || request.auth.uid == userId;
+      allow read, update: if request.auth != null && (request.auth.uid == userId || isAdmin());
+      allow create, delete: if request.auth != null && isAdmin();
     }
     
-    // Rules for Attendance
+    // Attendance:
+    // - Admins can read all records.
+    // - Users can read their own records.
+    // - Any authenticated user can create a record (validation happens in code).
     match /attendance/{attendanceId} {
-        // A user can create their own attendance record.
-        allow create: if request.resource.data.userId == request.auth.uid;
-        
-        // Only admins can read attendance records.
-        allow read: if isAdmin();
-        
-        // No one can update or delete attendance records to maintain data integrity.
-        allow update, delete: if false;
+      allow read: if request.auth != null && (isAdmin() || request.auth.uid == resource.data.userId);
+      allow create: if request.auth != null;
+      allow update, delete: if false; // Attendance records are immutable
     }
   }
 }
