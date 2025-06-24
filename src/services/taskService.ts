@@ -319,13 +319,44 @@ export const getTaskById = async (taskId: string, userUid: string, userRole?: Us
 
 export const getAllProjectTasks = async (projectId: string, userRole?: UserRole, userUid?: string): Promise<Task[]> => {
     if (!projectId) return [];
+
+    // If the user is a supervisor or member, fetch only their assigned tasks and the parent main tasks.
+    if ((userRole === 'supervisor' || userRole === 'member') && userUid) {
+        try {
+            // 1. Get all subtasks assigned to the user in this project
+            const assignedSubtasksQuery = query(tasksCollection, where('projectId', '==', projectId), where('assignedToUids', 'array-contains', userUid));
+            const assignedSubtasksSnapshot = await getDocs(assignedSubtasksQuery);
+            const assignedSubtasks = assignedSubtasksSnapshot.docs.map(mapDocumentToTask);
+
+            // 2. Get the unique IDs of their parent main tasks
+            const mainTaskIds = [...new Set(assignedSubtasks.map(t => t.parentId).filter(Boolean) as string[])];
+
+            // 3. Fetch those specific main tasks
+            let mainTasks: Task[] = [];
+            if (mainTaskIds.length > 0) {
+                // Fetch main tasks in chunks if there are more than 30 to avoid query limits
+                const mainTaskChunks: string[][] = [];
+                for (let i = 0; i < mainTaskIds.length; i += 30) {
+                    mainTaskChunks.push(mainTaskIds.slice(i, i + 30));
+                }
+                for (const chunk of mainTaskChunks) {
+                    const mainTasksQuery = query(tasksCollection, where(documentId(), 'in', chunk));
+                    const mainTasksSnapshot = await getDocs(mainTasksQuery);
+                    mainTasksSnapshot.forEach(doc => mainTasks.push(mapDocumentToTask(doc)));
+                }
+            }
+            
+            // 4. Return the combination of the main tasks they are involved in and their assigned sub-tasks
+            return [...mainTasks, ...assignedSubtasks];
+        } catch (e: any) {
+            console.error(`taskService: Error fetching role-specific tasks for project ${projectId}`, e);
+            throw e; // Re-throw the error to be handled by the caller
+        }
+    }
     
+    // For admin, owner, client, or if userUid is not provided, fetch based on project ID.
+    // The security rules will enforce what they can actually see.
     const queryConstraints = [where('projectId', '==', projectId)];
-    
-    // For clients, we need to ensure they can list tasks for projects they are a client of
-    // The security rules will enforce this, but the query itself doesn't need a clientUid filter
-    // if the rules are set up to allow listing by project id for clients.
-    
     const q = query(tasksCollection, ...queryConstraints);
 
     try {
