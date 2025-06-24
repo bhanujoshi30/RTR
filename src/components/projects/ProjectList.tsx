@@ -7,24 +7,28 @@ import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { FolderOpen, PlusCircle } from 'lucide-react';
 import { useTranslation } from '@/hooks/useTranslation';
+import { useAuth } from '@/hooks/useAuth';
 
 interface ProjectListProps {
   projects: Project[];
-  isSupervisorView?: boolean;
-  isClientView?: boolean;
 }
 
-export function ProjectList({ projects, isSupervisorView = false, isClientView = false }: ProjectListProps) {
+export function ProjectList({ projects }: ProjectListProps) {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  
+  const isSupervisorOrMember = user?.role === 'supervisor' || user?.role === 'member';
+  const isClient = user?.role === 'client';
+  const isAdminOrOwner = user?.role === 'admin' || user?.role === 'owner';
 
   if (projects.length === 0) {
     let title = t('projectList.noProjects');
     let message = t('projectList.getStarted');
     
-    if (isSupervisorView) {
+    if (isSupervisorOrMember) {
       title = t('projectList.welcome');
       message = t('projectList.contactAdmin');
-    } else if (isClientView) {
+    } else if (isClient) {
       title = t('projectList.noAssignedProjects');
       message = t('projectList.notAssigned');
     }
@@ -36,7 +40,7 @@ export function ProjectList({ projects, isSupervisorView = false, isClientView =
         <p className="mt-2 mb-6 text-sm text-muted-foreground">
           {message}
         </p>
-        {!isSupervisorView && !isClientView && ( // "Create Project" button for owners/admins
+        {isAdminOrOwner && (
           <Button asChild variant="default">
             <Link href="/projects/create">
               <PlusCircle className="mr-2 h-4 w-4" />

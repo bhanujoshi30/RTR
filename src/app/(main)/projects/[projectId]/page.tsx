@@ -4,10 +4,10 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getProjectById, deleteProject } from '@/services/projectService';
-import { getAllTasksAssignedToUser, getProjectMainTasks, getProjectSubTasksAssignedToUser } from '@/services/taskService';
+import { getAllTasksAssignedToUser, getProjectMainTasks, getProjectSubTasksAssignedToUser, getTaskById } from '@/services/taskService';
 import { getTodaysAttendanceForUserInProject } from '@/services/attendanceService';
 import { AttendanceDialog } from '@/components/attendance/AttendanceDialog';
-import type { Project, Task } from '@/types';
+import type { Project, Task, UserRole } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -54,24 +54,22 @@ export default function ProjectDetailsPage() {
   const [showAddMainTaskModal, setShowAddMainTaskModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // New state for progress calculation
   const [projectProgress, setProjectProgress] = useState(0);
   const [projectStatus, setProjectStatus] = useState<Project['status']>('Not Started');
   const [totalCost, setTotalCost] = useState(0);
 
-
-  // Attendance State
   const [showAttendanceDialog, setShowAttendanceDialog] = useState(false);
   const [checkingAttendance, setCheckingAttendance] = useState(true);
   const [canSubmitAttendance, setCanSubmitAttendance] = useState(false);
   const [attendanceStatus, setAttendanceStatus] = useState<{ submitted: boolean; timestamp?: Date | null }>({ submitted: false, timestamp: null });
 
-
   const { user, loading: authLoading } = useAuth();
+  
   const isSupervisor = user?.role === 'supervisor';
   const isMember = user?.role === 'member';
   const isClient = user?.role === 'client';
-  const canViewFinancials = user?.role === 'client' || user?.role === 'admin';
+  const isAdminOrOwner = user?.role === 'admin' || user?.role === 'owner';
+  const canViewFinancials = user?.role === 'client' || user?.role === 'admin' || user?.role === 'owner';
 
   const fetchProjectData = async () => {
     if (authLoading || !user || !projectId) return;
@@ -83,23 +81,12 @@ export default function ProjectDetailsPage() {
       if (fetchedProject) {
         setProject(fetchedProject);
         
-        const isSupervisorOrMember = user.role === 'supervisor' || user.role === 'member';
-        const isClientUser = user.role === 'client';
-
-        if (isSupervisorOrMember || isClientUser) {
-            // Supervisors/Members/Clients cannot see overall project progress as they can't read all tasks.
-            // We set default values and let the TaskList component handle showing their assigned tasks.
-            setProjectProgress(0);
-            setProjectStatus('In Progress'); // A neutral status
-            setTotalCost(0);
-        } else {
-            // Admin, Owner can fetch all tasks to calculate progress.
+        if (isAdminOrOwner) {
             const allMainTasks = await getProjectMainTasks(projectId, user.uid);
             const standardMainTasks = allMainTasks.filter(task => task.taskType !== 'collection');
             
             let progress = 0;
             if (standardMainTasks.length > 0) {
-                // task.progress is calculated in getProjectMainTasks for owners/admins
                 const totalProgressSum = standardMainTasks.reduce((sum, task) => sum + (task.progress || 0), 0);
                 progress = Math.round(totalProgressSum / standardMainTasks.length);
             }
@@ -113,9 +100,13 @@ export default function ProjectDetailsPage() {
             } else {
                 setProjectStatus('Not Started');
             }
-
             const cost = allMainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
             setTotalCost(cost);
+        } else {
+            // For Supervisor, Member, Client, we don't calculate overall progress to avoid permission issues.
+            setProjectProgress(0);
+            setProjectStatus(fetchedProject.status); // Use status from project doc
+            setTotalCost(fetchedProject.totalCost || 0);
         }
 
       } else {
@@ -140,7 +131,6 @@ export default function ProjectDetailsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, user, authLoading]);
   
-  // Effect for checking attendance eligibility and status
   useEffect(() => {
       if (authLoading || !user || !projectId) return;
 
@@ -149,10 +139,11 @@ export default function ProjectDetailsPage() {
           
           if (user.role === 'member' || user.role === 'supervisor') {
               try {
-                  const assignedTasks = await getAllTasksAssignedToUser(user.uid);
-                  const isAssignedToThisProject = assignedTasks.some(task => task.projectId === projectId);
-                  
-                  if (isAssignedToThisProject) {
+                  // A user is eligible to submit attendance if they are a member of the project
+                  // which is now stored on the project doc itself.
+                  const projectDoc = await getProjectById(projectId, user.uid, user.role);
+
+                  if (projectDoc && projectDoc.memberUids?.includes(user.uid)) {
                       setCanSubmitAttendance(true);
                       const today = format(new Date(), 'yyyy-MM-dd'); // Use local date
                       const record = await getTodaysAttendanceForUserInProject(user.uid, projectId, today);
@@ -181,7 +172,7 @@ export default function ProjectDetailsPage() {
 
 
   const handleDeleteProject = async () => {
-    if (!project || !user || isSupervisor || isMember || isClient) return;
+    if (!project || !user || !isAdminOrOwner) return;
     setIsDeleting(true);
     try {
       await deleteProject(project.id, user.uid);
@@ -236,7 +227,7 @@ export default function ProjectDetailsPage() {
     return <p className="text-center text-muted-foreground py-10">Project not found.</p>;
   }
   
-  const canManageProject = user && !isSupervisor && !isMember && !isClient;
+  const canManageProject = user && isAdminOrOwner;
   const defaultTab = isClient ? "timeline" : "tasks";
 
   let displayStatus = projectStatus;
@@ -322,7 +313,7 @@ export default function ProjectDetailsPage() {
                  {t(`status.${displayStatus.toLowerCase().replace(/ /g, '')}`)}
               </Badge>
             </div>
-            { user && !isSupervisor && !isMember && !isClient && (
+            { isAdminOrOwner && (
                 <div className="space-y-1">
                 <p className="text-sm font-medium text-muted-foreground">{t('projectDetails.progress')}</p>
                 <div className="flex items-center gap-2">

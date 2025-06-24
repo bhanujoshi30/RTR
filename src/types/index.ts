@@ -1,5 +1,5 @@
 
-export type UserRole = 'admin' | 'supervisor' | 'member' | 'client';
+export type UserRole = 'admin' | 'owner' | 'supervisor' | 'member' | 'client';
 
 export type ProjectStatus = 'Not Started' | 'In Progress' | 'Completed' | 'Payment Incomplete';
 export type TaskStatus = 'To Do' | 'In Progress' | 'Completed';
@@ -16,36 +16,36 @@ export interface Project {
   clientName?: string | null;
   createdAt: Date;
   status: ProjectStatus;
-  progress: number; // 0-100, Now dynamically calculated
+  progress: number;
   photoURL?: string | null;
   totalMainTasks?: number;
   totalSubTasks?: number;
   totalOpenIssues?: number;
   hasUpcomingReminder?: boolean;
   totalCost?: number;
-  memberUids?: string[]; // Denormalized list of all users assigned to sub-tasks
+  memberUids?: string[];
 }
 
 export interface Task {
   id: string;
   projectId: string;
-  projectOwnerUid?: string; // For security rules
-  clientUid?: string | null; // For security rules
-  parentId?: string | null; // null if it's a main task
+  projectOwnerUid?: string;
+  clientUid?: string | null;
+  parentId?: string | null;
   name: string;
   description?: string;
-  status: TaskStatus; // Status is user-editable only for sub-tasks
+  status: TaskStatus;
   taskType?: 'standard' | 'collection';
   reminderDays?: number | null;
   cost?: number | null;
   createdAt: Date;
-  dueDate: Date; // Made mandatory from previous change for sub-tasks, optional for main tasks
+  dueDate: Date;
   ownerUid: string;
   ownerName?: string | null;
-  assignedToUids?: string[] | null; // Array of UIDs, applicable for sub-tasks
-  assignedToNames?: string[] | null; // Array of names, applicable for sub-tasks
+  assignedToUids?: string[] | null;
+  assignedToNames?: string[] | null;
   updatedAt?: Date;
-  progress?: number; // For main tasks: % completion based on sub-tasks
+  progress?: number;
   openIssueCount?: number;
   isOverdue?: boolean;
   displaySubTaskCountLabel?: string;
@@ -56,16 +56,16 @@ export interface Issue {
   projectId: string;
   projectOwnerUid?: string;
   clientUid?: string | null;
-  taskId: string; // This is the ID of the parent SubTask
+  taskId: string;
   ownerUid: string;
   ownerName?: string | null;
   title: string;
   description?: string;
   severity: IssueSeverity;
   status: IssueProgressStatus;
-  assignedToUids?: string[] | null; // Array of UIDs
-  assignedToNames?: string[] | null; // Array of names
-  dueDate: Date; // Renamed from endDate and made mandatory
+  assignedToUids?: string[] | null;
+  assignedToNames?: string[] | null;
+  dueDate: Date;
   createdAt: Date;
   updatedAt?: Date;
 }
@@ -73,8 +73,8 @@ export interface Issue {
 export interface Attachment {
   id: string;
   projectId: string;
-  taskId: string; // This is the ID of the parent SubTask
-  issueId?: string; // ID of the issue it's related to, if any
+  taskId: string;
+  issueId?: string;
   ownerUid: string;
   ownerName: string;
   url: string;
@@ -115,8 +115,8 @@ export interface TimelineEvent {
 }
 
 export interface AggregatedEvent {
-  id: string; // main event ID or subtask ID
-  timestamp: Date; // for sorting, usually the latest event in a group
+  id: string;
+  timestamp: Date;
   type: 'mainTaskEvent' | 'subTaskEventGroup';
   data: TimelineEvent | {
     subTaskInfo: {
@@ -128,8 +128,8 @@ export interface AggregatedEvent {
 }
 
 export interface ProjectAggregatedEvent {
-  id: string; // main task ID
-  timestamp: Date; // for sorting, latest event in the group
+  id: string;
+  timestamp: Date;
   type: 'mainTaskGroup';
   data: {
     mainTaskInfo: {
@@ -137,7 +137,6 @@ export interface ProjectAggregatedEvent {
       name: string;
       taskType?: 'standard' | 'collection';
     };
-    // The events here are the ones from getTimelineForMainTask
     events: AggregatedEvent[];
   };
 }
@@ -160,7 +159,7 @@ export interface AttendanceRecord {
   userName: string;
   projectId: string;
   projectName: string;
-  date: string; // YYYY-MM-DD for easy querying
+  date: string;
   timestamp: Date;
   photoUrl: string;
   location?: {
@@ -174,7 +173,7 @@ export interface AttendanceRecord {
 export interface DprData {
   projectId: string;
   projectName: string;
-  date: string; // YYYY-MM-DD
+  date: string;
   language: 'en' | 'hi';
   tasksCreated: Pick<Task, 'id' | 'name' | 'parentId'>[];
   tasksCompleted: Pick<Task, 'id' | 'name' | 'parentId'>[];

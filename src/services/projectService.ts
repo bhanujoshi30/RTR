@@ -34,10 +34,7 @@ export const uploadProjectPhoto = (file: File): Promise<string> => {
 
     uploadTask.on(
       'state_changed',
-      (snapshot) => {
-        // Optional: report progress
-        // const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-      },
+      (snapshot) => {},
       (error) => {
         console.error('Project photo upload failed:', error);
         reject(error);
@@ -110,96 +107,13 @@ export const createProject = async (
   }
 };
 
-const processProjectList = async (projectsFromDb: Project[], userContext: { uid: string, role: 'owner' | 'client' | 'member' | 'supervisor' }): Promise<Project[]> => {
-    if (projectsFromDb.length === 0) {
-        return [];
-    }
-
-    const projectIds = projectsFromDb.map(p => p.id);
-    const allTasksByProject = new Map<string, Task[]>();
-    
-    const taskChunks: string[][] = [];
-    for (let i = 0; i < projectIds.length; i += 30) {
-      taskChunks.push(projectIds.slice(i, i + 30));
-    }
-
-    for (const chunk of taskChunks) {
-        if (chunk.length === 0) continue;
-        
-        let tasksQuery;
-        if (userContext.role === 'owner' || userContext.role === 'client') {
-             tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk));
-        } else { // member or supervisor
-             tasksQuery = query(collection(db, 'tasks'), where('projectId', 'in', chunk), where('assignedToUids', 'array-contains', userContext.uid));
-        }
-        
-        try {
-            const tasksSnapshot = await getDocs(tasksQuery);
-            tasksSnapshot.forEach(doc => {
-                const task: Task = mapDocumentToTask(doc);
-                const tasks = allTasksByProject.get(task.projectId) || [];
-                tasks.push(task);
-                allTasksByProject.set(task.projectId, tasks);
-            });
-        } catch(error: any) {
-            console.error(`projectService: Failed to process task chunk for role ${userContext.role}`, error);
-            // Don't rethrow, just continue so the dashboard can load projects without stats
-        }
-    }
-
-    const projectsWithDetails = projectsFromDb.map(project => {
-      const projectTasks = allTasksByProject.get(project.id) || [];
-      const mainTasks = projectTasks.filter(t => !t.parentId);
-      const standardMainTasks = mainTasks.filter(mt => mt.taskType !== 'collection');
-      
-      if (standardMainTasks.length > 0) {
-        const totalProgressSum = standardMainTasks.reduce((sum, task) => {
-            const subTasks = projectTasks.filter(t => t.parentId === task.id);
-            if (subTasks.length === 0) return sum;
-            const completedSubTasks = subTasks.filter(st => st.status === 'Completed').length;
-            const mainTaskProgress = Math.round((completedSubTasks / subTasks.length) * 100);
-            return sum + mainTaskProgress;
-        }, 0);
-        project.progress = Math.round(totalProgressSum / standardMainTasks.length);
-      } else {
-        project.progress = 0;
-      }
-      
-      const hasPendingCollectionTasks = mainTasks.some(task => task.taskType === 'collection' && task.status !== 'Completed');
-      if (project.progress >= 100) {
-          project.status = hasPendingCollectionTasks ? 'Payment Incomplete' : 'Completed';
-      } else if (project.progress > 0) {
-          project.status = 'In Progress';
-      } else {
-          project.status = 'Not Started';
-      }
-
-      project.totalCost = mainTasks.filter(t => t.taskType === 'collection').reduce((sum, task) => sum + (task.cost || 0), 0);
-
-      const now = new Date();
-      project.hasUpcomingReminder = mainTasks.some(task => {
-        if (task.taskType !== 'collection' || task.status === 'Completed' || !task.dueDate || !task.reminderDays) {
-          return false;
-        }
-        const daysRemaining = differenceInCalendarDays(task.dueDate, now);
-        return daysRemaining >= 0 && daysRemaining <= task.reminderDays;
-      });
-
-      return project;
-    });
-
-    projectsWithDetails.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-    return projectsWithDetails;
-}
-
-export const getUserProjects = async (userUid: string, userRole?: UserRole): Promise<Project[]> => {
+export const getUserProjects = async (userUid: string): Promise<Project[]> => {
   if (!userUid) return [];
 
-  const q = query(projectsCollection, where('ownerUid', '==', userUid));
+  const q = query(projectsCollection, where('ownerUid', '==', userUid), orderBy('createdAt', 'desc'));
   try {
     const querySnapshot = await getDocs(q);
     const projects = querySnapshot.docs.map(mapDocumentToProject);
-    projects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
     return projects;
   } catch (error: any) {
     console.error('projectService: Error fetching user projects for uid:', userUid, error.message, error.stack);
@@ -210,16 +124,15 @@ export const getUserProjects = async (userUid: string, userRole?: UserRole): Pro
 export const getClientProjects = async (clientUid: string): Promise<Project[]> => {
   if (!clientUid) return [];
 
-  const q = query(projectsCollection, where('clientUid', '==', clientUid));
+  const q = query(projectsCollection, where('clientUid', '==', clientUid), orderBy('createdAt', 'desc'));
   try {
     const querySnapshot = await getDocs(q);
     const projects = querySnapshot.docs.map(mapDocumentToProject);
-    projects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
     return projects;
   } catch (error: any) {
     console.error('projectService: Error fetching client projects for uid:', clientUid, error.message, error.stack);
     if (error.message.includes('index')) {
-        console.error("A Firestore index on 'clientUid' is required for this query to work.");
+        console.error("A Firestore index on 'clientUid' (ASC) and 'createdAt' (DESC) is required for this query to work.");
     }
     throw error;
   }
@@ -228,16 +141,15 @@ export const getClientProjects = async (clientUid: string): Promise<Project[]> =
 export const getMemberProjects = async (memberUid: string): Promise<Project[]> => {
   if (!memberUid) return [];
 
-  const q = query(projectsCollection, where('memberUids', 'array-contains', memberUid));
+  const q = query(projectsCollection, where('memberUids', 'array-contains', memberUid), orderBy('createdAt', 'desc'));
   try {
     const querySnapshot = await getDocs(q);
     const projects = querySnapshot.docs.map(mapDocumentToProject);
-    projects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
     return projects;
   } catch (error: any) {
     console.error('projectService: Error fetching member projects for uid:', memberUid, error.message, error.stack);
     if (error.message.includes('index')) {
-        console.error("A Firestore index on 'memberUids' (array-contains) is required for this query to work.");
+        console.error("A Firestore index on 'memberUids' (array-contains) and 'createdAt' (DESC) is required for this query to work.");
     }
     throw error;
   }
@@ -257,39 +169,13 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       const projectData = mapDocumentToProject(projectSnap);
       return projectData;
     } else {
-      // This can happen if the document doesn't exist OR if security rules deny access.
-      // Firestore does not distinguish between the two for security reasons.
       console.warn(`projectService: Project with ID '${projectId}' not found or user '${userUid}' lacks permission.`);
       return null;
     }
   } catch (error: any) {
-    // This block will now more reliably catch actual network errors or misconfigurations.
-    // Permission errors on a direct `get` are often returned as a "not found" state.
     console.error(`projectService: Error fetching project by ID ${projectId}.`, error);
     throw error;
   }
-};
-
-
-export const getProjectsByIds = async (projectIds: string[], userUid: string, userRole?: UserRole): Promise<Project[]> => {
-  if (!projectIds || projectIds.length === 0) {
-    return [];
-  }
-
-  const projectPromises = projectIds.map(id => 
-    getProjectById(id, userUid, userRole).catch(err => {
-      console.error(`Failed to fetch project ${id} within getProjectsByIds`, err);
-      return null;
-    })
-  );
-
-  const projects = await Promise.all(projectPromises);
-  
-  const validProjects = projects.filter((p): p is Project => p !== null);
-  
-  validProjects.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-
-  return validProjects;
 };
 
 
@@ -303,7 +189,6 @@ export const updateProject = async (
   }
 
   const projectDocRef = doc(db, 'projects', projectId);
-  // Re-check permissions on the client side before writing, although rules are the source of truth
   const projectSnap = await getDoc(projectDocRef);
   if (!projectSnap.exists() || (projectSnap.data().ownerUid !== userUid && !(await getDoc(doc(db, 'users', userUid))).data()?.role === 'admin') ) {
     throw new Error('Project not found or access denied for update.');
@@ -323,7 +208,6 @@ export const deleteProject = async (projectId: string, userUid: string): Promise
   }
 
   const projectDocRef = doc(db, 'projects', projectId);
-  // Re-check permissions on the client side before writing
   const projectSnap = await getDoc(projectDocRef);
   if (!projectSnap.exists() || (projectSnap.data().ownerUid !== userUid && !(await getDoc(doc(db, 'users', userUid))).data()?.role === 'admin') ) {
     throw new Error('Project not found or access denied for deletion.');

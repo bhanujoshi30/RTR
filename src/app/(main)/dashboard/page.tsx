@@ -8,7 +8,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/useAuth';
 import { useEffect, useState } from 'react';
 import type { Project } from '@/types';
-import { countProjectMainTasks, countProjectSubTasks, getProjectMainTasks } from '@/services/taskService';
+import { countProjectMainTasks, countProjectSubTasks } from '@/services/taskService';
 import { countProjectOpenIssues } from '@/services/issueService';
 import { getClientProjects, getMemberProjects, getUserProjects } from '@/services/projectService';
 import { Loader2 } from 'lucide-react';
@@ -37,7 +37,7 @@ export default function DashboardPage() {
       const isSupervisor = user.role === 'supervisor';
       const isMember = user.role === 'member';
       const isClient = user.role === 'client';
-      const isAdminOrOwner = !isSupervisor && !isMember && !isClient; 
+      const isAdminOrOwner = user.role === 'admin' || user.role === 'owner';
 
       setDashboardLoading(true);
       setDashboardError(null);
@@ -47,22 +47,12 @@ export default function DashboardPage() {
 
         if (isClient) {
             const clientProjects = await getClientProjects(user.uid);
-            finalProjects = clientProjects; // Clients don't see task counts on dashboard
+            finalProjects = clientProjects; // Clients see projects, no task counts needed
         } else if (isSupervisor || isMember) {
             const memberProjects = await getMemberProjects(user.uid);
-            finalProjects = await Promise.all(
-                memberProjects.map(async (project) => {
-                    // For members, counts should be relative to what they can see.
-                    // This requires a different approach if you want to show "your" counts vs project total.
-                    // For now, let's keep it simple and not show counts to avoid permission errors.
-                    return {
-                        ...project,
-                        totalMainTasks: undefined,
-                        totalSubTasks: undefined,
-                        totalOpenIssues: undefined,
-                    };
-                })
-            );
+            // For members/supervisors, task counts are too broad and can cause permission issues.
+            // The project card will show a simplified view based on their direct assignments.
+            finalProjects = memberProjects;
         } else if (isAdminOrOwner) {
             const adminProjects = await getUserProjects(user.uid);
             finalProjects = await Promise.all(
@@ -97,7 +87,7 @@ export default function DashboardPage() {
 
       } catch (err: any) {
         console.error("DashboardPage: Error fetching dashboard data:", err);
-        setDashboardError("Failed to load dashboard data. " + (err.message || ""));
+        setDashboardError("Failed to load dashboard data. " + (err.message || "Missing or insufficient permissions."));
       } finally {
         console.log('DashboardPage: fetchDashboardData finished. Setting dashboardLoading to false.');
         setDashboardLoading(false);
@@ -119,7 +109,7 @@ export default function DashboardPage() {
     pageTitle = t('dashboard.myProjects');
   }
 
-  const canCreateProject = user && !isSupervisor && !isMember && !isClient;
+  const canCreateProject = user && (user.role === 'admin' || user.role === 'owner');
 
   if (authLoading || dashboardLoading) {
     return (
@@ -128,6 +118,15 @@ export default function DashboardPage() {
         <p className="ml-3 text-lg">{t('dashboard.loading')}</p>
       </div>
     );
+  }
+   
+  if (dashboardError) {
+      return (
+          <div className="text-center py-10">
+              <h1 className="text-xl font-semibold text-destructive">Error Loading Dashboard</h1>
+              <p className="text-muted-foreground mt-2">{dashboardError}</p>
+          </div>
+      )
   }
 
   return (
@@ -153,8 +152,7 @@ export default function DashboardPage() {
           )}
         </div>
       </div>
-      {dashboardError && <p className="text-center text-destructive py-4">{dashboardError}</p>}
-      {!dashboardError && <ProjectList projects={projectsToDisplay} isSupervisorView={isSupervisor || isMember} isClientView={isClient} />}
+      <ProjectList projects={projectsToDisplay} />
     </div>
   );
 }

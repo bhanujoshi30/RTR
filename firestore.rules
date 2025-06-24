@@ -4,117 +4,137 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // Helper Functions
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function getUserRole(uid) {
-      // It's safe for any signed-in user to know another user's role.
-      return get(/databases/$(database)/documents/users/$(uid)).data.role;
+    function isUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
     }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
 
     function isAdmin() {
-      return isSignedIn() && getUserRole(request.auth.uid) == 'admin';
+      return isSignedIn() && getUserData().role == 'admin';
     }
 
-    // --- COLLECTION: users ---
+    function getProject(projectId) {
+      return get(/databases/$(database)/documents/projects/$(projectId));
+    }
+
+    function getProjectData(projectId) {
+      return getProject(projectId).data;
+    }
+
+    function isProjectOwner(projectId) {
+      return isUser(getProjectData(projectId).ownerUid);
+    }
+    
+    function isProjectClient(projectId) {
+      return isSignedIn() && request.auth.uid == getProjectData(projectId).clientUid;
+    }
+
+    function isProjectMember(projectId) {
+      return isSignedIn() && request.auth.uid in getProjectData(projectId).get('memberUids', []);
+    }
+
+    function getTask(taskId) {
+      return get(/databases/$(database)/documents/tasks/$(taskId));
+    }
+
+    function getTaskData(taskId) {
+        return getTask(taskId).data;
+    }
+    
+    function isTaskOwner(taskId) {
+        return isUser(getTaskData(taskId).ownerUid);
+    }
+
+    function isTaskAssignee(taskId) {
+        return isSignedIn() && request.auth.uid in getTaskData(taskId).get('assignedToUids', []);
+    }
+
+
+    // Collection Rules
     match /users/{userId} {
-      // Any signed-in user can read any other user's profile.
-      // This is necessary for the app to function (e.g., to get names for assignments).
       allow read: if isSignedIn();
-      
-      // Only admins can create, update, or delete user documents.
-      allow create, update: if isAdmin();
-      allow delete: if isAdmin() && request.auth.uid != userId; // Admin can't delete themselves
+      allow write: if isAdmin();
+      allow delete: if isAdmin() && request.auth.uid != userId;
     }
 
-    // --- COLLECTION: projects ---
     match /projects/{projectId} {
-      function isOwner() {
-        return request.auth.uid == resource.data.ownerUid;
-      }
-      function isClient() {
-        return request.auth.uid == resource.data.clientUid;
-      }
-      function isMember() {
-        return request.auth.uid in resource.data.memberUids;
-      }
-
-      // GET: Allow reading a single project document.
-      allow get: if isSignedIn() && (isOwner() || isClient() || isMember() || isAdmin());
+      allow get: if isProjectOwner(projectId) || isProjectClient(projectId) || isAdmin() || isProjectMember(projectId);
       
-      // LIST: Allow querying the projects collection.
-      // The query itself must be filtered in the app code (e.g., where('ownerUid', '==', ...)).
-      // The `get` rule above will be applied to each document returned by the query.
-      allow list: if isSignedIn();
+      allow list: if (isSignedIn() && 
+                      (request.query.where[0] == ['ownerUid', '==', request.auth.uid] ||
+                       request.query.where[0] == ['clientUid', '==', request.auth.uid] ||
+                       request.query.where[0] == ['memberUids', 'array-contains', request.auth.uid]))
+                  || isAdmin();
 
-      // WRITE: Only the owner or an admin can create/update/delete projects.
-      allow create: if isSignedIn() && (request.resource.data.ownerUid == request.auth.uid || isAdmin());
-      allow update, delete: if isSignedIn() && (isOwner() || isAdmin());
+      allow create: if isSignedIn();
+      allow update: if isProjectOwner(projectId) || isAdmin();
+      allow delete: if isProjectOwner(projectId) || isAdmin();
     }
 
-    // --- COLLECTION: tasks ---
     match /tasks/{taskId} {
-      function isTaskOwner() {
-        return request.auth.uid == resource.data.ownerUid;
-      }
+      allow read: if isProjectOwner(getTaskData(taskId).projectId) 
+                      || isProjectClient(getTaskData(taskId).projectId) 
+                      || isAdmin() 
+                      || isTaskOwner(taskId) 
+                      || isTaskAssignee(taskId)
+                      || isProjectMember(getTaskData(taskId).projectId);
+                      
+      allow create: if isProjectOwner(request.resource.data.projectId) || isAdmin();
+      allow update: if isTaskOwner(taskId) || isAdmin() || isTaskAssignee(taskId);
+      allow delete: if isTaskOwner(taskId) || isAdmin();
 
-      function isProjectMember() {
-        let projectData = get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data;
-        return request.auth.uid == projectData.ownerUid || request.auth.uid in projectData.memberUids;
-      }
-
-      // GET: Allow reading a task if user is part of the project (owner or member).
-      allow get: if isSignedIn() && (isProjectMember() || isAdmin());
-
-      // LIST: Allow querying tasks if the user is part of the project specified in the query,
-      // OR if they are querying for tasks assigned directly to them.
-      allow list: if isSignedIn(); // Let the `get` rule handle filtering results from the query.
-
-      // CREATE: Only project owners or admins can create tasks.
-      allow create: if isSignedIn() && (get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid == request.auth.uid || isAdmin());
-      
-      // UPDATE: Owner, admin, or an assigned user on a sub-task.
-      allow update: if isSignedIn() && (isTaskOwner() || isAdmin() || (resource.data.parentId != null && request.auth.uid in resource.data.assignedToUids));
-      
-      // DELETE: Only the task owner or admin.
-      allow delete: if isSignedIn() && (isTaskOwner() || isAdmin());
-
-      // --- SUBCOLLECTION: attachments ---
-      match /attachments/{attachmentId} {
-        allow read, create: if isSignedIn() && isProjectMember();
-        allow delete: if isSignedIn() && request.auth.uid == resource.data.ownerUid;
-      }
-      
-      // --- SUBCOLLECTION: timeline ---
       match /timeline/{eventId} {
-        allow read, create: if isSignedIn() && isProjectMember();
-      }
-    }
-    
-    // --- COLLECTION: issues ---
-    match /issues/{issueId} {
-       function isIssueProjectMember() {
-        let projectData = get(/databases/$(database)/documents/projects/$(resource.data.projectId)).data;
-        return request.auth.uid == projectData.ownerUid || request.auth.uid in projectData.memberUids;
+        allow read: if isSignedIn();
+        allow create: if isTaskOwner(taskId) || isTaskAssignee(taskId) || isAdmin();
       }
 
-      allow get: if isSignedIn() && isIssueProjectMember();
-      allow list: if isSignedIn(); // `get` rule filters results.
-      
-      allow create, update: if isSignedIn() && isIssueProjectMember();
-      allow delete: if isSignedIn() && request.auth.uid == resource.data.ownerUid;
+      match /attachments/{attachmentId} {
+        allow read: if isSignedIn();
+        allow create: if isTaskOwner(taskId) || isTaskAssignee(taskId) || isAdmin();
+        allow delete: if isUser(get(/databases/$(database)/documents/tasks/$(taskId)/attachments/$(attachmentId)).data.ownerUid);
+      }
     }
     
-    // --- COLLECTION: attendance ---
-    match /attendance/{attendanceId} {
-        // Only the user who created the record or an admin can read it.
-        allow read: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
-        // Only the user can create an attendance record for themselves.
-        allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
-        // Nobody can update/delete attendance for data integrity.
-        allow update, delete: if false;
+    match /issues/{issueId} {
+        function getIssueData() {
+            return get(/databases/$(database)/documents/issues/$(issueId)).data;
+        }
+        function isIssueOwner() {
+            return isUser(getIssueData().ownerUid);
+        }
+        function isIssueAssignee() {
+            return isSignedIn() && request.auth.uid in getIssueData().get('assignedToUids', []);
+        }
+
+        allow read, get: if isProjectOwner(getIssueData().projectId)
+                            || isAdmin()
+                            || isIssueOwner()
+                            || isIssueAssignee()
+                            || isProjectClient(getIssueData().projectId)
+                            || isProjectMember(getIssueData().projectId);
+
+        allow list: if isSignedIn();
+
+        allow create: if isTaskOwner(request.resource.data.taskId)
+                         || isTaskAssignee(request.resource.data.taskId)
+                         || isAdmin();
+
+        allow update: if isIssueOwner() || isIssueAssignee() || isAdmin();
+        allow delete: if isIssueOwner() || isAdmin();
+    }
+
+    match /attendance/{recordId} {
+        allow read: if isAdmin();
+        allow create: if isSignedIn();
     }
   }
 }
