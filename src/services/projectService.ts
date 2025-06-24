@@ -239,15 +239,16 @@ export const getProjectById = async (projectId: string, userUid: string, userRol
       const projectData = mapDocumentToProject(projectSnap);
       return projectData;
     } else {
-      console.warn('projectService: Project not found for ID:', projectId);
+      // This can happen if the document doesn't exist OR if security rules deny access.
+      // Firestore does not distinguish between the two for security reasons.
+      console.warn(`projectService: Project with ID '${projectId}' not found or user '${userUid}' lacks permission.`);
       return null;
     }
   } catch (error: any) {
+    // This block will now more reliably catch actual network errors or misconfigurations.
+    // Permission errors on a direct `get` are often returned as a "not found" state.
     console.error(`projectService: Error fetching project by ID ${projectId}.`, error);
-    if ((error as any)?.code === 'permission-denied') {
-        throw new Error(`Access denied when fetching project ${projectId}. Check Firestore security rules.`);
-    }
-    throw error; 
+    throw error;
   }
 };
 
@@ -284,8 +285,9 @@ export const updateProject = async (
   }
 
   const projectDocRef = doc(db, 'projects', projectId);
+  // Re-check permissions on the client side before writing, although rules are the source of truth
   const projectSnap = await getDoc(projectDocRef);
-  if (!projectSnap.exists() || projectSnap.data().ownerUid !== userUid) {
+  if (!projectSnap.exists() || (projectSnap.data().ownerUid !== userUid && !(await getDoc(doc(db, 'users', userUid))).data()?.role === 'admin') ) {
     throw new Error('Project not found or access denied for update.');
   }
 
@@ -303,8 +305,9 @@ export const deleteProject = async (projectId: string, userUid: string): Promise
   }
 
   const projectDocRef = doc(db, 'projects', projectId);
+  // Re-check permissions on the client side before writing
   const projectSnap = await getDoc(projectDocRef);
-  if (!projectSnap.exists() || projectSnap.data().ownerUid !== userUid) {
+  if (!projectSnap.exists() || (projectSnap.data().ownerUid !== userUid && !(await getDoc(doc(db, 'users', userUid))).data()?.role === 'admin') ) {
     throw new Error('Project not found or access denied for deletion.');
   }
 
