@@ -59,3 +59,12 @@ npm run genkit:dev
 This will start the Genkit development UI, typically on a different port (like 4000), which you can use to inspect and test your AI flows.
 
 You are now all set up for local development!
+
+---
+## 🙏 Thank You!
+
+Thank you for checking out TaskFlow! We hope you find it useful. If you have any questions or feedback, please feel free to open an issue.
+
+---
+Why don't scientists trust atoms?
+Because they make up everything!
