@@ -32,3 +32,11 @@ messaging.onBackgroundMessage((payload) => {
 
   self.registration.showNotification(notificationTitle, notificationOptions);
 });
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = event.notification.data?.link;
+  if (link) {
+    event.waitUntil(clients.openWindow(link));
+  }
+});

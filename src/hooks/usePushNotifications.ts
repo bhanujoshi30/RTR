@@ -2,11 +2,12 @@ import { useState, useEffect } from 'react';
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { app as firebaseApp, db } from '@/lib/firebase';
+import { useToast } from './use-toast';
 import { useAuth } from './useAuth';
 
 export const usePushNotifications = () => {
   const { user } = useAuth();
-  const [notification, setNotification] = useState(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     const requestPermission = async () => {
@@ -17,9 +18,6 @@ export const usePushNotifications = () => {
 
       if (permission === 'granted') {
         const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
-
-        // Enhanced debugging
-        console.log('Attempting to use VAPID key:', vapidKey);
 
         if (!vapidKey || vapidKey === 'YOUR_VAPID_KEY') {
           console.error(
@@ -33,7 +31,6 @@ export const usePushNotifications = () => {
 
         if (currentToken) {
           console.log('FCM Token received:', currentToken);
-          // Save the token to the user's document in Firestore
           const userDocRef = doc(db, 'users', user.uid);
           await updateDoc(userDocRef, {
             fcmTokens: arrayUnion(currentToken),
@@ -47,13 +44,14 @@ export const usePushNotifications = () => {
     const messaging = getMessaging(firebaseApp);
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log('Message received. ', payload);
-      setNotification(payload);
+      toast({
+        title: payload.notification?.title,
+        description: payload.notification?.body,
+      });
     });
 
     return () => {
       unsubscribe();
     };
-  }, [user]);
-
-  return { notification };
+  }, [user, toast]);
 };

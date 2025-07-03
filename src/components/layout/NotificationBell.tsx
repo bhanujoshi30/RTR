@@ -15,7 +15,8 @@ import {
   where,
   onSnapshot,
   orderBy,
-  limit,
+  doc,
+  updateDoc,
 } from 'firebase/firestore';
 import { formatDistanceToNow } from 'date-fns';
 import Link from 'next/link';
@@ -40,8 +41,7 @@ export function NotificationBell() {
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc'),
-      limit(10)
+      orderBy('createdAt', 'desc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -58,6 +58,13 @@ export function NotificationBell() {
 
     return () => unsubscribe();
   }, [user]);
+
+  const handleNotificationClick = async (notification: Notification) => {
+    if (!notification.isRead) {
+      const notifRef = doc(db, 'notifications', notification.id);
+      await updateDoc(notifRef, { isRead: true });
+    }
+  };
 
   return (
     <Popover>
@@ -82,9 +89,19 @@ export function NotificationBell() {
           <div className="grid gap-2">
             {notifications.length > 0 ? (
               notifications.map((notif) => (
-                <Link href={notif.link} key={notif.id}>
-                  <div className="grid grid-cols-[25px_1fr] items-start pb-4 last:mb-0 last:pb-0">
-                    <span className="flex h-2 w-2 translate-y-1 rounded-full bg-sky-500" />
+                <Link
+                  href={notif.link}
+                  key={notif.id}
+                  onClick={() => handleNotificationClick(notif)}
+                >
+                  <div
+                    className={`grid grid-cols-[25px_1fr] items-start pb-4 last:mb-0 last:pb-0 ${
+                      notif.isRead ? 'opacity-50' : ''
+                    }`}
+                  >
+                    {!notif.isRead && (
+                      <span className="flex h-2 w-2 translate-y-1 rounded-full bg-sky-500" />
+                    )}
                     <div className="grid gap-1">
                       <p className="text-sm font-medium">{notif.title}</p>
                       <p className="text-sm text-muted-foreground">
