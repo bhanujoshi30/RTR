@@ -34,10 +34,11 @@ service cloud.firestore {
     // Projects Collection
     match /projects/{projectId} {
       // Allow a user to get a project if they own it, are the client, a member, or an admin.
+      // This rule is now self-contained and does not cause a circular dependency.
       allow get: if isSignedIn() && (
         isUser(resource.data.ownerUid) ||
         isUser(resource.data.clientUid) ||
-        isProjectMember(projectId) ||
+        (resource.data.memberUids != null && request.auth.uid in resource.data.memberUids) ||
         isAdmin()
       );
       // Allow any signed-in user to query the projects collection.
@@ -51,7 +52,7 @@ service cloud.firestore {
     // Tasks Collection
     match /tasks/{taskId} {
       // Allow reading a task if the user is the owner, is assigned, is a member of the project,
-      // the project client, or an admin. This is the key fix for supervisor timeline views.
+      // the project client, or an admin. This rule works for both dashboard and direct links.
       allow get: if isSignedIn() && (
         isUser(resource.data.ownerUid) ||
         (resource.data.assignedToUids != null && request.auth.uid in resource.data.assignedToUids) ||
@@ -104,6 +105,14 @@ service cloud.firestore {
       // This is the key fix for the attendance console error.
       allow read: if isUser(resource.data.userId) || isAdmin();
       allow create: if isSignedIn();
+    }
+
+    // Notifications Collection
+    match /notifications/{notificationId} {
+      // A user can read and update their own notifications.
+      // Creation is handled by backend functions.
+      allow read, update: if isUser(resource.data.userId);
+      allow create, delete: if false; // Nobody can create/delete from the client
     }
   }
 }

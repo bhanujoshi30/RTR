@@ -27,6 +27,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from '@/hooks/useTranslation';
 import { updateUserLanguagePreference } from '@/services/userService';
 import { useToast } from '@/hooks/use-toast';
+import { NotificationBell } from './NotificationBell';
 
 export function Header() {
   const { user } = useAuth();
@@ -138,45 +139,48 @@ export function Header() {
 
         <div className="flex items-center gap-4">
           {user ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-9 w-9">
-                    <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || 'User'} />
-                    <AvatarFallback>
-                      <UserCircle />
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user.displayName || user.email}</p>
-                    {user.displayName && user.email && <p className="text-xs leading-none text-muted-foreground">{user.email}</p>}
-                     {user.role && <p className="text-xs leading-none text-muted-foreground capitalize">{t('header.role')}: {user.role}</p>}
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuSub>
-                  <DropdownMenuSubTrigger>
-                    <LanguageIcon className="mr-2 h-4 w-4" />
-                    <span>{t('header.language')}</span>
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuSubContent>
-                     <DropdownMenuRadioGroup value={locale} onValueChange={handleLanguageChange}>
-                        <DropdownMenuRadioItem value="en">{t('header.english')}</DropdownMenuRadioItem>
-                        <DropdownMenuRadioItem value="hi">{t('header.hindi')}</DropdownMenuRadioItem>
-                      </DropdownMenuRadioGroup>
-                  </DropdownMenuSubContent>
-                </DropdownMenuSub>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive-foreground focus:bg-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  {t('header.logout')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <>
+              <NotificationBell />
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                    <Avatar className="h-9 w-9">
+                      <AvatarImage src={user.photoURL || undefined} alt={user.displayName || user.email || 'User'} />
+                      <AvatarFallback>
+                        <UserCircle />
+                      </AvatarFallback>
+                    </Avatar>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-medium leading-none">{user.displayName || user.email}</p>
+                      {user.displayName && user.email && <p className="text-xs leading-none text-muted-foreground">{user.email}</p>}
+                       {user.role && <p className="text-xs leading-none text-muted-foreground capitalize">{t('header.role')}: {user.role}</p>}
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger>
+                      <LanguageIcon className="mr-2 h-4 w-4" />
+                      <span>{t('header.language')}</span>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent>
+                       <DropdownMenuRadioGroup value={locale} onValueChange={handleLanguageChange}>
+                          <DropdownMenuRadioItem value="en">{t('header.english')}</DropdownMenuRadioItem>
+                          <DropdownMenuRadioItem value="hi">{t('header.hindi')}</DropdownMenuRadioItem>
+                        </DropdownMenuRadioGroup>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-destructive focus:text-destructive-foreground focus:bg-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    {t('header.logout')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           ) : (
              <Button asChild>
                 <Link href="/login">{t('auth.login')}</Link>
@@ -206,3 +210,4 @@ export function Header() {
     </header>
   );
 }
+

@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useRouter, usePathname } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
+import { usePushNotifications } from '@/hooks/usePushNotifications';
 
 interface AuthGuardProps {
   children: ReactNode;
@@ -14,6 +15,7 @@ export function AuthGuard({ children }: AuthGuardProps) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  usePushNotifications();
 
   useEffect(() => {
     if (!loading) {
