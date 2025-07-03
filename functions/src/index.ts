@@ -46,6 +46,11 @@ export const onTaskCreated = functions.firestore
             title: "New Task Assigned",
             body: `You have been assigned a new task: ${task.name}`,
           },
+          android: {
+            notification: {
+              channelId: "default",
+            },
+          },
           webpush: {
             fcmOptions: {
               link: `/projects/${task.projectId}/tasks/${snapshot.id}`,
@@ -99,6 +104,11 @@ export const onIssueCreated = functions.firestore
           notification: {
             title: "New Issue Reported",
             body: `A new issue has been assigned to you: ${issue.title}`,
+          },
+          android: {
+            notification: {
+              channelId: "default",
+            },
           },
           webpush: {
             fcmOptions: {
