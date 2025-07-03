@@ -28,13 +28,14 @@ export const onTaskCreated = functions.firestore
     const notificationPromises = userDocs.docs.map(async (userDoc) => {
       const user = userDoc.data();
       const { fcmTokens } = user;
+      const link = `/projects/${task.projectId}/tasks/${snapshot.id}`;
 
       // 1. Create In-App Notification
       await db.collection("notifications").add({
         userId: userDoc.id,
         title: "New Task Assigned",
         message: `You have been assigned a new task: ${task.name}`,
-        link: `/projects/${task.projectId}/tasks/${snapshot.id}`,
+        link: link,
         isRead: false,
         createdAt: new Date(),
       });
@@ -46,6 +47,11 @@ export const onTaskCreated = functions.firestore
             title: "New Task Assigned",
             body: `You have been assigned a new task: ${task.name}`,
           },
+          data: {
+            title: "New Task Assigned",
+            body: `You have been assigned a new task: ${task.name}`,
+            link: link,
+          },
           android: {
             notification: {
               channelId: "default",
@@ -53,7 +59,7 @@ export const onTaskCreated = functions.firestore
           },
           webpush: {
             fcmOptions: {
-              link: `/projects/${task.projectId}/tasks/${snapshot.id}`,
+              link: link,
             },
           },
           tokens: fcmTokens,
@@ -87,13 +93,14 @@ export const onIssueCreated = functions.firestore
     const notificationPromises = userDocs.docs.map(async (userDoc) => {
       const user = userDoc.data();
       const { fcmTokens } = user;
+      const link = `/projects/${issue.projectId}/tasks/${issue.taskId}/issues/${snapshot.id}`;
 
       // 1. Create In-App Notification
       await db.collection("notifications").add({
         userId: userDoc.id,
         title: "New Issue Reported",
         message: `A new issue has been assigned to you: ${issue.title}`,
-        link: `/projects/${issue.projectId}/tasks/${issue.taskId}/issues/${snapshot.id}`,
+        link: link,
         isRead: false,
         createdAt: new Date(),
       });
@@ -105,6 +112,11 @@ export const onIssueCreated = functions.firestore
             title: "New Issue Reported",
             body: `A new issue has been assigned to you: ${issue.title}`,
           },
+          data: {
+            title: "New Issue Reported",
+            body: `A new issue has been assigned to you: ${issue.title}`,
+            link: link,
+          },
           android: {
             notification: {
               channelId: "default",
@@ -112,7 +124,7 @@ export const onIssueCreated = functions.firestore
           },
           webpush: {
             fcmOptions: {
-              link: `/projects/${issue.projectId}/tasks/${issue.taskId}/issues/${snapshot.id}`,
+              link: link,
             },
           },
           tokens: fcmTokens,

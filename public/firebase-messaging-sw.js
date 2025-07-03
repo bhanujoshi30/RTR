@@ -23,20 +23,33 @@ messaging.onBackgroundMessage((payload) => {
     '[firebase-messaging-sw.js] Received background message ',
     payload
   );
-  // Customize notification here
-  const notificationTitle = payload.notification.title;
-  const notificationOptions = {
-    body: payload.notification.body,
-    icon: '/favicon.ico'
-  };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  // Check if the payload has a data field
+  if (payload.data) {
+    const notificationTitle = payload.data.title;
+    const notificationOptions = {
+      body: payload.data.body,
+      icon: '/favicon.ico',
+      data: {
+        link: payload.data.link,
+      },
+    };
+
+    self.registration.showNotification(notificationTitle, notificationOptions);
+  } else {
+    console.log('[firebase-messaging-sw.js] Received background message without data field.');
+  }
 });
 
 self.addEventListener('notificationclick', (event) => {
+  console.log('[firebase-messaging-sw.js] Notification click received.', event.notification);
   event.notification.close();
+
   const link = event.notification.data?.link;
   if (link) {
+    console.log(`[firebase-messaging-sw.js] Opening window: ${link}`);
     event.waitUntil(clients.openWindow(link));
+  } else {
+    console.log('[firebase-messaging-sw.js] No link found on notification.');
   }
 });
